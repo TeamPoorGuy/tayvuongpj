@@ -7,7 +7,7 @@ Hệ thống trung gian kết nối khách hàng có nhu cầu thể thao với 
 ## 📌 Các Nhóm Người Dùng & Chức Năng Chính
 
 ### 1. ⚽ Khách Hàng (Customer / User)
-- **Tài khoản**: Đăng ký, đăng nhập, quên/đổi mật khẩu, xem và cập nhật hồ sơ cá nhân, đổi ảnh đại diện.
+- **Tài khoản**: Đăng ký, đăng nhập, đổi mật khẩu, xem và cập nhật hồ sơ cá nhân, đổi ảnh đại diện.
 - **Tìm kiếm & Lọc**: Tìm sân theo tên/địa chỉ, lọc theo danh mục thể thao (Bóng đá, Cầu lông, Tennis, Bóng rổ, Bóng chuyền), lọc theo loại sân, khoảng giá thuê.
 - **Kiểm tra khung giờ realtime (AJAX)**: Chọn ngày để xem các khung giờ còn trống trực tiếp mà không cần reload trang.
 - **Đặt sân & Thanh toán**: Xác nhận thông tin, xem tổng số tiền và gửi yêu cầu đặt sân.
@@ -95,15 +95,30 @@ php artisan storage:link
 
 ---
 
+## 🗃️ Export / Import Database SQL
+
+Dự án đã chuẩn bị sẵn file Dump SQL chứa toàn bộ lệnh `CREATE TABLE` (DDL) và `INSERT INTO` (Dữ liệu mẫu đầy đủ):
+
+- **Đường dẫn file SQL Dump**: `database/tayvuong_sports_field_dump.sql`
+
+### Import vào MySQL / phpMyAdmin / DBeaver:
+```bash
+mysql -u [username] -p [database_name] < database/tayvuong_sports_field_dump.sql
+```
+
+---
+
 ## 🌐 Cấu Hình Tên Miền Local `http://tayvuong.com`
 
-### Cách 1: Sử dụng FlyEnv (Recommeded trên Linux)
+### Cách 1: Sử dụng FlyEnv (Recommended trên Linux)
 1. Mở ứng dụng **FlyEnv**.
 2. Thêm hoặc Sửa Site:
    - **Domain**: `tayvuong.com`
    - **Path (Đường dẫn)**: Trỏ chính xác vào thư mục **`public`** của dự án:
-     `/path/to/tayvuongpj/public`
+     `/home/bonkerzz/Documents/tayvuongpj/public`
 3. Lưu cấu hình và truy cập: **`http://tayvuong.com`**
+
+> 💡 **Lưu ý khắc phục lỗi 403 Forbidden trong FlyEnv**: Đảm bảo đường dẫn thư mục trỏ tới subfolder `/public` chứ không trỏ ở thư mục gốc project.
 
 ### Cách 2: Sử dụng Artisan Serve
 1. Thêm domain vào `/etc/hosts`:
@@ -122,13 +137,17 @@ php artisan storage:link
 
 Tất cả tài khoản mẫu có mật khẩu chung là: **`password`**
 
-| Vai trò | Email đăng nhập | Mật khẩu | Chức năng kiểm thử |
+| Vai trò | Email đăng nhập | Mật khẩu | Mô tả & Quyền hạn |
 |---|---|---|---|
-| **System Admin** | `admin@sportfield.com` | `password` | Truy cập `/admin/dashboard` - Duyệt sân, duyệt chủ sân, khóa user, xem báo cáo |
-| **Field Owner (Chủ sân 1)** | `owner1@sportfield.com` | `password` | Truy cập `/field-owner/dashboard` - Đăng sân, xác nhận đơn đặt, thống kê |
-| **Field Owner (Chủ sân 2)** | `owner2@sportfield.com` | `password` | Quản lý hệ thống sân Sao Mai Arena |
-| **Customer (Khách hàng 1)** | `customer@sportfield.com` | `password` | Tìm sân, chọn ngày & slot AJAX, đặt sân, xem lịch sử, đánh giá sân |
-| **Customer (Khách hàng 2)** | `customer2@sportfield.com` | `password` | Tài khoản khách hàng mẫu thứ 2 |
+| **System Admin** | `admin@sportfield.com` | `password` | Quản trị viên tối cao: Kiểm duyệt sân, kiểm duyệt chủ sân, khóa user, quản lý danh mục |
+| **Field Owner 1** | `owner1@sportfield.com` | `password` | Chủ sân CLB Thể Thao Tây Vương (Sân bóng đá, cầu lông, tennis) |
+| **Field Owner 2** | `owner2@sportfield.com` | `password` | Chủ sân Khu Phức Hợp Sao Mai (Bóng rổ, bóng chuyền) |
+| **Field Owner 3** | `owner3@sportfield.com` | `password` | Chủ sân Cầu Giấy Pro (Tài khoản đang chờ Admin duyệt) |
+| **Customer 1** | `customer@sportfield.com` | `password` | Khách hàng Lê Văn Khách |
+| **Customer 2** | `customer2@sportfield.com` | `password` | Khách hàng Phạm Hoàng Nam |
+| **Customer 3** | `customer3@sportfield.com` | `password` | Khách hàng Vũ Thị Hương |
+| **Customer 4** | `customer4@sportfield.com` | `password` | Khách hàng Đặng Anh Khoa |
+| **Customer 5** | `customer5@sportfield.com` | `password` | Khách hàng Ngô Bảo Long |
 
 ---
 

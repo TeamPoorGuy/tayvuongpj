@@ -13,63 +13,79 @@ class BookingSeeder extends Seeder
 {
     public function run(): void
     {
-        $customer1 = User::where('email', 'customer@sportfield.com')->first();
-        $customer2 = User::where('email', 'customer2@sportfield.com')->first();
+        $customers = User::where('role', 'customer')->get();
         $fields = SportsField::with('timeSlots')->get();
 
-        if ($fields->isEmpty() || !$customer1) {
+        if ($fields->isEmpty() || $customers->isEmpty()) {
             return;
         }
 
-        $field1 = $fields[0];
-        $slot1 = $field1->timeSlots->first();
-        $slot2 = $field1->timeSlots->skip(1)->first();
+        $reviewsComments = [
+            5 => [
+                'Sân rất đẹp, cỏ nhân tạo êm ái, đèn sáng rõ ban đêm. Chủ sân cực kỳ thân thiện!',
+                'Chất lượng sân tuyệt vời, phòng thay đồ và vệ sinh vô cùng sạch sẽ. Sẽ quay lại thường xuyên!',
+                'Khung giờ đặt rất chuẩn, sân không bị chồng lịch. Đánh giá 5 sao cho chất lượng dịch vụ.',
+                'Sân thi đấu đạt chuẩn, dịch vụ mượn bóng và áo lưới rất chu đáo.',
+            ],
+            4 => [
+                'Sân đẹp và thoáng mát. Tuy nhiên bãi gửi xe hơi đông vào giờ cao điểm.',
+                'Mặt sân khá tốt, hệ thống đèn sáng. Giá thuê hợp lý so với mặt bằng chung.',
+                'Chất lượng tốt, chỉ là căng tin hơi ít đồ uống.',
+            ],
+            3 => [
+                'Mặt sân bình thường, có vài chỗ cỏ hơi mòn nhưng vẫn đá ổn.',
+            ]
+        ];
 
-        // 1. Đơn hoàn thành + Đánh giá
-        $b1 = Booking::create([
-            'user_id' => $customer1->id,
-            'sports_field_id' => $field1->id,
-            'time_slot_id' => $slot1->id,
-            'booking_date' => Carbon::yesterday()->toDateString(),
-            'status' => 'completed',
-            'total_price' => $field1->price_per_hour * 1.5,
-            'notes' => 'Cần mượn thêm 2 quả bóng.',
-        ]);
+        $dates = [
+            Carbon::yesterday()->subDays(3)->toDateString(),
+            Carbon::yesterday()->subDays(2)->toDateString(),
+            Carbon::yesterday()->toDateString(),
+            Carbon::today()->toDateString(),
+            Carbon::tomorrow()->toDateString(),
+            Carbon::tomorrow()->addDays(2)->toDateString(),
+        ];
 
-        Review::create([
-            'user_id' => $customer1->id,
-            'sports_field_id' => $field1->id,
-            'booking_id' => $b1->id,
-            'rating' => 5,
-            'comment' => 'Sân chất lượng rất tốt, mặt cỏ êm, đèn sáng rõ. Nhân viên nhiệt tình!',
-            'is_visible' => true,
-        ]);
+        $statuses = ['completed', 'confirmed', 'pending', 'cancelled', 'rejected'];
 
-        // 2. Đơn đã xác nhận (Hôm nay)
-        Booking::create([
-            'user_id' => $customer1->id,
-            'sports_field_id' => $field1->id,
-            'time_slot_id' => $slot2->id,
-            'booking_date' => Carbon::today()->toDateString(),
-            'status' => 'confirmed',
-            'total_price' => $field1->price_per_hour * 1.5,
-            'notes' => 'Thanh toán tiền mặt tại sân.',
-        ]);
+        $count = 0;
+        foreach ($fields as $fieldIdx => $field) {
+            $slots = $field->timeSlots;
+            if ($slots->isEmpty()) continue;
 
-        // 3. Đơn chờ xác nhận (Ngày mai)
-        if ($customer2 && isset($fields[1])) {
-            $field2 = $fields[1];
-            $slotField2 = $field2->timeSlots->first();
+            foreach ($dates as $dateIdx => $date) {
+                $slot = $slots[$dateIdx % count($slots)];
+                $customer = $customers[($fieldIdx + $dateIdx) % count($customers)];
+                $status = $statuses[($fieldIdx + $dateIdx) % count($statuses)];
 
-            Booking::create([
-                'user_id' => $customer2->id,
-                'sports_field_id' => $field2->id,
-                'time_slot_id' => $slotField2->id,
-                'booking_date' => Carbon::tomorrow()->toDateString(),
-                'status' => 'pending',
-                'total_price' => $field2->price_per_hour * 1.5,
-                'notes' => 'Đặt sân đá giao hữu công ty.',
-            ]);
+                $booking = Booking::create([
+                    'user_id' => $customer->id,
+                    'sports_field_id' => $field->id,
+                    'time_slot_id' => $slot->id,
+                    'booking_date' => $date,
+                    'status' => $status,
+                    'total_price' => $field->price_per_hour * 1.5,
+                    'notes' => 'Đặt sân đá giải nội bộ công ty.',
+                ]);
+
+                // Nếu là đơn completed thì tạo review
+                if ($status === 'completed') {
+                    $rating = rand(4, 5);
+                    $comments = $reviewsComments[$rating];
+                    $commentText = $comments[array_rand($comments)];
+
+                    Review::create([
+                        'user_id' => $customer->id,
+                        'sports_field_id' => $field->id,
+                        'booking_id' => $booking->id,
+                        'rating' => $rating,
+                        'comment' => $commentText,
+                        'is_visible' => true,
+                    ]);
+                }
+
+                $count++;
+            }
         }
     }
 }
