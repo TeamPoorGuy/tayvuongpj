@@ -1,58 +1,147 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ⚽ Website Quản Lý và Đặt Sân Thể Thao Trực Tuyến (SportHub)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Hệ thống trung gian kết nối khách hàng có nhu cầu thể thao với các chủ sân bóng đá, cầu lông, tennis, bóng chuyền, bóng rổ. Hỗ trợ tìm kiếm, kiểm tra khung giờ còn trống realtime không cần tải lại trang (AJAX), đặt sân, theo dõi đơn hàng và quản lý doanh thu.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 📌 Các Nhóm Người Dùng & Chức Năng Chính
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 1. ⚽ Khách Hàng (Customer / User)
+- **Tài khoản**: Đăng ký, đăng nhập, quên/đổi mật khẩu, xem và cập nhật hồ sơ cá nhân, đổi ảnh đại diện.
+- **Tìm kiếm & Lọc**: Tìm sân theo tên/địa chỉ, lọc theo danh mục thể thao (Bóng đá, Cầu lông, Tennis, Bóng rổ, Bóng chuyền), lọc theo loại sân, khoảng giá thuê.
+- **Kiểm tra khung giờ realtime (AJAX)**: Chọn ngày để xem các khung giờ còn trống trực tiếp mà không cần reload trang.
+- **Đặt sân & Thanh toán**: Xác nhận thông tin, xem tổng số tiền và gửi yêu cầu đặt sân.
+- **Lịch sử & Đánh giá**: Theo dõi trạng thái đơn hàng (Chờ xác nhận, Đã xác nhận, Đã hoàn thành, Đã hủy/Từ chối), hủy đơn khi đủ điều kiện, đánh giá số sao (1-5⭐) và viết bình luận sau khi sử dụng sân.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 2. 🏢 Chủ Sân (Field Owner)
+- **Quản lý sân bóng**: Đăng bài sân mới, cập nhật thông tin sân, ngừng/bật hoạt động sân, upload nhiều hình ảnh sân bóng.
+- **Quản lý giá & Khung giờ**: Cấu hình giá thuê theo giờ và các khung giờ hoạt động.
+- **Quản lý đơn đặt**: Xem lịch đặt sân, xác nhận hoặc từ chối đơn đặt, đánh dấu hoàn thành sau khi khách sử dụng.
+- **Thống kê doanh thu**: Theo dõi tổng số sân, tổng lượt đặt, lượt đặt theo ngày/tháng, doanh thu theo ngày/tháng, thống kê sân hot nhất.
 
-## Learning Laravel
+### 3. 👑 Quản Trị Viên (System Admin)
+- **Quản lý tài khoản**: Khóa / mở khóa tài khoản Khách hàng và Chủ sân.
+- **Kiểm duyệt chủ sân**: Duyệt hoặc từ chối hồ sơ đăng ký tài khoản chủ sân.
+- **Kiểm duyệt sân bóng**: Duyệt sân bóng do chủ sân đăng trước khi hiển thị công khai trên hệ thống.
+- **Quản lý danh mục**: Thêm/sửa danh mục thể thao và loại sân.
+- **Báo cáo & Giám sát**: Thống kê toàn bộ số liệu hệ thống (doanh thu, đơn hàng, người dùng), giám sát và ẩn các đánh giá/bình luận vi phạm.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🛠️ Công Nghệ Sử Dụng
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+- **Backend**: Laravel 13.x, PHP 8.2+ / 8.3+
+- **Database**: MySQL / SQLite (Eloquent ORM, Migrations, Seeders)
+- **Frontend**: Blade Template, Tailwind CSS v4, JavaScript (ES6+, Fetch API AJAX)
+- **Phân quyền**: Role-based Middleware (`admin`, `field_owner`, `customer`)
 
-## Agentic Development
+---
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## 🗄️ Sơ Đồ Quan Hệ Dữ Liệu (ERD)
 
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```mermaid
+erDiagram
+    User ||--o| FieldOwnerProfile : "has one"
+    User ||--o{ Booking : "makes"
+    User ||--o{ Review : "writes"
+    User ||--o{ SportsField : "owns"
+    
+    SportCategory ||--o{ FieldType : "has many"
+    FieldType ||--o{ SportsField : "has many"
+    
+    SportsField ||--o{ FieldImage : "has many"
+    SportsField ||--o{ TimeSlot : "has many"
+    SportsField ||--o{ Booking : "has many"
+    SportsField ||--o{ Review : "has many"
+    
+    TimeSlot ||--o{ Booking : "has many"
+    Booking ||--o| Review : "has one"
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## ⚙️ Hướng Dẫn Cài Đặt Dự Án (Installation Guide)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 1. Yêu cầu hệ thống
+- PHP >= 8.2 (đã bật các extension: `pdo`, `mbstring`, `openssl`, `sqlite3` hoặc `mysqli`)
+- Composer >= 2.x
+- Node.js & NPM (tùy chọn nếu build assets)
 
-## Code of Conduct
+### 2. Cài đặt các bước
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+# 1. Clone repository
+git clone https://github.com/KhangNG2603/tayvuongpj.git
+cd tayvuongpj
 
-## Security Vulnerabilities
+# 2. Cài đặt thư viện PHP
+composer install
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# 3. Tạo file môi trường .env
+cp .env.example .env
 
-## License
+# 4. Tạo Application Key
+php artisan key:generate
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# 5. Tạo file database SQLite (hoặc cấu hình MySQL trong file .env)
+touch database/database.sqlite
+
+# 6. Chạy Migration và Seed dữ liệu mẫu
+php artisan migrate:fresh --seed
+
+# 7. Tạo Symbolic Link cho Storage (để xem ảnh upload)
+php artisan storage:link
+```
+
+---
+
+## 🌐 Cấu Hình Tên Miền Local `http://tayvuong.com`
+
+### Cách 1: Sử dụng FlyEnv (Recommeded trên Linux)
+1. Mở ứng dụng **FlyEnv**.
+2. Thêm hoặc Sửa Site:
+   - **Domain**: `tayvuong.com`
+   - **Path (Đường dẫn)**: Trỏ chính xác vào thư mục **`public`** của dự án:
+     `/path/to/tayvuongpj/public`
+3. Lưu cấu hình và truy cập: **`http://tayvuong.com`**
+
+### Cách 2: Sử dụng Artisan Serve
+1. Thêm domain vào `/etc/hosts`:
+   ```bash
+   echo "127.0.0.1 tayvuong.com" | sudo tee -a /etc/hosts
+   ```
+2. Chạy lệnh:
+   ```bash
+   php artisan serve --port=8000
+   ```
+3. Truy cập: **`http://localhost:8000`** hoặc **`http://tayvuong.com:8000`**
+
+---
+
+## 🔑 Tài Khoản Mẫu Để Kiểm Thử (Dữ Liệu Seeded)
+
+Tất cả tài khoản mẫu có mật khẩu chung là: **`password`**
+
+| Vai trò | Email đăng nhập | Mật khẩu | Chức năng kiểm thử |
+|---|---|---|---|
+| **System Admin** | `admin@sportfield.com` | `password` | Truy cập `/admin/dashboard` - Duyệt sân, duyệt chủ sân, khóa user, xem báo cáo |
+| **Field Owner (Chủ sân 1)** | `owner1@sportfield.com` | `password` | Truy cập `/field-owner/dashboard` - Đăng sân, xác nhận đơn đặt, thống kê |
+| **Field Owner (Chủ sân 2)** | `owner2@sportfield.com` | `password` | Quản lý hệ thống sân Sao Mai Arena |
+| **Customer (Khách hàng 1)** | `customer@sportfield.com` | `password` | Tìm sân, chọn ngày & slot AJAX, đặt sân, xem lịch sử, đánh giá sân |
+| **Customer (Khách hàng 2)** | `customer2@sportfield.com` | `password` | Tài khoản khách hàng mẫu thứ 2 |
+
+---
+
+## 🧪 Chạy Kiểm Thử Tự Động (Automated Testing)
+
+Dự án tích hợp sẵn bộ kiểm thử tính năng (Feature Tests) với PHPUnit / Laravel Test:
+
+```bash
+php artisan test
+```
+
+---
+
+## 📜 Giấy Phép (License)
+
+Dự án đồ án học thuật mở rộng phát triển trên nền tảng Laravel Framework ([MIT License](https://opensource.org/licenses/MIT)).
