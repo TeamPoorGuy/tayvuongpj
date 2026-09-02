@@ -3,6 +3,12 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$connection = env('DB_CONNECTION', 'mysql');
+
+if (! in_array($connection, ['sqlite', 'mysql', 'mariadb', 'pgsql', 'sqlsrv'], true)) {
+    $connection = 'mysql';
+}
+
 return [
 
     /*
@@ -17,7 +23,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => $connection,
 
     /*
     |--------------------------------------------------------------------------

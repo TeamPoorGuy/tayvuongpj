@@ -1,8 +1,19 @@
 *.log
 .DS_Store
+
+# Local environment and secret files (all project levels)
 .env
-.env.backup
-.env.production
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+!*.env.*.example
+*.pem
+*.p12
+*.pfx
+
 .phpactor.json
 .phpunit.result.cache
 /.codex
@@ -20,6 +31,13 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# Local-only project memory and work history
+/Doc/
+/doc/
+
+# Local-only Markdown documentation and AI instructions
+*.md
+
 /vendor
 _ide_helper.php
 Homestead.json

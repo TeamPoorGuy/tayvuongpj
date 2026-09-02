@@ -1,19 +1,16 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "name": "sporthub-workspace",
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite"
+        "build": "npm --prefix frontend run build",
+        "dev": "concurrently --names api,frontend --prefix-colors blue,green \"php artisan serve --port=8011\" \"npm --prefix frontend run dev\"",
+        "dev:api": "php artisan serve --port=8011",
+        "dev:frontend": "npm --prefix frontend run dev",
+        "lint": "npm --prefix frontend run lint"
     },
     "devDependencies": {
-        "@tailwindcss/vite": "^4.0.0",
-        "concurrently": "^10.0.3",
-        "laravel-vite-plugin": "^3.1",
-        "tailwindcss": "^4.0.0",
-        "vite": "^8.0.0"
-    },
-    "optionalDependencies": {
-        "@laravel/multiplex": "^0.4.1"
+        "concurrently": "^10.0.3"
     }
 }
