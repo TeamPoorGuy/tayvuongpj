@@ -1,95 +1,58 @@
-# SportHub — Website quản lý và đặt sân thể thao
+<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-SportHub là hệ thống kết nối khách hàng với chủ sân. Dự án được tách thành hai ứng dụng độc lập:
+<p align="center">
+<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+</p>
 
-- `backend`: Laravel REST API tại thư mục gốc.
-- `frontend`: React + TypeScript + Vite trong `frontend/`.
+## About Laravel
 
-Backend không render giao diện Blade. Mọi giao tiếp giữa hai ứng dụng dùng JSON qua `/api/v1`, còn xác thực SPA dùng Laravel Sanctum.
+Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
-## Chức năng
+- [Simple, fast routing engine](https://laravel.com/docs/routing).
+- [Powerful dependency injection container](https://laravel.com/docs/container).
+- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
+- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
+- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
+- [Robust background job processing](https://laravel.com/docs/queues).
+- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
-- Khách hàng: đăng ký/đăng nhập, tìm và lọc sân, xem lịch trống, đặt/hủy sân, đánh giá, cập nhật hồ sơ và mật khẩu.
-- Chủ sân: dashboard, quản lý sân/hình ảnh/khung giờ, xử lý booking, xem đánh giá và cập nhật hồ sơ kinh doanh.
-- Quản trị viên: dashboard toàn hệ thống, khóa tài khoản, duyệt chủ sân/sân, quản lý booking, đánh giá, danh mục và loại sân.
+Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## Kiến trúc backend
+## Learning Laravel
 
-Kiến trúc được tổ chức theo vai trò tương đương N-Layer trong Spring Boot hoặc ASP.NET Core:
+Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
 
-| Vai trò N-Layer | Laravel |
-|---|---|
-| Controller | `app/Http/Controllers/Api/V1/` |
-| Request DTO / validation | `app/Http/Requests/Api/` |
-| DTO | `app/DTOs/` |
-| Response DTO | `app/Http/Resources/Api/` |
-| Service / business logic | `app/Services/` |
-| Entity / ORM | `app/Models/` |
-| Enum | `app/Enums/` |
-| Exception handler | `app/Exceptions/` và `bootstrap/app.php` |
-| Security | Sanctum và `app/Http/Middleware/` |
-| Configuration | `config/` |
+In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
-Luồng chính:
+You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
 
-```text
-React -> API Route -> Security Middleware -> Form Request -> Controller
-      -> DTO -> Service -> Eloquent Model -> API Resource -> JSON
+## Agentic Development
+
+Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+
+```bash
+composer require laravel/boost --dev
+
+php artisan boost:install
 ```
 
-## Công nghệ
+Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
 
-- Backend: PHP 8.3+, Laravel 13, Laravel Sanctum.
-- Database: MySQL (Laragon); SQLite in-memory dành riêng cho test.
-- Frontend: React 19, TypeScript, Vite, React Router, TanStack Query, Axios.
+## Contributing
 
-## Cài đặt
+Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
 
-```powershell
-composer install
-npm install
-npm --prefix frontend install
-Copy-Item .env.example .env
-php artisan key:generate
-php artisan migrate --seed
-php artisan storage:link
-```
+## Code of Conduct
 
-Cấu hình kết nối MySQL của Laragon trong `.env`. Không đưa `.env` hoặc thông tin đăng nhập thật lên Git.
+In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-## Chạy dự án
+## Security Vulnerabilities
 
-Cách ngắn nhất, chạy cả API và React trong một terminal:
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
-```powershell
-npm run dev
-```
+## License
 
-Hoặc chạy riêng hai terminal:
-
-```powershell
-# Terminal 1 — Laravel API
-php artisan serve --port=8011
-
-# Terminal 2 — React
-npm --prefix frontend run dev
-```
-
-Truy cập giao diện tại `http://127.0.0.1:5173`. Metadata backend ở `http://127.0.0.1:8011/api`, API nghiệp vụ ở `http://127.0.0.1:8011/api/v1`, trạng thái dịch vụ ở `http://127.0.0.1:8011/up`.
-
-## Build và kiểm thử
-
-```powershell
-npm run build
-npm run lint
-php artisan test
-php artisan route:list --path=api/v1
-```
-
-## Dữ liệu mẫu
-
-Seeder hiện có tài khoản mẫu cho ba vai trò. Chạy `php artisan migrate:fresh --seed` khi muốn tạo lại toàn bộ dữ liệu phát triển. Thao tác này xóa dữ liệu hiện tại, vì vậy không chạy trên cơ sở dữ liệu cần giữ lại.
-
-## Tài liệu nội bộ cho AI
-
-Các tài liệu ngữ cảnh, lịch sử thay đổi và nguồn tham khảo nằm trong `Doc/`. Thư mục này được cố ý loại khỏi Git để chỉ dùng cục bộ theo yêu cầu của chủ dự án.
+The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
