@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Kênh Chủ Sân - SportHub')</title>
+    <!-- Theme Init Script to avoid FOUC -->
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style> body { font-family: 'Plus Jakarta Sans', sans-serif; } </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex h-screen overflow-hidden">
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex h-screen overflow-hidden transition-colors duration-200">
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col border-r border-slate-800 flex-shrink-0">
+    <aside class="w-64 bg-slate-900 dark:bg-slate-950 text-white flex flex-col border-r border-slate-800 flex-shrink-0">
         <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-slate-950">⚽</div>
             <div>
@@ -52,10 +65,13 @@
     </aside>
 
     <!-- Main Content Area -->
-    <div class="flex-grow flex flex-col overflow-y-auto">
-        <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10 shadow-sm">
-            <h1 class="text-lg font-bold text-slate-900">@yield('page_title', 'Bảng Điều Khiển')</h1>
-            <a href="{{ route('home') }}" class="text-xs text-emerald-600 font-semibold hover:underline">← Xem trang công khai</a>
+    <div class="flex-grow flex flex-col overflow-y-auto bg-slate-50 dark:bg-slate-900">
+        <header class="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 h-16 flex items-center justify-between px-8 sticky top-0 z-10 shadow-sm">
+            <h1 class="text-lg font-bold text-slate-900 dark:text-white">@yield('page_title', 'Bảng Điều Khiển')</h1>
+            <div class="flex items-center gap-4">
+                <x-theme-toggle />
+                <a href="{{ route('home') }}" class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">← Xem trang công khai</a>
+            </div>
         </header>
 
         <main class="p-8 flex-grow">

@@ -11,10 +11,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
+    <!-- Theme Init Script to avoid FOUC -->
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    
     <!-- Tailwind v4 CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -38,10 +48,10 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col min-h-screen transition-colors duration-200">
 
     <!-- Header Navigation -->
-    <header class="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-50 shadow-md">
+    <header class="bg-slate-900 dark:bg-slate-900/90 dark:backdrop-blur border-b border-slate-800 text-white sticky top-0 z-50 shadow-md">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <!-- Logo -->
@@ -61,8 +71,10 @@
                     <a href="{{ route('customer.fields.index') }}" class="hover:text-emerald-400 transition-colors py-2">Tìm sân thể thao</a>
                 </nav>
 
-                <!-- Auth Navigation -->
+                <!-- Right Controls: Theme Toggle & Auth Navigation -->
                 <div class="flex items-center gap-3">
+                    <x-theme-toggle />
+
                     @auth
                         <div class="relative group">
                             <button class="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-800 transition">

@@ -54,36 +54,36 @@
 <!-- Categories Section -->
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
     <div class="text-center max-w-2xl mx-auto mb-12">
-        <h2 class="text-3xl font-black text-slate-900">Danh Mục Bộ Môn Thể Thao</h2>
-        <p class="text-slate-500 text-sm mt-2">Đa dạng sân chơi đáp ứng mọi nhu cầu rèn luyện của bạn</p>
+        <h2 class="text-3xl font-black text-slate-900 dark:text-white">Danh Mục Bộ Môn Thể Thao</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Đa dạng sân chơi đáp ứng mọi nhu cầu rèn luyện của bạn</p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
         @foreach($categories as $cat)
-            <a href="{{ route('customer.fields.index', ['category' => $cat->slug]) }}" class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition duration-300 text-center group">
+            <a href="{{ route('customer.fields.index', ['category' => $cat->slug]) }}" class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition duration-300 text-center group">
                 <div class="text-4xl mb-3 group-hover:scale-110 transition-transform">{{ $cat->icon }}</div>
-                <h3 class="font-bold text-slate-900 text-base group-hover:text-emerald-600">{{ $cat->name }}</h3>
-                <p class="text-xs text-slate-400 mt-1">{{ $cat->field_types_count }} loại sân</p>
+                <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-500">{{ $cat->name }}</h3>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ $cat->field_types_count }} loại sân</p>
             </a>
         @endforeach
     </div>
 </div>
 
 <!-- Featured Fields Section -->
-<div class="bg-slate-100 py-16">
+<div class="bg-slate-100 dark:bg-slate-900/50 py-16">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-end mb-10">
             <div>
-                <h2 class="text-3xl font-black text-slate-900">Sân Thể Thao Nổi Bật</h2>
-                <p class="text-slate-500 text-sm mt-1">Các cơ sở được yêu thích và đánh giá cao nhất</p>
+                <h2 class="text-3xl font-black text-slate-900 dark:text-white">Sân Thể Thao Nổi Bật</h2>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Các cơ sở được yêu thích và đánh giá cao nhất</p>
             </div>
-            <a href="{{ route('customer.fields.index') }}" class="text-sm font-bold text-emerald-600 hover:text-emerald-700">Xem tất cả →</a>
+            <a href="{{ route('customer.fields.index') }}" class="text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700">Xem tất cả →</a>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             @foreach($featuredFields as $field)
-                <div class="bg-white rounded-2xl overflow-hidden shadow-md border border-slate-200/60 hover:shadow-xl transition group flex flex-col">
-                    <div class="relative h-48 bg-slate-200 overflow-hidden">
+                <div class="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-md border border-slate-200/60 dark:border-slate-800 hover:shadow-xl transition group flex flex-col">
+                    <div class="relative h-48 bg-slate-200 dark:bg-slate-800 overflow-hidden">
                         @if($field->primaryImage)
                             <img src="{{ $field->primaryImage->image_path }}" alt="{{ $field->name }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                         @else
@@ -96,21 +96,21 @@
                     <div class="p-6 flex-grow flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between gap-2 mb-2">
-                                <span class="text-xs text-emerald-600 font-semibold px-2 py-0.5 bg-emerald-50 rounded-md">{{ $field->fieldType->name }}</span>
+                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 rounded-md">{{ $field->fieldType->name }}</span>
                                 <x-star-rating :rating="$field->averageRating()" />
                             </div>
-                            <h3 class="font-bold text-lg text-slate-900 group-hover:text-emerald-600 transition line-clamp-1">
+                            <h3 class="font-bold text-lg text-slate-900 dark:text-white group-hover:text-emerald-500 transition line-clamp-1">
                                 <a href="{{ route('customer.fields.show', $field->slug) }}">{{ $field->name }}</a>
                             </h3>
-                            <p class="text-xs text-slate-500 mt-2 line-clamp-2">📍 {{ $field->address }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">📍 {{ $field->address }}</p>
                         </div>
 
-                        <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                             <div>
                                 <span class="text-xs text-slate-400 block">Giá thuê chỉ từ</span>
-                                <span class="text-lg font-black text-slate-900">{{ number_format($field->price_per_hour) }} <span class="text-xs font-normal text-slate-500">đ/giờ</span></span>
+                                <span class="text-lg font-black text-slate-900 dark:text-white">{{ number_format($field->price_per_hour) }} <span class="text-xs font-normal text-slate-500">đ/giờ</span></span>
                             </div>
-                            <a href="{{ route('customer.fields.show', $field->slug) }}" class="px-4 py-2 bg-slate-900 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition">
+                            <a href="{{ route('customer.fields.show', $field->slug) }}" class="px-4 py-2 bg-slate-900 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition">
                                 Đặt Sân
                             </a>
                         </div>
