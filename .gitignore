@@ -37,6 +37,7 @@
 
 # Local-only Markdown documentation and AI instructions
 *.md
+!/README.md
 
 /vendor
 _ide_helper.php
