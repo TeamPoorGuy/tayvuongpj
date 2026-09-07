@@ -17,8 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
         $middleware->alias([
+            // Kiểm tra role customer, field_owner hoặc admin.
             'api.role' => \App\Http\Middleware\EnsureUserHasRole::class,
+            // Kiểm tra tài khoản có đang bị khóa không.
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
+            // kiểm tra chủ sân đã được xác thực chưa.
+            'owner.approved' => \App\Http\Middleware\EnsureFieldOwnerIsApproved::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -19,7 +19,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
         Route::post('/register', [AuthController::class, 'register'])->middleware('guest');
         Route::middleware(['auth:sanctum', 'active'])->group(function () {
-            Route::get('/me', [AuthController::class, 'me']);
+            Route::get('/me', [AuthController::class, 'me'])
+        ->middleware('active');
             Route::post('/logout', [AuthController::class, 'logout']);
         });
     });
@@ -42,18 +43,71 @@ Route::prefix('v1')->group(function () {
             Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword']);
         });
 
-        Route::prefix('field-owner')->middleware('api.role:field_owner')->group(function () {
-            Route::get('/dashboard', [FieldOwner\DashboardController::class, 'show']);
-            Route::get('/fields', [FieldOwner\FieldController::class, 'index']);
-            Route::post('/fields', [FieldOwner\FieldController::class, 'store']);
-            Route::put('/fields/{field}', [FieldOwner\FieldController::class, 'update']);
-            Route::patch('/fields/{field}/toggle', [FieldOwner\FieldController::class, 'toggle']);
-            Route::get('/bookings', [FieldOwner\BookingController::class, 'index']);
-            Route::patch('/bookings/{booking}/status', [FieldOwner\BookingController::class, 'updateStatus']);
-            Route::get('/reviews', [FieldOwner\ReviewController::class, 'index']);
-            Route::get('/profile', [FieldOwner\ProfileController::class, 'show']);
-            Route::put('/profile', [FieldOwner\ProfileController::class, 'update']);
+        Route::prefix('field-owner')
+    // Trước tiên phải có role chủ sân.
+    ->middleware('api.role:field_owner')
+    ->group(function () {
+
+        /*
+         * Hai route hồ sơ nằm ngoài owner.approved.
+         * xem và chỉnh sửa hồ sơ để gửi admin duyệt.
+         */
+        Route::get(
+            '/profile',
+            [FieldOwner\ProfileController::class, 'show']
+        );
+
+        Route::put(
+            '/profile',
+            [FieldOwner\ProfileController::class, 'update']
+        );
+
+        /*
+         * Những route bên trong đây chỉ dành cho
+         * chủ sân đã được admin duyệt.
+         */
+        Route::middleware('owner.approved')->group(function () {
+            Route::get(
+                '/dashboard',
+                [FieldOwner\DashboardController::class, 'show']
+            );
+
+            Route::get(
+                '/fields',
+                [FieldOwner\FieldController::class, 'index']
+            );
+
+            Route::post(
+                '/fields',
+                [FieldOwner\FieldController::class, 'store']
+            );
+
+            Route::put(
+                '/fields/{field}',
+                [FieldOwner\FieldController::class, 'update']
+            );
+
+            Route::patch(
+                '/fields/{field}/toggle',
+                [FieldOwner\FieldController::class, 'toggle']
+            );
+
+            Route::get(
+                '/bookings',
+                [FieldOwner\BookingController::class, 'index']
+            );
+
+            Route::patch(
+                '/bookings/{booking}/status',
+                [FieldOwner\BookingController::class, 'updateStatus']
+            );
+
+            Route::get(
+                '/reviews',
+                [FieldOwner\ReviewController::class, 'index']
+            );
         });
+    });
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
