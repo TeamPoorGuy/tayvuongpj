@@ -32,11 +32,9 @@
 /storage/*.key
 /storage/pail
 # Local-only project memory and work history
-/Doc/
-/doc/
+
 
 # Local-only Markdown documentation and AI instructions
-*.md
 !/README.md
 
 /vendor
