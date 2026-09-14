@@ -11,12 +11,12 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Chủ sân 1 (Đã duyệt)
+        // 1. Chủ sân 1 (Đã duyệt) — role vẫn là customer, quyền chủ sân suy ra từ verification_status.
         $owner1 = User::create([
             'name' => 'Nguyễn Văn Chủ',
             'email' => 'owner1@sportfield.com',
             'password' => Hash::make('password'),
-            'role' => 'field_owner',
+            'role' => 'customer',
             'phone' => '0988776655',
             'address' => '123 Đường Lê Văn Lương, Thanh Xuân, Hà Nội',
             'is_active' => true,
@@ -24,12 +24,15 @@ class UserSeeder extends Seeder
 
         FieldOwnerProfile::create([
             'user_id' => $owner1->id,
+            'owner_name' => 'Nguyễn Văn Chủ',
+            'owner_id_number' => '001099001234',
             'business_name' => 'CLB Thể Thao Tây Vương',
             'business_address' => '123 Đường Lê Văn Lương, Thanh Xuân, Hà Nội',
             'business_phone' => '0988776655',
             'business_license' => 'GPKD-123456',
             'description' => 'Trung tâm thể thao đa năng gồm bóng đá, cầu lông và tennis hiện đại.',
             'verification_status' => 'approved',
+            'verified_at' => now(),
         ]);
 
         // 2. Chủ sân 2 (Đã duyệt)
@@ -37,7 +40,7 @@ class UserSeeder extends Seeder
             'name' => 'Trần Thị Sân',
             'email' => 'owner2@sportfield.com',
             'password' => Hash::make('password'),
-            'role' => 'field_owner',
+            'role' => 'customer',
             'phone' => '0911223344',
             'address' => '456 Đường Nguyễn Trãi, Thanh Xuân, Hà Nội',
             'is_active' => true,
@@ -45,12 +48,15 @@ class UserSeeder extends Seeder
 
         FieldOwnerProfile::create([
             'user_id' => $owner2->id,
+            'owner_name' => 'Trần Thị Sân',
+            'owner_id_number' => '001099005678',
             'business_name' => 'Khu Phức Hợp Thể Thao Sao Mai',
             'business_address' => '456 Đường Nguyễn Trãi, Thanh Xuân, Hà Nội',
             'business_phone' => '0911223344',
             'business_license' => 'GPKD-789012',
             'description' => 'Hệ thống sân bóng rổ và bóng chuyền đạt tiêu chuẩn thi đấu.',
             'verification_status' => 'approved',
+            'verified_at' => now(),
         ]);
 
         // 3. Chủ sân 3 (Mới đăng ký - Chờ duyệt)
@@ -58,7 +64,7 @@ class UserSeeder extends Seeder
             'name' => 'Hoàng Minh Tuấn',
             'email' => 'owner3@sportfield.com',
             'password' => Hash::make('password'),
-            'role' => 'field_owner',
+            'role' => 'customer',
             'phone' => '0977889900',
             'address' => '88 Đường Cầu Giấy, Hà Nội',
             'is_active' => true,
@@ -66,6 +72,8 @@ class UserSeeder extends Seeder
 
         FieldOwnerProfile::create([
             'user_id' => $owner3->id,
+            'owner_name' => 'Hoàng Minh Tuấn',
+            'owner_id_number' => '001099009012',
             'business_name' => 'Sân Cầu Lông & Pickleball Cầu Giấy',
             'business_address' => '88 Đường Cầu Giấy, Hà Nội',
             'business_phone' => '0977889900',

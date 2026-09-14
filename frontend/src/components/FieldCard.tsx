@@ -4,9 +4,10 @@ import type { SportsField } from '../types/api'
 
 const currency = new Intl.NumberFormat('vi-VN')
 
-export function FieldCard({ field }: { field: SportsField }) {
+export function FieldCard({ field, index }: { field: SportsField; index?: number }) {
+  const style = index !== undefined ? ({ '--i': index } as React.CSSProperties) : undefined
   return (
-    <article className="field-card">
+    <article className="field-card reveal" style={style}>
       <Link to={`/fields/${field.slug}`} className="field-card__image">
         {field.primary_image ? <img src={field.primary_image} alt={field.name} /> : <span>SportHub</span>}
         <span className="pill pill--dark">{field.field_type?.category?.name ?? 'Thể thao'}</span>
@@ -23,3 +24,4 @@ export function FieldCard({ field }: { field: SportsField }) {
     </article>
   )
 }
+

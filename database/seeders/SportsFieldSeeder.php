@@ -128,16 +128,7 @@ class SportsFieldSeeder extends Seeder
             ],
         ];
 
-        $slotsConfig = [
-            ['06:00', '07:30'],
-            ['07:30', '09:00'],
-            ['09:00', '10:30'],
-            ['14:00', '15:30'],
-            ['15:30', '17:00'],
-            ['17:00', '18:30'],
-            ['18:30', '20:00'],
-            ['20:00', '21:30'],
-        ];
+        $slotsConfig = TimeSlot::DEFAULT_SCHEDULE;
 
         foreach ($fieldsData as $fData) {
             $field = SportsField::create([

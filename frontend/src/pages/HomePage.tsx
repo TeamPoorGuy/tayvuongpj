@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router'
 import { useState } from 'react'
 import { api } from '../api/client'
 import { FieldCard } from '../components/FieldCard'
+import { useReveal } from '../hooks/useReveal'
 import type { ApiEnvelope, HomeData } from '../types/api'
 
 export function HomePage() {
@@ -13,6 +14,8 @@ export function HomePage() {
     queryKey: ['home'],
     queryFn: async () => (await api.get<ApiEnvelope<HomeData>>('/home')).data.data,
   })
+
+  useReveal([data])
 
   const search = (event: React.FormEvent) => {
     event.preventDefault()
@@ -44,12 +47,12 @@ export function HomePage() {
       </section>
 
       <section className="section shell">
-        <div className="section-heading"><div><span className="kicker">Chọn môn yêu thích</span><h2>Mỗi ngày một trận mới.</h2></div><Link to="/fields">Xem tất cả <ArrowRight size={16} /></Link></div>
-        {isPending && <div className="loading-grid">{Array.from({ length: 5 }).map((_, index) => <span key={index} />)}</div>}
+        <div className="section-heading reveal"><div><span className="kicker">Chọn môn yêu thích</span><h2>Mỗi ngày một trận mới.</h2></div><Link to="/fields">Xem tất cả <ArrowRight size={16} /></Link></div>
+        {isPending && <div className="loading-grid">{Array.from({ length: 5 }).map((_, index) => <span key={index} className="skeleton-shimmer" />)}</div>}
         {isError && <div className="notice notice--error">Không thể tải danh mục. Hãy kiểm tra API Laravel.</div>}
         <div className="category-grid">
-          {data?.categories.map((category) => (
-            <Link to={`/fields?category=${category.slug}`} className="category-card" key={category.id}>
+          {data?.categories.map((category, index) => (
+            <Link to={`/fields?category=${category.slug}`} className="category-card reveal" style={{ '--i': index } as React.CSSProperties} key={category.id}>
               <span>{category.icon ?? '●'}</span><strong>{category.name}</strong><small>{category.field_types_count} loại sân</small>
             </Link>
           ))}
@@ -58,18 +61,33 @@ export function HomePage() {
 
       <section className="section section--muted">
         <div className="shell">
-          <div className="section-heading"><div><span className="kicker">Được cộng đồng lựa chọn</span><h2>Sân nổi bật gần đây.</h2></div><Link to="/fields">Khám phá toàn bộ <ArrowRight size={16} /></Link></div>
-          <div className="field-grid">{data?.featured_fields.map((field) => <FieldCard field={field} key={field.id} />)}</div>
+          <div className="section-heading reveal"><div><span className="kicker">Được cộng đồng lựa chọn</span><h2>Sân nổi bật gần đây.</h2></div><Link to="/fields">Khám phá toàn bộ <ArrowRight size={16} /></Link></div>
+          {isPending && (
+            <div className="field-grid">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div className="skeleton-card" key={index}>
+                  <div className="skeleton-card__img skeleton-shimmer" />
+                  <div className="skeleton-card__body">
+                    <div className="skeleton-line skeleton-line--short skeleton-shimmer" />
+                    <div className="skeleton-line skeleton-line--title skeleton-shimmer" />
+                    <div className="skeleton-line skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="field-grid">{data?.featured_fields.map((field, index) => <FieldCard field={field} index={index} key={field.id} />)}</div>
         </div>
       </section>
 
       <section id="how-it-works" className="benefits">
         <div className="shell benefits__grid">
-          <article><Search /><div><strong>Tìm đúng sân</strong><p>Lọc theo môn, khu vực và mức giá phù hợp.</p></div></article>
-          <article><CalendarCheck /><div><strong>Chọn lịch trống</strong><p>Xem giờ còn trống trước khi gửi yêu cầu.</p></div></article>
-          <article><ShieldCheck /><div><strong>An tâm vào trận</strong><p>Thông tin sân và chủ sân được kiểm duyệt.</p></div></article>
+          <article className="reveal" style={{ '--i': 0 } as React.CSSProperties}><Search /><div><strong>Tìm đúng sân</strong><p>Lọc theo môn, khu vực và mức giá phù hợp.</p></div></article>
+          <article className="reveal" style={{ '--i': 1 } as React.CSSProperties}><CalendarCheck /><div><strong>Chọn lịch trống</strong><p>Xem giờ còn trống trước khi gửi yêu cầu.</p></div></article>
+          <article className="reveal" style={{ '--i': 2 } as React.CSSProperties}><ShieldCheck /><div><strong>An tâm vào trận</strong><p>Thông tin sân và chủ sân được kiểm duyệt.</p></div></article>
         </div>
       </section>
     </>
   )
 }
+

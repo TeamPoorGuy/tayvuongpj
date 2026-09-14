@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\DTOs\Booking\CreateBookingData;
 use App\Enums\BookingStatus;
-use App\Enums\FieldStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
 use App\Models\Booking;
@@ -20,7 +19,7 @@ class BookingService
     {
         return Booking::query()
             ->where('user_id', $user->id)
-            ->with(['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review'])
+            ->with(Booking::resourceRelations())
             ->latest()
             ->paginate(10);
     }
@@ -28,9 +27,9 @@ class BookingService
     public function create(User $user, CreateBookingData $data): Booking
     {
         return DB::transaction(function () use ($user, $data) {
-            $field = SportsField::query()->lockForUpdate()->findOrFail($data->sportsFieldId);
+            $field = SportsField::query()->approved()->lockForUpdate()->find($data->sportsFieldId);
 
-            if ($field->status !== FieldStatus::Approved->value || ! $field->is_active) {
+            if (! $field) {
                 throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
             }
 
@@ -43,7 +42,7 @@ class BookingService
                 ->where('sports_field_id', $field->id)
                 ->where('time_slot_id', $slot->id)
                 ->whereDate('booking_date', $data->bookingDate)
-                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->whereIn('status', BookingStatus::blockingCases())
                 ->lockForUpdate()
                 ->exists();
 
@@ -57,9 +56,9 @@ class BookingService
                 'time_slot_id' => $slot->id,
                 'booking_date' => $data->bookingDate,
                 'status' => BookingStatus::Pending->value,
-                'total_price' => $field->price_per_hour * 1.5,
+                'total_price' => $field->price_per_hour * $slot->durationInHours(),
                 'notes' => $data->notes,
-            ])->load(['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review']);
+            ])->load(Booking::resourceRelations());
         });
     }
 
@@ -79,6 +78,6 @@ class BookingService
             'cancel_reason' => $reason ?: 'Khách hàng tự hủy đơn.',
         ]);
 
-        return $booking->refresh()->load(['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review']);
+        return $booking->refresh()->load(Booking::resourceRelations());
     }
 }

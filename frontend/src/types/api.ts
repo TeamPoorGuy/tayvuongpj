@@ -14,12 +14,17 @@ export interface User {
 
 export interface OwnerProfile {
   id: number
+  owner_name: string | null
+  owner_id_number: string | null
   business_name: string
   business_address: string
   business_phone: string
   business_license: string | null
   description: string | null
-  verification_status: string
+  verification_status: 'pending' | 'approved' | 'rejected'
+  verification_documents: string | null
+  rejection_reason: string | null
+  verified_at: string | null
   user?: User
 }
 

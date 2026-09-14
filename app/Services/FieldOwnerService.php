@@ -30,6 +30,7 @@ class FieldOwnerService
             'current_month_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->count(),
             'current_month_revenue' => (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->sum('total_price'),
             'most_booked_field' => SportsField::where('field_owner_id', $owner->id)->with(['primaryImage', 'fieldType.sportCategory', 'reviews'])->withCount('bookings')->orderByDesc('bookings_count')->first(),
+            // Dashboard summary only — deliberately omits 'review', unlike Booking::resourceRelations().
             'recent_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->with(['sportsField.primaryImage', 'sportsField.reviews', 'customer', 'timeSlot'])->latest()->take(5)->get(),
         ];
     }
@@ -67,7 +68,7 @@ class FieldOwnerService
                 ]);
             }
 
-            foreach ([['06:00', '07:30'], ['07:30', '09:00'], ['09:00', '10:30'], ['14:00', '15:30'], ['15:30', '17:00'], ['17:00', '18:30'], ['18:30', '20:00'], ['20:00', '21:30']] as [$start, $end]) {
+            foreach (TimeSlot::DEFAULT_SCHEDULE as [$start, $end]) {
                 TimeSlot::create(['sports_field_id' => $field->id, 'start_time' => $start, 'end_time' => $end, 'is_active' => true]);
             }
 
@@ -102,7 +103,7 @@ class FieldOwnerService
         $fieldIds = SportsField::where('field_owner_id', $owner->id)->pluck('id');
 
         return Booking::whereIn('sports_field_id', $fieldIds)
-            ->with(['sportsField.primaryImage', 'sportsField.reviews', 'customer', 'timeSlot', 'review'])
+            ->with(Booking::resourceRelations(withCustomer: true))
             ->when($filters['field_id'] ?? null, fn ($query, $id) => $query->where('sports_field_id', $id))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereDate('booking_date', $date))
@@ -113,24 +114,16 @@ class FieldOwnerService
 
     public function updateBookingStatus(User $owner, Booking $booking, string $status): Booking
     {
-        $ownsField = SportsField::where('field_owner_id', $owner->id)->whereKey($booking->sports_field_id)->exists();
-        if (! $ownsField) {
-            throw new ForbiddenException();
-        }
+        $this->assertOwner($owner, $booking->sportsField);
 
-        $allowed = match ($booking->status) {
-            BookingStatus::Pending->value => [BookingStatus::Confirmed->value, BookingStatus::Rejected->value],
-            BookingStatus::Confirmed->value => [BookingStatus::Completed->value, BookingStatus::Cancelled->value],
-            default => [],
-        };
-
-        if (! in_array($status, $allowed, true)) {
+        $next = BookingStatus::from($status);
+        if (! $booking->status->canTransitionTo($next)) {
             throw new \App\Exceptions\ConflictException('Chuyển trạng thái đơn không hợp lệ.');
         }
 
-        $booking->update(['status' => $status]);
+        $booking->update(['status' => $next->value]);
 
-        return $booking->refresh()->load(['sportsField.primaryImage', 'sportsField.reviews', 'customer', 'timeSlot', 'review']);
+        return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
     }
 
     public function reviews(User $owner): LengthAwarePaginator

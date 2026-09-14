@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
-:root { --ink:#102019; --soft:#506158; --forest:#0b3025; --lime:#b9ef52; --cream:#f5f7f0; --paper:#fff; --line:#dfe5db; --muted:#718078; font-family:'Manrope',sans-serif; color:var(--ink); background:var(--cream); font-synthesis:none; }
+:root { --ink:#102019; --soft:#506158; --forest:#0b3025; --lime:#b9ef52; --cream:#f5f7f0; --paper:#fff; --line:#dfe5db; --muted:#718078; --ease-out:cubic-bezier(.16,1,.3,1); --ease-spring:cubic-bezier(.34,1.56,.64,1); --dur-fast:.18s; --dur-base:.32s; --dur-slow:.6s; font-family:'Manrope',sans-serif; color:var(--ink); background:var(--cream); font-synthesis:none; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body { margin:0; min-width:320px; min-height:100vh; }
@@ -131,3 +131,377 @@ button { cursor:pointer; }
 @media(max-width:1000px) { .detail-grid { grid-template-columns:1fr; }.booking-card { position:static; }.stats-grid { grid-template-columns:repeat(2,1fr); }.settings-grid,.category-admin { grid-template-columns:1fr; } }
 @media(max-width:780px) { .gallery { height:360px; }.sidebar { position:static; width:100%; }.sidebar nav { display:flex; overflow:auto; }.sidebar nav a { flex:none; }.sidebar__user,.sidebar>button { display:none; }.dashboard { display:block; }.dashboard__main { width:100%; margin:0; }.dashboard__top { padding-inline:16px; }.dashboard__content { padding:22px 13px; }.workspace-title__icon { display:none; }.booking-item { grid-template-columns:1fr; }.booking-item__image { height:180px; min-height:0; } }
 @media(max-width:640px) { .gallery { height:270px; grid-template-columns:1fr; }.gallery img:not(.gallery__main) { display:none; }.detail-head { align-items:start; flex-direction:column; }.form-grid,.review-grid,.category-tree { grid-template-columns:1fr; }.auth-page { grid-template-columns:1fr; }.auth-page>aside { display:none; }.stats-grid { grid-template-columns:1fr; }.workspace-title { align-items:start; }.workspace-title__action { margin-left:0; }.workspace-title { flex-wrap:wrap; } }
+
+/* ==========================================================================
+   Motion System Enhancements (SportHub Premium Motion)
+   ========================================================================== */
+
+/* Accessibility: Triệt để tắt toàn bộ animation khi người dùng bật Reduce Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .hero h1 em::after {
+    transform: scaleX(1) !important;
+    animation: none !important;
+  }
+  .hero__spotlight {
+    animation: none !important;
+  }
+  .status--pending i {
+    animation: none !important;
+  }
+}
+
+/* Scroll Reveal & Stagger System */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+.reveal[style*="--i"] {
+  transition-delay: calc(var(--i, 0) * 65ms);
+}
+
+/* Modern CSS scroll-driven animation enhancement */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal-auto {
+      animation: autoReveal var(--dur-slow) var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 30%;
+    }
+  }
+}
+@keyframes autoReveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Enhanced Hover States & Tactile Press Feedback */
+.button {
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.button:active {
+  transform: scale(0.96) translateY(0);
+}
+
+/* Button Sheen Streak (Vệt sáng lướt qua nút brand lime) */
+.button--brand {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(185, 239, 82, 0.28);
+}
+.button--brand:hover {
+  box-shadow: 0 7px 22px rgba(185, 239, 82, 0.45);
+}
+.button--brand::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -120%;
+  width: 60%;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  transform: rotate(25deg);
+  transition: left 0.65s var(--ease-out);
+  pointer-events: none;
+}
+.button--brand:hover::before {
+  left: 150%;
+}
+
+/* Field Card Multi-Layer Hover Depth & Lime Glow Border */
+.field-card {
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+.field-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(185, 239, 82, 0.45);
+  box-shadow: 0 18px 45px rgba(16, 32, 25, 0.12), 0 4px 12px rgba(16, 32, 25, 0.05);
+}
+.field-card__image img {
+  transition: transform 0.6s var(--ease-out), filter 0.6s var(--ease-out);
+}
+.field-card:hover img {
+  transform: scale(1.05);
+  filter: brightness(1.04);
+}
+
+/* Category Card Spring Bounce */
+.category-card {
+  transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.category-card > span {
+  display: inline-block;
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+.category-card:hover > span {
+  transform: translateY(-5px) scale(1.14);
+}
+.category-card:hover {
+  transform: translateY(-5px);
+  border-color: #b9d79a;
+  box-shadow: 0 18px 45px rgba(16, 32, 25, 0.1);
+}
+
+/* Stat, Review, Booking Item Hover Lift */
+.stat, .review-card, .booking-item {
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.stat:hover, .review-card:hover, .booking-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 38px rgba(16, 32, 25, 0.09);
+  border-color: #cfdbce;
+}
+
+/* Tactile Feedback for Round-Link, Slots, Pagers */
+.round-link {
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.round-link:hover {
+  transform: translateY(-2px) scale(1.05);
+  background: #08261d;
+}
+.round-link:active {
+  transform: scale(0.93);
+}
+.slot-grid button {
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.slot-grid button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: #a8cc8b;
+}
+.slot-grid button:not(:disabled):active {
+  transform: scale(0.96);
+}
+.pager button {
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.pager button:hover {
+  transform: translateY(-1px);
+}
+.pager button:active {
+  transform: scale(0.95);
+}
+
+/* Hero Section Entrance Stagger & Highlights */
+@keyframes heroFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero .eyebrow {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 0.06s;
+}
+.hero h1 {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 0.14s;
+}
+.hero__copy > p {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 0.22s;
+}
+.hero-search {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 0.30s;
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.hero-search:focus-within {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32), 0 0 0 3px rgba(185, 239, 82, 0.4);
+}
+.hero__proof {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 0.38s;
+}
+
+/* Lime Underline Drawing Animation for "Chơi hết mình" */
+.hero h1 em {
+  position: relative;
+  display: inline-block;
+}
+.hero h1 em::after {
+  content: '';
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: var(--lime);
+  border-radius: 3px;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: drawLimeUnderline 0.75s var(--ease-out) 0.5s forwards;
+}
+@keyframes drawLimeUnderline {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Hero Spotlight Entrance & Floating Motion (8s, biên độ 6px) */
+@keyframes spotlightFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.hero__spotlight {
+  animation: heroFadeInUp var(--dur-slow) var(--ease-out) 0.25s backwards, spotlightFloat 8s ease-in-out 0.85s infinite;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.hero__spotlight:hover {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+/* Loading States & Shimmer Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.loading-grid span,
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e5eae1 20%, #f3f7ef 48%, #e5eae1 80%) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.8s infinite linear !important;
+}
+
+/* Skeleton Card Components */
+.skeleton-card {
+  border: 1px solid var(--line);
+  border-radius: 23px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(16, 32, 25, 0.04);
+}
+.skeleton-card__img {
+  height: 220px;
+  width: 100%;
+}
+.skeleton-card__body {
+  padding: 19px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+}
+.skeleton-line--short {
+  width: 40%;
+}
+.skeleton-line--title {
+  height: 20px;
+  width: 75%;
+}
+.skeleton-stat {
+  min-height: 125px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Notice Slide In */
+.notice {
+  animation: noticeSlideIn var(--dur-base) var(--ease-out);
+}
+@keyframes noticeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sidebar Active Tab Indicator (Framer Motion layoutId support) */
+.sidebar nav a {
+  position: relative;
+  z-index: 1;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.sidebar__active-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: rgba(185, 239, 82, 0.14);
+  border-left: 3px solid var(--lime);
+  z-index: -1;
+  pointer-events: none;
+}
+.dashboard--admin .sidebar__active-pill {
+  background: rgba(119, 99, 217, 0.2);
+  border-left-color: #c8bfff;
+}
+
+/* Table Row Stagger Cascade */
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.table-wrap tbody tr {
+  animation: rowFadeIn var(--dur-base) var(--ease-out) backwards;
+}
+.table-wrap tbody tr:nth-child(1) { animation-delay: 0.03s; }
+.table-wrap tbody tr:nth-child(2) { animation-delay: 0.06s; }
+.table-wrap tbody tr:nth-child(3) { animation-delay: 0.09s; }
+.table-wrap tbody tr:nth-child(4) { animation-delay: 0.12s; }
+.table-wrap tbody tr:nth-child(5) { animation-delay: 0.15s; }
+.table-wrap tbody tr:nth-child(6) { animation-delay: 0.18s; }
+.table-wrap tbody tr:nth-child(7) { animation-delay: 0.21s; }
+.table-wrap tbody tr:nth-child(8) { animation-delay: 0.24s; }
+
+/* Status Pending Badge Breathing Dot */
+@keyframes statusDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.45);
+    opacity: 0.52;
+  }
+}
+.status--pending i {
+  animation: statusDotPulse 1.8s ease-in-out infinite;
+}
