@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Enums\FieldStatus;
+use App\Enums\BookingStatus;
 use App\Http\Requests\Api\Field\FieldIndexRequest;
 use App\Models\Booking;
 use App\Models\FieldType;
@@ -69,7 +69,7 @@ class CatalogService
     public function availableSlots(SportsField $field, string $date): array
     {
         abort_unless(
-            $field->status === FieldStatus::Approved->value && $field->is_active,
+            SportsField::approved()->whereKey($field->id)->exists(),
             404,
             'Không tìm thấy sân đang hoạt động.'
         );
@@ -77,7 +77,7 @@ class CatalogService
         $bookedSlotIds = Booking::query()
             ->where('sports_field_id', $field->id)
             ->whereDate('booking_date', $date)
-            ->whereIn('status', ['pending', 'confirmed'])
+            ->whereIn('status', BookingStatus::blockingCases())
             ->pluck('time_slot_id');
 
         return $field->timeSlots()->where('is_active', true)->get()->map(fn ($slot) => [

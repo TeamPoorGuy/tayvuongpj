@@ -7,6 +7,7 @@ import { FieldDetailPage } from './pages/FieldDetailPage'
 import { LoginPage, RegisterPage } from './pages/AuthPages'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
+import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
 import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 
@@ -25,10 +26,11 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="bookings" element={<CustomerBookingsPage />} />
           <Route path="profile" element={<CustomerProfilePage />} />
+          <Route path="become-owner" element={<OwnerApplicationPage />} />
         </Route>
       </Route>
 
-      <Route element={<ProtectedRoute roles={['field_owner']} />}>
+      <Route element={<ProtectedRoute roles={['customer']} requireApprovedOwner />}>
         <Route element={<DashboardLayout />}>
           <Route path="owner" element={<OwnerDashboardPage />} />
           <Route path="owner/fields" element={<OwnerFieldsPage />} />

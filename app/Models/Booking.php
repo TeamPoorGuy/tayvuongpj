@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BookingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -23,6 +24,7 @@ class Booking extends Model
 
     protected $casts = [
         'booking_date' => 'date',
+        'status' => BookingStatus::class,
         'total_price' => 'decimal:2',
         'cancelled_at' => 'datetime',
     ];
@@ -47,8 +49,23 @@ class Booking extends Model
         return $this->hasOne(Review::class);
     }
 
+    /**
+     * Relations BookingResource needs to render without omitting a field.
+     *
+     * @return list<string>
+     */
+    public static function resourceRelations(bool $withCustomer = false): array
+    {
+        $relations = ['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review'];
+        if ($withCustomer) {
+            $relations[] = 'customer';
+        }
+
+        return $relations;
+    }
+
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, ['pending', 'confirmed']) && $this->booking_date->isFuture();
+        return $this->status->blocksSlot() && $this->booking_date->isFuture();
     }
 }

@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Enums\UserRole;
+use App\Enums\VerificationStatus;
+use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
+use App\Mail\OwnerApplicationVerified;
 use App\Models\Booking;
 use App\Models\FieldOwnerProfile;
 use App\Models\FieldType;
@@ -13,6 +16,7 @@ use App\Models\SportsField;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class AdminService
@@ -21,8 +25,8 @@ class AdminService
     {
         return [
             'total_customers' => User::where('role', UserRole::Customer->value)->count(),
-            'total_field_owners' => User::where('role', UserRole::FieldOwner->value)->count(),
-            'pending_owners' => FieldOwnerProfile::where('verification_status', 'pending')->count(),
+            'total_field_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Approved)->count(),
+            'pending_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Pending)->count(),
             'total_fields' => SportsField::count(),
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'total_bookings' => Booking::count(),
@@ -55,16 +59,38 @@ class AdminService
         return $user->refresh();
     }
 
-    public function ownerProfiles(): LengthAwarePaginator
+    public function ownerProfiles(?string $status = null): LengthAwarePaginator
     {
-        return FieldOwnerProfile::with('user')->latest()->paginate(10);
+        return FieldOwnerProfile::with('user')
+            ->when($status, fn ($query) => $query->where('verification_status', $status))
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
     }
 
-    public function verifyOwner(FieldOwnerProfile $profile, string $status): FieldOwnerProfile
+    public function verifyOwner(FieldOwnerProfile $profile, string $status, ?string $reason, User $admin): FieldOwnerProfile
     {
-        $profile->update(['verification_status' => $status]);
+        if ($profile->verification_status !== VerificationStatus::Pending) {
+            throw new ConflictException('Hồ sơ này đã được xử lý.');
+        }
 
-        return $profile->refresh()->load('user');
+        $profile->update([
+            'verification_status' => $status,
+            'rejection_reason' => $status === VerificationStatus::Rejected->value ? $reason : null,
+            'verified_at' => now(),
+            'verified_by' => $admin->id,
+        ]);
+
+        $profile->refresh()->load('user');
+
+        try {
+            Mail::to($profile->user->email)->send(new OwnerApplicationVerified($profile));
+        } catch (\Throwable $e) {
+            // Gửi mail thất bại không được chặn việc duyệt hồ sơ; chỉ ghi log để kiểm tra sau.
+            report($e);
+        }
+
+        return $profile;
     }
 
     public function fields(?string $status): LengthAwarePaginator
@@ -85,7 +111,7 @@ class AdminService
 
     public function bookings(?string $status): LengthAwarePaginator
     {
-        return Booking::with(['sportsField.primaryImage', 'sportsField.reviews', 'customer', 'timeSlot', 'review'])
+        return Booking::with(Booking::resourceRelations(withCustomer: true))
             ->when($status, fn ($query) => $query->where('status', $status))
             ->latest()
             ->paginate(15)

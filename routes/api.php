@@ -41,17 +41,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
             Route::put('/profile', [Customer\ProfileController::class, 'update']);
             Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword']);
+            Route::get('/owner-application', [Customer\OwnerApplicationController::class, 'show']);
+            Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store']);
         });
 
         Route::prefix('field-owner')
-    // Trước tiên phải có role chủ sân.
-    ->middleware('api.role:field_owner')
+    // Chỉ chủ sân đã được admin duyệt mới vào được khu này.
+    // (đơn xin làm chủ sân nằm ở customer/owner-application, không cần duyệt để xem/nộp)
+    ->middleware('owner.approved')
     ->group(function () {
-
-        /*
-         * Hai route hồ sơ nằm ngoài owner.approved.
-         * xem và chỉnh sửa hồ sơ để gửi admin duyệt.
-         */
         Route::get(
             '/profile',
             [FieldOwner\ProfileController::class, 'show']
@@ -62,51 +60,45 @@ Route::prefix('v1')->group(function () {
             [FieldOwner\ProfileController::class, 'update']
         );
 
-        /*
-         * Những route bên trong đây chỉ dành cho
-         * chủ sân đã được admin duyệt.
-         */
-        Route::middleware('owner.approved')->group(function () {
-            Route::get(
-                '/dashboard',
-                [FieldOwner\DashboardController::class, 'show']
-            );
+        Route::get(
+            '/dashboard',
+            [FieldOwner\DashboardController::class, 'show']
+        );
 
-            Route::get(
-                '/fields',
-                [FieldOwner\FieldController::class, 'index']
-            );
+        Route::get(
+            '/fields',
+            [FieldOwner\FieldController::class, 'index']
+        );
 
-            Route::post(
-                '/fields',
-                [FieldOwner\FieldController::class, 'store']
-            );
+        Route::post(
+            '/fields',
+            [FieldOwner\FieldController::class, 'store']
+        );
 
-            Route::put(
-                '/fields/{field}',
-                [FieldOwner\FieldController::class, 'update']
-            );
+        Route::put(
+            '/fields/{field}',
+            [FieldOwner\FieldController::class, 'update']
+        );
 
-            Route::patch(
-                '/fields/{field}/toggle',
-                [FieldOwner\FieldController::class, 'toggle']
-            );
+        Route::patch(
+            '/fields/{field}/toggle',
+            [FieldOwner\FieldController::class, 'toggle']
+        );
 
-            Route::get(
-                '/bookings',
-                [FieldOwner\BookingController::class, 'index']
-            );
+        Route::get(
+            '/bookings',
+            [FieldOwner\BookingController::class, 'index']
+        );
 
-            Route::patch(
-                '/bookings/{booking}/status',
-                [FieldOwner\BookingController::class, 'updateStatus']
-            );
+        Route::patch(
+            '/bookings/{booking}/status',
+            [FieldOwner\BookingController::class, 'updateStatus']
+        );
 
-            Route::get(
-                '/reviews',
-                [FieldOwner\ReviewController::class, 'index']
-            );
-        });
+        Route::get(
+            '/reviews',
+            [FieldOwner\ReviewController::class, 'index']
+        );
     });
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {

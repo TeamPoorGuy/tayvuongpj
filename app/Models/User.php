@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\VerificationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -67,6 +68,12 @@ class User extends Authenticatable
     public function isCustomer(): bool
     {
         return $this->role === 'customer';
+    }
+
+    // Chủ sân được duyệt: vai trò suy ra từ trạng thái hồ sơ, không phải cột role.
+    public function isApprovedOwner(): bool
+    {
+        return $this->fieldOwnerProfile?->verification_status === VerificationStatus::Approved;
     }
 
     // Relationships

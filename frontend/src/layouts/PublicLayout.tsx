@@ -1,11 +1,17 @@
 import { Menu, UserRound } from 'lucide-react'
-import { Link, NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Brand } from '../components/Brand'
 import { useAuth } from '../context/auth-context'
+import { useReveal } from '../hooks/useReveal'
 
 export function PublicLayout() {
   const { user } = useAuth()
+  const location = useLocation()
+  useReveal([location.pathname])
+
   const workspace = user?.role === 'admin' ? '/admin' : user?.role === 'field_owner' ? '/owner' : '/bookings'
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -22,14 +28,27 @@ export function PublicLayout() {
           </div>
         </div>
       </header>
-      <main><Outlet /></main>
+      <main>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
+      </main>
       <footer className="footer">
         <div className="shell footer__grid">
-          <div><Brand /><p>Nền tảng tìm và đặt sân thể thao dành cho cộng đồng Việt Nam.</p></div>
-          <div><strong>Khám phá</strong><Link to="/fields">Tất cả sân</Link><Link to="/register">Trở thành chủ sân</Link></div>
-          <div><strong>SportHub</strong><span>Hà Nội, Việt Nam</span><span>hotro@sporthub.vn</span></div>
+          <div className="reveal" style={{ '--i': 0 } as React.CSSProperties}><Brand /><p>Nền tảng tìm và đặt sân thể thao dành cho cộng đồng Việt Nam.</p></div>
+          <div className="reveal" style={{ '--i': 1 } as React.CSSProperties}><strong>Khám phá</strong><Link to="/fields">Tất cả sân</Link><Link to="/register">Trở thành chủ sân</Link></div>
+          <div className="reveal" style={{ '--i': 2 } as React.CSSProperties}><strong>SportHub</strong><span>Hà Nội, Việt Nam</span><span>hotro@sporthub.vn</span></div>
         </div>
       </footer>
     </div>
   )
 }
+

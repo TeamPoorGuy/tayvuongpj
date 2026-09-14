@@ -12,7 +12,7 @@ class BookingResource extends JsonResource
         return [
             'id' => $this->id,
             'booking_date' => $this->booking_date?->format('Y-m-d'),
-            'status' => $this->status,
+            'status' => $this->status->value,
             'total_price' => (float) $this->total_price,
             'notes' => $this->notes,
             'cancelled_at' => $this->cancelled_at?->toISOString(),

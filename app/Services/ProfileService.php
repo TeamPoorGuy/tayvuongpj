@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\DTOs\Profile\UpdateCustomerProfileData;
+use App\Enums\VerificationStatus;
 use App\Models\FieldOwnerProfile;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -40,7 +41,7 @@ class ProfileService
                 'business_name' => $user->name,
                 'business_address' => $user->address ?: '',
                 'business_phone' => $user->phone ?: '',
-                'verification_status' => 'pending',
+                'verification_status' => VerificationStatus::Pending,
             ]
         );
     }

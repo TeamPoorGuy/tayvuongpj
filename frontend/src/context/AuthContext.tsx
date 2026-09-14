@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { api, initializeCsrf } from "../api/client";
+import { api } from "../api/client";
 import type { ApiEnvelope, User } from "../types/api";
 import { AuthContext } from "./auth-context";
 
@@ -22,7 +22,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         path: string,
         payload: Record<string, unknown>,
     ) => {
-        await initializeCsrf();
         const nextUser = (await api.post<ApiEnvelope<User>>(path, payload)).data
             .data;
         queryClient.setQueryData(["auth", "me"], nextUser);
@@ -31,9 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = async () => {
         try {
-            // Lấy CSRF cookie trước khi gửi request POST.
-            await initializeCsrf();
-
             // Yêu cầu backend hủy session.
             await api.post("/auth/logout");
         } finally {

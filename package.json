@@ -4,6 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "start": "npm run dev",
         "build": "npm --prefix frontend run build",
         "dev": "concurrently --names api,frontend --prefix-colors blue,green \"php artisan serve --port=8011\" \"npm --prefix frontend run dev\"",
         "dev:api": "php artisan serve --port=8011",
