@@ -1,8 +1,8 @@
 # Bối cảnh dự án cho AI — Tây Vương / SportHub
 
-- Cập nhật lần cuối: **2026-09-07 15:59**
-- Trạng thái: Laravel REST API và React SPA đã tách riêng, chạy local với Laragon MySQL.
-- Nguồn: mã nguồn hiện tại, đề cương người dùng cung cấp, `REFERENCES.md` và `History/2026-09-01_2032_chuyen-api-react-layered.md`.
+- Cập nhật lần cuối: **2026-09-14 14:25**
+- Trạng thái: Laravel 13 REST API + React 19 SPA tách riêng; vừa merge PR #3 bổ sung luồng đăng ký chủ sân và sửa logic `isApprovedOwner()`.
+- Nguồn: mã nguồn hiện tại commit `17b267a`, đề cương người dùng cung cấp, `REFERENCES.md` và `Doc/History/`.
 
 ## 1. Mục tiêu sản phẩm
 
@@ -166,13 +166,14 @@ Sanctum bổ sung bảng `personal_access_tokens`, dù SPA hiện dùng cookie s
 - `SANCTUM_STATEFUL_DOMAINS` phải chứa host frontend kèm port khi chạy khác origin.
 - Endpoint available-slots chỉ trả dữ liệu cho sân đã duyệt và đang hoạt động.
 - Chặn double booking hiện ở transaction + lock ứng dụng, chưa có unique constraint phù hợp vì trạng thái booking thay đổi.
-- Commit `cd1da60` đã thêm middleware `owner.approved` cho API vận hành của chủ sân, nhưng implementation đang đọc nhầm `$profile->verified` thay vì `$profile->verification_status`; hiện cả owner approved có thể bị chặn. Hai route profile vẫn truy cập được. Route logout vẫn còn nằm trong nhóm `active`, nên tài khoản bị khóa chưa đăng xuất sạch được.
+- Commit `186aaf7` (PR #3) đã sửa lỗi đọc nhầm `$profile->verified` bằng phương thức `$user->isApprovedOwner()` kiểm tra `verification_status === approved`. Đồng thời thêm form nộp hồ sơ chủ sân `/become-owner` và gửi mail thông báo `OwnerApplicationVerified`. Tuy nhiên, route `/logout` vẫn còn nằm trong nhóm middleware `['auth:sanctum', 'active']`, khiến tài khoản bị khóa chưa đăng xuất sạch được trên backend (frontend đã dùng block `finally` để xóa state cục bộ).
 - Ảnh nằm trong public storage, cần `php artisan storage:link`.
 - Xóa/tạo lại dữ liệu bằng `migrate:fresh --seed` là destructive; chỉ dùng trên database phát triển.
 
 ## 10. Kiểm thử hiện tại
 
-- 13 test, 32 assertion chạy đạt trên SQLite in-memory; bộ test hiện chưa bao phủ owner pending/approved hoặc logout của tài khoản bị khóa nên chưa phát hiện hai lỗi auth trong commit `cd1da60`.
+- 26 feature tests trong `LayeredApiTest.php` và 2 tests trong `ApiEntrypointTest.php` chạy đạt trên SQLite in-memory, bao phủ thêm luồng submit hồ sơ chủ sân, admin duyệt/từ chối, gửi mail, và ngăn chặn truy cập owner khi chưa approved.
+- Chưa có test cho trường hợp logout của tài khoản bị khóa (`is_active = false`).
 - Bao phủ backend entrypoint/health, public catalog, session login, 401, tài khoản inactive, role/ownership 403, bảo vệ admin, tạo booking hợp lệ, chặn slot thuộc sân khác và chặn xem slot của sân chưa duyệt.
 - Build React/TypeScript và Oxlint đều chạy sạch.
 - Smoke test thật qua Vite proxy + Laravel ngày `2026-09-01` đã đạt cho đăng nhập và endpoint riêng của customer, owner, admin. Ngày `2026-09-02`, health và frontend/ảnh preview trả 200; API cần dữ liệu chưa smoke lại do Laragon/MySQL đang tắt. Sau audit, metadata backend được chuyển từ `/` sang `/api`.

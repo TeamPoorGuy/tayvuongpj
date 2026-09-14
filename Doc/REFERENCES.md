@@ -17,7 +17,7 @@ bản ghi `Doc/History/` và thêm nguồn mới vào đây.
 | Giao diện và API client | `frontend/src/**/*.{ts,tsx,css}` |
 | Kiểm thử hiện có | `tests/**/*.php`, `phpunit.xml` |
 | Nhật ký trạng thái và cách chạy cục bộ | `ProjectLog/PROJECT_LOG.md` |
-| Lịch sử Git đã xem | commits `c34940a`, `ee45bc4`, `4099eae` |
+| Lịch sử Git đã xem | commits `c34940a`, `ee45bc4`, `4099eae`, `cd1da60`, `dd725e5`, `186aaf7`, `17b267a` |
 
 ## Yêu cầu nghiệp vụ do người dùng cung cấp
 
