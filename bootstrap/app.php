@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->alias([
             // Kiểm tra role customer, field_owner hoặc admin.
             'api.role' => \App\Http\Middleware\EnsureUserHasRole::class,

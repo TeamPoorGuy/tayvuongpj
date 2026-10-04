@@ -14,10 +14,10 @@ Route::get('/', fn () => response()->json([
     'health_url' => url('/up'),
 ]));
 
-Route::prefix('v1')->group(function () {
+Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::prefix('auth')->group(function () {
-        Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
-        Route::post('/register', [AuthController::class, 'register'])->middleware('guest');
+        Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:login']);
+        Route::post('/register', [AuthController::class, 'register'])->middleware(['guest', 'throttle:register']);
         Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::get('/me', [AuthController::class, 'me'])
         ->middleware('active');
@@ -35,14 +35,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
-            Route::post('/bookings', [Customer\BookingController::class, 'store']);
+            Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware('throttle:writes');
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel']);
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
             Route::put('/profile', [Customer\ProfileController::class, 'update']);
             Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword']);
             Route::get('/owner-application', [Customer\OwnerApplicationController::class, 'show']);
-            Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store']);
+            Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store'])->middleware('throttle:writes');
+            Route::get('/owner-application/document', [Customer\OwnerApplicationController::class, 'document']);
         });
 
         Route::prefix('field-owner')
@@ -106,6 +107,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/users', [Admin\UserController::class, 'index']);
             Route::patch('/users/{user}/toggle', [Admin\UserController::class, 'toggle']);
             Route::get('/field-owners', [Admin\FieldOwnerController::class, 'index']);
+            Route::get('/field-owners/{profile}/document', [Admin\FieldOwnerController::class, 'document']);
             Route::patch('/field-owners/{profile}/verify', [Admin\FieldOwnerController::class, 'verify']);
             Route::get('/fields', [Admin\FieldController::class, 'index']);
             Route::patch('/fields/{field}/verify', [Admin\FieldController::class, 'verify']);

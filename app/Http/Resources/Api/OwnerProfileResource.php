@@ -19,7 +19,11 @@ class OwnerProfileResource extends JsonResource
             'business_license' => $this->business_license,
             'description' => $this->description,
             'verification_status' => $this->verification_status,
-            'verification_documents' => $this->verification_documents,
+            'verification_documents' => $this->verification_documents
+                ? ($request->user()?->isAdmin()
+                    ? url("/api/v1/admin/field-owners/{$this->id}/document")
+                    : url('/api/v1/customer/owner-application/document'))
+                : null,
             'rejection_reason' => $this->rejection_reason,
             'verified_at' => $this->verified_at?->toISOString(),
             'user' => $this->whenLoaded('user', fn () => new UserResource($this->user)),

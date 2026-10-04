@@ -41,7 +41,7 @@ class CatalogService
         return SportsField::approved()
             ->with(['primaryImage', 'fieldType.sportCategory', 'reviews'])
             ->when($request->filled('keyword'), function ($query) use ($request) {
-                $keyword = $request->string('keyword')->toString();
+                $keyword = addcslashes($request->string('keyword')->toString(), '%_\\');
                 $query->where(fn ($inner) => $inner
                     ->where('name', 'like', "%{$keyword}%")
                     ->orWhere('address', 'like', "%{$keyword}%"));
@@ -62,7 +62,7 @@ class CatalogService
     {
         return SportsField::approved()
             ->where('slug', $slug)
-            ->with(['images', 'primaryImage', 'fieldType.sportCategory', 'owner.fieldOwnerProfile', 'timeSlots', 'reviews.user'])
+            ->with(['images', 'primaryImage', 'fieldType.sportCategory', 'owner.fieldOwnerProfile', 'timeSlots', 'reviews' => fn ($q) => $q->where('is_visible', true)->with('user')])
             ->firstOrFail();
     }
 

@@ -36,7 +36,11 @@ class FieldResource extends JsonResource
                 'id' => $this->owner->id,
                 'name' => $this->owner->name,
                 'phone' => $this->owner->phone,
-                'business' => $this->owner->fieldOwnerProfile ? new OwnerProfileResource($this->owner->fieldOwnerProfile) : null,
+                // Public endpoint: never expose CCCD, documents or review status here.
+                'business' => $this->owner->fieldOwnerProfile ? [
+                    'business_name' => $this->owner->fieldOwnerProfile->business_name,
+                    'business_phone' => $this->owner->fieldOwnerProfile->business_phone,
+                ] : null,
             ]),
             'time_slots' => $this->whenLoaded('timeSlots', fn () => $this->timeSlots->map(fn ($slot) => [
                 'id' => $slot->id,

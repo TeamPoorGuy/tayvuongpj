@@ -279,7 +279,7 @@ class LayeredApiTest extends TestCase
 
     public function test_customer_can_submit_an_owner_application_with_a_license_file(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
         Sanctum::actingAs($customer);
 
@@ -459,5 +459,67 @@ class LayeredApiTest extends TestCase
         ]);
 
         return [$field, $slot];
+    }
+    public function test_public_field_detail_never_leaks_owner_private_data_or_hidden_reviews(): void
+    {
+        $owner = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        FieldOwnerProfile::create([
+            'user_id' => $owner->id, 'owner_name' => 'A', 'owner_id_number' => '001099001234',
+            'business_name' => 'Sân Y', 'business_address' => 'HN', 'business_phone' => '0900000009',
+            'verification_status' => 'approved', 'verification_documents' => 'licenses/x.pdf',
+        ]);
+        $cat = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bong-da']);
+        $type = FieldType::create(['sport_category_id' => $cat->id, 'name' => 'Sân 5', 'slug' => 'san-5']);
+        $field = SportsField::create([
+            'field_owner_id' => $owner->id, 'field_type_id' => $type->id, 'name' => 'Sân Y', 'slug' => 'san-y',
+            'address' => 'HN', 'price_per_hour' => 100000, 'status' => 'approved', 'is_active' => true,
+        ]);
+        $viewer = User::factory()->create();
+        $field->reviews()->create(['user_id' => $viewer->id, 'rating' => 1, 'comment' => 'HIDDEN-TEXT', 'is_visible' => false]);
+
+        $body = $this->getJson('/api/v1/fields/san-y')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('001099001234', $body);
+        $this->assertStringNotContainsString('licenses/x.pdf', $body);
+        $this->assertStringNotContainsString('HIDDEN-TEXT', $body);
+    }
+
+    public function test_owner_documents_are_private_to_admin_and_the_applicant(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('licenses/x.pdf', 'pdf');
+        $applicant = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $profile = FieldOwnerProfile::create([
+            'user_id' => $applicant->id, 'owner_name' => 'A', 'owner_id_number' => '001099001234',
+            'business_name' => 'S', 'business_address' => 'HN', 'business_phone' => '0900000009',
+            'verification_status' => 'pending', 'verification_documents' => 'licenses/x.pdf',
+        ]);
+
+        $this->getJson("/api/v1/admin/field-owners/{$profile->id}/document")->assertUnauthorized();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+        $this->getJson("/api/v1/admin/field-owners/{$profile->id}/document")->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        $this->get("/api/v1/admin/field-owners/{$profile->id}/document")->assertOk();
+
+        Sanctum::actingAs($applicant);
+        $this->get('/api/v1/customer/owner-application/document')->assertOk();
+    }
+
+    public function test_login_is_rate_limited_after_five_attempts(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/login', ['email' => 'x@example.test', 'password' => 'bad'])->assertStatus(401);
+        }
+
+        $this->postJson('/api/v1/auth/login', ['email' => 'x@example.test', 'password' => 'bad'])->assertStatus(429);
+    }
+
+    public function test_responses_carry_security_headers(): void
+    {
+        $this->getJson('/api/v1/home')
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 }

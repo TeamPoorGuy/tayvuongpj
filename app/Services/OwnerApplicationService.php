@@ -38,7 +38,8 @@ class OwnerApplicationService
         ];
 
         if ($data->licenseFile) {
-            $attributes['verification_documents'] = '/storage/'.$data->licenseFile->store('licenses', 'public');
+            // Private disk: CCCD/license scans are served only through authorised routes.
+            $attributes['verification_documents'] = $data->licenseFile->store('licenses', 'local');
         }
 
         return $user->fieldOwnerProfile()->updateOrCreate(['user_id' => $user->id], $attributes);

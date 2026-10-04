@@ -9,6 +9,8 @@ use App\Http\Resources\Api\OwnerProfileResource;
 use App\Services\OwnerApplicationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OwnerApplicationController extends Controller
 {
@@ -19,6 +21,14 @@ class OwnerApplicationController extends Controller
         $profile = $this->service->show($request->user());
 
         return response()->json(['data' => $profile ? new OwnerProfileResource($profile) : null]);
+    }
+
+    public function document(Request $request): StreamedResponse
+    {
+        $path = $request->user()->fieldOwnerProfile?->verification_documents;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path);
     }
 
     public function store(SubmitApplicationRequest $request): JsonResponse

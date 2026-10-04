@@ -40,9 +40,9 @@ class AdminService
         return User::where('role', '!=', UserRole::Admin->value)
             ->when($filters['role'] ?? null, fn ($query, $role) => $query->where('role', $role))
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where(fn ($inner) => $inner
-                ->where('name', 'like', "%{$keyword}%")
-                ->orWhere('email', 'like', "%{$keyword}%")
-                ->orWhere('phone', 'like', "%{$keyword}%")))
+                ->where('name', 'like', "%".addcslashes($keyword, '%_\\')."%")
+                ->orWhere('email', 'like', "%".addcslashes($keyword, '%_\\')."%")
+                ->orWhere('phone', 'like', "%".addcslashes($keyword, '%_\\')."%")))
             ->latest()
             ->paginate(15)
             ->withQueryString();
