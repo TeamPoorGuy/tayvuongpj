@@ -17,7 +17,6 @@ class UpdateOwnerProfileRequest extends FormRequest
             'business_name' => ['required', 'string', 'max:255'],
             'business_address' => ['required', 'string', 'max:255'],
             'business_phone' => ['required', 'string', 'max:20'],
-            'business_license' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
         ];
     }

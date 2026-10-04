@@ -1,6 +1,6 @@
 const labels: Record<string, string> = {
   pending: 'Chờ xử lý', confirmed: 'Đã xác nhận', completed: 'Hoàn thành',
-  cancelled: 'Đã hủy', rejected: 'Từ chối', approved: 'Đã duyệt', inactive: 'Tạm đóng',
+  cancelled: 'Đã hủy', rejected: 'Từ chối', approved: 'Đã duyệt', inactive: 'Tạm đóng', suspended: 'Tạm khoá',
 }
 
 export function StatusBadge({ status }: { status: string }) {

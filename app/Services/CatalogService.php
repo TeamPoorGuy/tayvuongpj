@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Models\FieldType;
 use App\Models\SportCategory;
 use App\Models\SportsField;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -30,7 +31,8 @@ class CatalogService
     public function featuredFields(): Collection
     {
         return SportsField::approved()
-            ->with(['primaryImage', 'fieldType.sportCategory', 'reviews'])
+            ->with(['primaryImage', 'fieldType.sportCategory'])
+            ->withRating()
             ->latest()
             ->take(6)
             ->get();
@@ -39,7 +41,8 @@ class CatalogService
     public function fields(FieldIndexRequest $request): LengthAwarePaginator
     {
         return SportsField::approved()
-            ->with(['primaryImage', 'fieldType.sportCategory', 'reviews'])
+            ->with(['primaryImage', 'fieldType.sportCategory'])
+            ->withRating()
             ->when($request->filled('keyword'), function ($query) use ($request) {
                 $keyword = addcslashes($request->string('keyword')->toString(), '%_\\');
                 $query->where(fn ($inner) => $inner
@@ -85,6 +88,8 @@ class CatalogService
             'start_time' => substr($slot->start_time, 0, 5),
             'end_time' => substr($slot->end_time, 0, 5),
             'is_booked' => $bookedSlotIds->contains($slot->id),
+            'is_past' => Carbon::parse($date.' '.$slot->start_time)->isPast(),
+            'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
         ])->all();
     }
 }

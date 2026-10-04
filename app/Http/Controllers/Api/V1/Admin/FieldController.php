@@ -24,6 +24,6 @@ class FieldController extends Controller
 
     public function verify(VerifyRequest $request, SportsField $field): JsonResponse
     {
-        return response()->json(['message' => 'Đã xử lý kiểm duyệt sân.', 'data' => new FieldResource($this->service->verifyField($field, $request->string('status')->toString()))]);
+        return response()->json(['message' => 'Đã xử lý kiểm duyệt sân.', 'data' => new FieldResource($this->service->verifyField($field, $request->string('status')->toString(), $request->input('rejection_reason')))]);
     }
 }

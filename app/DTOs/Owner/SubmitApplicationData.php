@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 
 readonly class SubmitApplicationData
 {
+    /** @param array<string, UploadedFile> $documents keyed by OwnerDocument type */
     public function __construct(
         public string $ownerName,
         public string $ownerIdNumber,
@@ -15,7 +16,11 @@ readonly class SubmitApplicationData
         public string $businessPhone,
         public string $businessLicense,
         public ?string $description,
-        public ?UploadedFile $licenseFile,
+        public string $bankName,
+        public string $bankAccountNumber,
+        public string $bankAccountHolder,
+        public ?string $ip,
+        public array $documents,
     ) {}
 
     public static function fromRequest(SubmitApplicationRequest $request): self
@@ -28,7 +33,11 @@ readonly class SubmitApplicationData
             businessPhone: $request->string('business_phone')->toString(),
             businessLicense: $request->string('business_license')->toString(),
             description: $request->input('description'),
-            licenseFile: $request->file('license_file'),
+            bankName: $request->string('bank_name')->toString(),
+            bankAccountNumber: $request->string('bank_account_number')->toString(),
+            bankAccountHolder: $request->string('bank_account_holder')->toString(),
+            ip: $request->ip(),
+            documents: $request->file('documents', []),
         );
     }
 }

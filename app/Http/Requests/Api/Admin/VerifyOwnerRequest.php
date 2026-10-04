@@ -15,8 +15,8 @@ class VerifyOwnerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::in(['approved', 'rejected'])],
-            'rejection_reason' => ['required_if:status,rejected', 'string', 'max:500'],
+            'status' => ['required', Rule::in(['approved', 'rejected', 'suspended'])],
+            'rejection_reason' => ['required_if:status,rejected,suspended', 'string', 'max:500'],
         ];
     }
 }

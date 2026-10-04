@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\VerifyOwnerRequest;
 use App\Http\Resources\Api\OwnerProfileResource;
 use App\Models\FieldOwnerProfile;
+use App\Models\OwnerDocument;
 use App\Services\AdminService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,11 @@ class FieldOwnerController extends Controller
         return OwnerProfileResource::collection($this->service->ownerProfiles($request->query('status')));
     }
 
-    public function document(FieldOwnerProfile $profile): StreamedResponse
+    public function document(FieldOwnerProfile $profile, OwnerDocument $document): StreamedResponse
     {
-        abort_unless($profile->verification_documents && Storage::disk('local')->exists($profile->verification_documents), 404);
+        abort_unless($document->field_owner_profile_id === $profile->id && Storage::disk('local')->exists($document->path), 404);
 
-        return Storage::disk('local')->response($profile->verification_documents);
+        return Storage::disk('local')->response($document->path, $document->original_name);
     }
 
     public function verify(VerifyOwnerRequest $request, FieldOwnerProfile $profile): JsonResponse

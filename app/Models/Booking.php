@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\BookingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
@@ -36,7 +37,7 @@ class Booking extends Model
 
     public function sportsField()
     {
-        return $this->belongsTo(SportsField::class);
+        return $this->belongsTo(SportsField::class)->withTrashed();
     }
 
     public function timeSlot()
@@ -56,7 +57,7 @@ class Booking extends Model
      */
     public static function resourceRelations(bool $withCustomer = false): array
     {
-        $relations = ['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review'];
+        $relations = ['sportsField.primaryImage', 'timeSlot', 'review'];
         if ($withCustomer) {
             $relations[] = 'customer';
         }
@@ -64,8 +65,20 @@ class Booking extends Model
         return $relations;
     }
 
+    public function startsAt(): Carbon
+    {
+        return Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->start_time);
+    }
+
+    public function endsAt(): Carbon
+    {
+        return Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->end_time);
+    }
+
     public function canBeCancelled(): bool
     {
-        return $this->status->blocksSlot() && $this->booking_date->isFuture();
+        $cutoff = now()->addHours((int) config('booking.cancel_cutoff_hours'));
+
+        return $this->status->blocksSlot() && $this->startsAt()->gt($cutoff);
     }
 }

@@ -21,8 +21,11 @@ export interface OwnerProfile {
   business_phone: string
   business_license: string | null
   description: string | null
-  verification_status: 'pending' | 'approved' | 'rejected'
-  verification_documents: string | null
+  verification_status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  bank_name?: string | null
+  bank_account_number?: string | null
+  bank_account_holder?: string | null
+  documents?: { id: number; type: string; original_name: string; url: string }[]
   rejection_reason: string | null
   verified_at: string | null
   user?: User
@@ -70,6 +73,7 @@ export interface TimeSlot {
   end_time: string
   is_active?: boolean
   is_booked?: boolean
+  is_past?: boolean
 }
 
 export interface Review {

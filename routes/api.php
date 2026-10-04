@@ -43,7 +43,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword'])->middleware('throttle:writes');
             Route::get('/owner-application', [Customer\OwnerApplicationController::class, 'show']);
             Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store'])->middleware('throttle:writes');
-            Route::get('/owner-application/document', [Customer\OwnerApplicationController::class, 'document']);
+            Route::get('/owner-application/documents/{document}', [Customer\OwnerApplicationController::class, 'document']);
         });
 
         Route::prefix('field-owner')
@@ -81,6 +81,14 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             [FieldOwner\FieldController::class, 'update']
         );
 
+        Route::delete('/fields/{field}', [FieldOwner\FieldController::class, 'destroy']);
+        Route::post('/fields/{field}/images', [FieldOwner\FieldController::class, 'addImages'])->middleware('throttle:writes');
+        Route::delete('/fields/{field}/images/{image}', [FieldOwner\FieldController::class, 'deleteImage']);
+        Route::patch('/fields/{field}/images/{image}/primary', [FieldOwner\FieldController::class, 'primaryImage']);
+        Route::post('/fields/{field}/slots', [FieldOwner\SlotController::class, 'store']);
+        Route::put('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'update']);
+        Route::delete('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'destroy']);
+
         Route::patch(
             '/fields/{field}/toggle',
             [FieldOwner\FieldController::class, 'toggle']
@@ -107,7 +115,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/users', [Admin\UserController::class, 'index']);
             Route::patch('/users/{user}/toggle', [Admin\UserController::class, 'toggle']);
             Route::get('/field-owners', [Admin\FieldOwnerController::class, 'index']);
-            Route::get('/field-owners/{profile}/document', [Admin\FieldOwnerController::class, 'document']);
+            Route::get('/field-owners/{profile}/documents/{document}', [Admin\FieldOwnerController::class, 'document']);
             Route::patch('/field-owners/{profile}/verify', [Admin\FieldOwnerController::class, 'verify']);
             Route::get('/fields', [Admin\FieldController::class, 'index']);
             Route::patch('/fields/{field}/verify', [Admin\FieldController::class, 'verify']);
@@ -117,6 +125,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/categories', [Admin\CategoryController::class, 'index']);
             Route::post('/categories', [Admin\CategoryController::class, 'storeCategory']);
             Route::post('/field-types', [Admin\CategoryController::class, 'storeFieldType']);
+            Route::put('/categories/{category}', [Admin\CategoryController::class, 'updateCategory']);
+            Route::put('/field-types/{fieldType}', [Admin\CategoryController::class, 'updateFieldType']);
         });
     });
 });

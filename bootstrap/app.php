@@ -57,6 +57,14 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(['message' => 'Bạn cần đăng nhập để tiếp tục.'], 401);
         });
 
+        $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json(['message' => 'Bạn không có quyền thực hiện thao tác này.', 'code' => 'FORBIDDEN'], 403);
+        });
+
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;

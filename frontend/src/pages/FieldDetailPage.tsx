@@ -43,7 +43,7 @@ export function FieldDetailPage() {
         <aside className="booking-card">
           <div className="booking-price"><span>Giá thuê mỗi giờ</span><strong>{currency.format(item.price_per_hour)}đ</strong></div>
           <label><span>Ngày chơi</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={date} onChange={(event) => { setDate(event.target.value); setSlotId(null) }} /></label>
-          <div><span className="field-label">Khung giờ còn trống</span><div className="slot-grid">{slots.data?.map((slot) => <button disabled={slot.is_booked} className={slotId === slot.id ? 'selected' : ''} onClick={() => setSlotId(slot.id)} key={slot.id}>{slot.start_time} – {slot.end_time}</button>)}</div></div>
+          <div><span className="field-label">Khung giờ còn trống</span><div className="slot-grid">{slots.data?.map((slot) => <button disabled={slot.is_booked || slot.is_past} className={slotId === slot.id ? 'selected' : ''} onClick={() => setSlotId(slot.id)} key={slot.id}>{slot.start_time} – {slot.end_time}</button>)}</div></div>
           <label><span>Ghi chú</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Yêu cầu thêm cho chủ sân..." /></label>
           {booking.isSuccess && <div className="notice notice--success">Đã gửi yêu cầu đặt sân.</div>}
           {booking.isError && <div className="notice notice--error">{errorMessage(booking.error)}</div>}

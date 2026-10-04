@@ -15,6 +15,10 @@ class UpdateBookingStatusRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['status' => ['required', Rule::enum(BookingStatus::class)]];
+        return [
+            'status' => ['required', Rule::enum(BookingStatus::class)],
+            // Huỷ đơn đã xác nhận phải có lý do để báo cho khách.
+            'reason' => ['required_if:status,cancelled', 'nullable', 'string', 'max:500'],
+        ];
     }
 }

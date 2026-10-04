@@ -14,9 +14,9 @@ use App\Models\Review;
 use App\Models\SportCategory;
 use App\Models\SportsField;
 use App\Models\User;
+use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class AdminService
@@ -31,7 +31,7 @@ class AdminService
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'total_bookings' => Booking::count(),
             'total_revenue' => (float) Booking::whereIn('status', ['confirmed', 'completed'])->sum('total_price'),
-            'most_booked_fields' => SportsField::with(['primaryImage', 'fieldType.sportCategory', 'reviews'])->withCount('bookings')->orderByDesc('bookings_count')->take(5)->get(),
+            'most_booked_fields' => SportsField::with(['primaryImage', 'fieldType.sportCategory'])->withRating()->withCount('bookings')->orderByDesc('bookings_count')->take(5)->get(),
         ];
     }
 
@@ -61,7 +61,7 @@ class AdminService
 
     public function ownerProfiles(?string $status = null): LengthAwarePaginator
     {
-        return FieldOwnerProfile::with('user')
+        return FieldOwnerProfile::with(['user', 'documents'])
             ->when($status, fn ($query) => $query->where('verification_status', $status))
             ->latest()
             ->paginate(10)
@@ -70,41 +70,42 @@ class AdminService
 
     public function verifyOwner(FieldOwnerProfile $profile, string $status, ?string $reason, User $admin): FieldOwnerProfile
     {
-        if ($profile->verification_status !== VerificationStatus::Pending) {
-            throw new ConflictException('Hồ sơ này đã được xử lý.');
+        $next = VerificationStatus::from($status);
+        if (! $profile->verification_status->canTransitionTo($next)) {
+            throw new ConflictException('Hồ sơ này đã được xử lý hoặc không thể chuyển sang trạng thái này.');
         }
 
         $profile->update([
-            'verification_status' => $status,
-            'rejection_reason' => $status === VerificationStatus::Rejected->value ? $reason : null,
+            'verification_status' => $next,
+            'rejection_reason' => $next === VerificationStatus::Approved ? null : $reason,
             'verified_at' => now(),
             'verified_by' => $admin->id,
         ]);
 
-        $profile->refresh()->load('user');
+        $profile->refresh()->load(['user', 'documents']);
 
-        try {
-            Mail::to($profile->user->email)->send(new OwnerApplicationVerified($profile));
-        } catch (\Throwable $e) {
-            // Gửi mail thất bại không được chặn việc duyệt hồ sơ; chỉ ghi log để kiểm tra sau.
-            report($e);
-        }
+        // Gửi mail qua queue; lỗi mail không được chặn việc duyệt hồ sơ.
+        SafeMail::queue($profile->user->email, new OwnerApplicationVerified($profile));
 
         return $profile;
     }
 
     public function fields(?string $status): LengthAwarePaginator
     {
-        return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews'])
+        return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage'])
+            ->withRating()
             ->when($status, fn ($query) => $query->where('status', $status))
             ->latest()
             ->paginate(15)
             ->withQueryString();
     }
 
-    public function verifyField(SportsField $field, string $status): SportsField
+    public function verifyField(SportsField $field, string $status, ?string $reason = null): SportsField
     {
-        $field->update(['status' => $status]);
+        $field->update([
+            'status' => $status,
+            'rejection_reason' => $status === 'rejected' ? $reason : null,
+        ]);
 
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
@@ -144,6 +145,21 @@ class AdminService
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ])->load('fieldTypes')->loadCount('fieldTypes');
+    }
+
+    public function updateCategory(SportCategory $category, array $data): SportCategory
+    {
+        // Giữ nguyên slug để link /fields?category=... không bị gãy.
+        $category->update($data);
+
+        return $category->load('fieldTypes')->loadCount('fieldTypes');
+    }
+
+    public function updateFieldType(FieldType $type, array $data): FieldType
+    {
+        $type->update($data);
+
+        return $type->load('sportCategory');
     }
 
     public function createFieldType(array $data): FieldType

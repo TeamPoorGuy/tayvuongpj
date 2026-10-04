@@ -28,7 +28,7 @@ class BookingController extends Controller
 
     public function updateStatus(UpdateBookingStatusRequest $request, Booking $booking): JsonResponse
     {
-        $booking = $this->service->updateBookingStatus($request->user(), $booking, $request->string('status')->toString());
+        $booking = $this->service->updateBookingStatus($request->user(), $booking, $request->string('status')->toString(), $request->input('reason'));
 
         return response()->json(['message' => 'Đã cập nhật trạng thái đơn.', 'data' => new BookingResource($booking)]);
     }

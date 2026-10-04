@@ -6,6 +6,7 @@ use App\DTOs\Owner\SubmitApplicationData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Owner\SubmitApplicationRequest;
 use App\Http\Resources\Api\OwnerProfileResource;
+use App\Models\OwnerDocument;
 use App\Services\OwnerApplicationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,12 +24,12 @@ class OwnerApplicationController extends Controller
         return response()->json(['data' => $profile ? new OwnerProfileResource($profile) : null]);
     }
 
-    public function document(Request $request): StreamedResponse
+    public function document(Request $request, OwnerDocument $document): StreamedResponse
     {
-        $path = $request->user()->fieldOwnerProfile?->verification_documents;
-        abort_unless($path && Storage::disk('local')->exists($path), 404);
+        $profile = $request->user()->fieldOwnerProfile;
+        abort_unless($profile && $document->field_owner_profile_id === $profile->id && Storage::disk('local')->exists($document->path), 404);
 
-        return Storage::disk('local')->response($path);
+        return Storage::disk('local')->response($document->path, $document->original_name);
     }
 
     public function store(SubmitApplicationRequest $request): JsonResponse

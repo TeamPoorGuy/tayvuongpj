@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SportsField extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'field_owner_id',
@@ -20,6 +21,7 @@ class SportsField extends Model
         'description',
         'price_per_hour',
         'status',
+        'rejection_reason',
         'is_active',
     ];
 
@@ -65,6 +67,16 @@ class SportsField extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function visibleReviews()
+    {
+        return $this->hasMany(Review::class)->where('is_visible', true);
+    }
+
+    public function scopeWithRating($query)
+    {
+        return $query->withAvg('visibleReviews', 'rating')->withCount('visibleReviews');
+    }
+
     public function averageRating()
     {
         return $this->reviews()->where('is_visible', true)->avg('rating') ?: 0;
@@ -73,6 +85,8 @@ class SportsField extends Model
     // Scopes
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved')->where('is_active', true);
+        return $query->where('status', 'approved')->where('is_active', true)
+            // Chủ sân bị thu hồi (suspended) thì sân tự ẩn khỏi danh sách công khai.
+            ->whereHas('owner.fieldOwnerProfile', fn ($q) => $q->where('verification_status', 'approved'));
     }
 }
