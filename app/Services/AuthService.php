@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\DTOs\Auth\RegisterUserData;
-use App\Enums\UserRole;
 use App\Exceptions\ForbiddenException;
 use App\Models\User;
 use Illuminate\Auth\AuthenticationException;
@@ -36,11 +35,9 @@ class AuthService
             'name' => $data->name,
             'email' => $data->email,
             'password' => Hash::make($data->password),
-            'role' => UserRole::Customer->value,
             'phone' => $data->phone,
             'address' => $data->address,
-            'is_active' => true,
-        ]);
+        ])->refresh(); // load DB defaults: role=customer, is_active=true
 
         Auth::login($user);
         $request->session()->regenerate();

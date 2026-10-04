@@ -54,7 +54,7 @@ class AdminService
             throw new ForbiddenException('Không thể khóa tài khoản quản trị viên.');
         }
 
-        $user->update(['is_active' => ! $user->is_active]);
+        $user->forceFill(['is_active' => ! $user->is_active])->save();
 
         return $user->refresh();
     }

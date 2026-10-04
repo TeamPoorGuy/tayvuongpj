@@ -11,6 +11,7 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        \Illuminate\Database\Eloquent\Model::unguard(); // seeders set role/is_active directly
         // 1. Chủ sân 1 (Đã duyệt) — role vẫn là customer, quyền chủ sân suy ra từ verification_status.
         $owner1 = User::create([
             'name' => 'Nguyễn Văn Chủ',

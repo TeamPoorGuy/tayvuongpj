@@ -23,12 +23,12 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
         'phone',
         'avatar',
         'address',
-        'is_active',
     ];
+
+    // role / is_active are privileged: set via forceFill only, never mass-assigned.
 
     /**
      * The attributes that should be hidden for serialization.

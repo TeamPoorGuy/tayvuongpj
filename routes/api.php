@@ -36,11 +36,11 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware('throttle:writes');
-            Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel']);
+            Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
             Route::put('/profile', [Customer\ProfileController::class, 'update']);
-            Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword']);
+            Route::put('/profile/password', [Customer\ProfileController::class, 'updatePassword'])->middleware('throttle:writes');
             Route::get('/owner-application', [Customer\OwnerApplicationController::class, 'show']);
             Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store'])->middleware('throttle:writes');
             Route::get('/owner-application/document', [Customer\OwnerApplicationController::class, 'document']);
