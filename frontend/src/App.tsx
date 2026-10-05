@@ -10,6 +10,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
 import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
+import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
 import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
       <Route element={<ProtectedRoute roles={['customer']} requireApprovedOwner />}>
         <Route element={<DashboardLayout />}>
           <Route path="owner" element={<OwnerDashboardPage />} />
+          <Route path="owner/schedule" element={<OwnerSchedulePage />} />
           <Route path="owner/fields" element={<OwnerFieldsPage />} />
           <Route path="owner/bookings" element={<OwnerBookingsPage />} />
           <Route path="owner/reviews" element={<OwnerReviewsPage />} />

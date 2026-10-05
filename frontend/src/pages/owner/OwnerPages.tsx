@@ -14,6 +14,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
@@ -778,13 +779,18 @@ export function OwnerBookingsPage() {
         title="Đơn đặt sân & Check-in QR"
         copy="Xác nhận yêu cầu, quét mã QR check-in tích điểm uy tín và hoàn tất lượt chơi."
         action={
-          <button
-            type="button"
-            className="button button--brand"
-            onClick={() => setShowCheckInModal(true)}
-          >
-            <QrCode size={16} /> Quét / Check-in QR
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link to="/owner/schedule" className="button button--ghost">
+              <CalendarDays size={16} /> Xem lịch trực quan
+            </Link>
+            <button
+              type="button"
+              className="button button--brand"
+              onClick={() => setShowCheckInModal(true)}
+            >
+              <QrCode size={16} /> Quét / Check-in QR
+            </button>
+          </div>
         }
       />
       <div className="toolbar">

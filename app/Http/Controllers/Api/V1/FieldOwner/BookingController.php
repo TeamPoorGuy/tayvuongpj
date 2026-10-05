@@ -21,6 +21,9 @@ class BookingController extends Controller
             'field_id' => ['nullable', 'integer'],
             'status' => ['nullable', 'string'],
             'date' => ['nullable', 'date'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
 
         return BookingResource::collection($this->service->bookings($request->user(), $filters));

@@ -57,6 +57,8 @@ export interface SportsField {
   name: string
   slug: string
   address: string
+  latitude?: number | string | null
+  longitude?: number | string | null
   description: string | null
   price_per_hour: number
   status: string

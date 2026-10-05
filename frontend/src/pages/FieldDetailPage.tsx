@@ -24,6 +24,7 @@ import { errorMessage } from '../api/errors'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
 import { useToast } from '../components/Toast'
+import { FieldMap } from '../components/FieldMap'
 import { getLocalTodayString } from '../utils/date'
 import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
 
@@ -148,6 +149,19 @@ export function FieldDetailPage() {
       return true
     })
   }, [slots.data, periodFilter])
+
+  const allSlots = useMemo(() => slots.data ?? [], [slots.data])
+  const availableCount = useMemo(
+    () => allSlots.filter((s) => !s.is_booked && !s.is_past).length,
+    [allSlots],
+  )
+  const isDateFullyBooked = !slots.isPending && allSlots.length > 0 && availableCount === 0
+
+  const tomorrowDateStr = useMemo(() => {
+    const d = new Date(date)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }, [date])
 
   const scrollToBooking = () => {
     const el = document.getElementById('booking-card-section')
@@ -281,6 +295,9 @@ export function FieldDetailPage() {
             </section>
           )}
 
+          {/* Leaflet Map & Directions */}
+          <FieldMap field={item} />
+
           {/* Reviews List */}
           <section className="content-card reveal">
             <div className="section-head-sm">
@@ -335,7 +352,14 @@ export function FieldDetailPage() {
           {/* Time slot period filter */}
           <div className="slot-picker-wrap">
             <div className="slot-picker-head">
-              <span className="field-label">Khung giờ hoạt động</span>
+              <div className="slot-picker-title-col">
+                <span className="field-label">Khung giờ hoạt động</span>
+                {!slots.isPending && allSlots.length > 0 && (
+                  <span className="slot-availability-pill">
+                    Còn <strong>{availableCount}</strong>/{allSlots.length} slot khả dụng
+                  </span>
+                )}
+              </div>
               <div className="period-tabs">
                 <button
                   type="button"
@@ -380,27 +404,62 @@ export function FieldDetailPage() {
               </div>
             )}
 
+            {/* Smart notice when date is fully booked */}
+            {isDateFullyBooked && (
+              <div className="fully-booked-notice">
+                <div className="fully-booked-head">
+                  <Info size={15} />
+                  <strong>Ngày {new Date(date).toLocaleDateString('vi-VN')} đã kín tất cả khung giờ!</strong>
+                </div>
+                <p>
+                  Bạn có thể bấm vào các khung giờ đã đặt bên dưới để tham gia <strong>Hàng đợi (Waitlist)</strong>, hoặc chuyển sang ngày mai để xem khung giờ trống.
+                </p>
+                <button
+                  type="button"
+                  className="button button--brand button--small"
+                  onClick={() => {
+                    setDate(tomorrowDateStr)
+                    setSlotId(null)
+                    setSelectedBookedSlot(null)
+                  }}
+                >
+                  <CalendarDays size={13} /> Chuyển sang ngày mai ({new Date(tomorrowDateStr).toLocaleDateString('vi-VN')})
+                </button>
+              </div>
+            )}
+
             <div className="slot-grid">
               {filteredSlots.map((slot) => {
                 const isSelected = slotId === slot.id
                 const isBookedSelected = selectedBookedSlot?.id === slot.id
+                const isAvailable = !slot.is_booked && !slot.is_past
                 return (
                   <button
                     type="button"
                     disabled={slot.is_past}
+                    aria-disabled={slot.is_booked || slot.is_past}
                     className={`slot-chip ${isSelected ? 'selected' : ''} ${
                       slot.is_booked ? 'slot-chip--booked' : ''
-                    } ${isBookedSelected ? 'slot-chip--booked-active' : ''} ${slot.is_past ? 'slot-chip--past' : ''}`}
+                    } ${isBookedSelected ? 'slot-chip--booked-active' : ''} ${
+                      slot.is_past ? 'slot-chip--past' : ''
+                    }`}
                     onClick={() => {
                       if (slot.is_booked) {
                         setSlotId(null)
                         setSelectedBookedSlot(slot)
-                      } else {
+                      } else if (!slot.is_past) {
                         setSelectedBookedSlot(null)
                         setSlotId(slot.id)
                       }
                     }}
                     key={slot.id}
+                    title={
+                      slot.is_past
+                        ? 'Khung giờ này đã trôi qua'
+                        : slot.is_booked
+                          ? 'Khung giờ đã kín — Bấm để vào hàng đợi Waitlist hoặc xem gợi ý'
+                          : 'Khung giờ còn trống — Bấm để chọn đặt'
+                    }
                   >
                     <span>
                       {slot.start_time} – {slot.end_time}
@@ -410,8 +469,9 @@ export function FieldDetailPage() {
                         {currency.format(slot.price_per_hour)}đ/h
                       </small>
                     )}
-                    {slot.is_booked && <small>Đã đặt (Chờ)</small>}
-                    {slot.is_past && <small>Đã qua</small>}
+                    {slot.is_booked && <small className="slot-badge--booked">Đã đặt (Waitlist)</small>}
+                    {slot.is_past && <small className="slot-badge--past">Đã qua giờ</small>}
+                    {isAvailable && <small className="slot-badge--avail">Còn trống</small>}
                   </button>
                 )
               })}

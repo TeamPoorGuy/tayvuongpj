@@ -24,6 +24,7 @@ const customerNav = [
 
 const ownerNav = [
   { to: '/owner', label: 'Tổng quan sân', icon: ChartNoAxesCombined },
+  { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },

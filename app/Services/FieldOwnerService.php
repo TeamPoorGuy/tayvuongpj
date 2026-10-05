@@ -113,14 +113,17 @@ class FieldOwnerService
     public function bookings(User $owner, array $filters): LengthAwarePaginator
     {
         $fieldIds = SportsField::withTrashed()->where('field_owner_id', $owner->id)->pluck('id');
+        $perPage = min(200, max(1, (int) ($filters['per_page'] ?? 10)));
 
         return Booking::whereIn('sports_field_id', $fieldIds)
             ->with(Booking::resourceRelations(withCustomer: true))
             ->when($filters['field_id'] ?? null, fn ($query, $id) => $query->where('sports_field_id', $id))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereDate('booking_date', $date))
+            ->when($filters['start_date'] ?? null, fn ($query, $start) => $query->whereDate('booking_date', '>=', $start))
+            ->when($filters['end_date'] ?? null, fn ($query, $end) => $query->whereDate('booking_date', '<=', $end))
             ->latest()
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
     }
 
