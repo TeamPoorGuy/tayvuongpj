@@ -1,5 +1,5 @@
-import { useMutation } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowRight, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
@@ -70,12 +70,16 @@ export function ResetPasswordPage() {
   const [params] = useSearchParams()
   const reset = useMutation({ mutationFn: (payload: Record<string, FormDataEntryValue>) => api.post('/auth/reset-password', { ...payload, token: params.get('token'), email: params.get('email') }) })
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); reset.mutate(Object.fromEntries(new FormData(event.currentTarget).entries())) }
+  if (!params.get('token') || !params.get('email')) return <AuthShell title="Liên kết không hợp lệ" copy="Liên kết đặt lại mật khẩu thiếu thông tin hoặc đã bị cắt ngắn."><div className="form-stack"><div className="notice notice--error">Không thể đặt lại mật khẩu từ liên kết này.</div><Link className="button button--brand button--block" to="/forgot-password">Yêu cầu liên kết mới</Link></div></AuthShell>
   return <AuthShell title="Đặt lại mật khẩu" copy={`Tạo mật khẩu mới cho ${params.get('email') ?? 'tài khoản của bạn'}.`}>{reset.isSuccess ? <div className="form-stack"><div className="notice notice--success">{reset.data.data.message}</div><Link className="button button--brand button--block" to="/login">Đăng nhập</Link></div> : <form onSubmit={submit} className="form-stack"><label><span>Mật khẩu mới</span><input name="password" type="password" required /></label><label><span>Xác nhận mật khẩu</span><input name="password_confirmation" type="password" required /></label>{reset.isError && <div className="notice notice--error">{errorMessage(reset.error)}</div>}<button disabled={reset.isPending} className="button button--brand button--block">{reset.isPending ? 'Đang lưu...' : 'Đặt lại mật khẩu'}</button></form>}</AuthShell>
 }
 
 export function EmailVerifiedPage() {
   const [params] = useSearchParams()
   const ok = params.get('status') === 'success'
+  const client = useQueryClient()
+  // Làm mới trạng thái đăng nhập để thanh nhắc "chưa xác thực" biến mất ngay.
+  useEffect(() => { if (ok) void client.invalidateQueries({ queryKey: ['auth', 'me'] }) }, [ok, client])
   return <AuthShell title={ok ? 'Xác thực email thành công' : 'Liên kết không hợp lệ'} copy={ok ? 'Tài khoản của bạn đã sẵn sàng để đặt sân.' : 'Liên kết xác thực sai hoặc đã hết hạn. Hãy đăng nhập và bấm "Gửi lại email xác thực".'}><div className="form-stack"><div className={`notice ${ok ? 'notice--success' : 'notice--error'}`}>{ok ? 'Email đã được xác thực.' : 'Không thể xác thực email.'}</div><Link className="button button--brand button--block" to="/">Về trang chủ</Link></div></AuthShell>
 }
 

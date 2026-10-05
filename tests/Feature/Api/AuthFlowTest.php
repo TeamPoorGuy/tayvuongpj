@@ -61,7 +61,7 @@ class AuthFlowTest extends TestCase
         $user = User::factory()->unverified()->create(['is_active' => true]);
         $url = URL::temporarySignedRoute('verification.verify', now()->addHour(), ['id' => $user->id, 'hash' => sha1($user->email)]);
 
-        $this->get($url.'x')->assertForbidden(); // chữ ký sai
+        $this->get($url.'x')->assertRedirectContains('status=invalid'); // chữ ký sai/hết hạn
         $this->assertFalse($user->fresh()->hasVerifiedEmail());
 
         $wrongHash = URL::temporarySignedRoute('verification.verify', now()->addHour(), ['id' => $user->id, 'hash' => sha1('other@x.test')]);
@@ -152,5 +152,54 @@ class AuthFlowTest extends TestCase
 
         $this->get('/auth/google/callback')->assertRedirectContains('error=disabled');
         $this->assertGuest();
+    }
+
+    public function test_google_cannot_link_an_existing_account_when_google_email_is_unverified(): void
+    {
+        $victim = User::factory()->create(['email' => 'victim@example.test', 'is_active' => true]);
+        $this->mockGoogle($this->googleUser('victim@example.test', verified: false));
+
+        $this->get('/auth/google/callback')->assertRedirectContains('error=google');
+
+        $this->assertNull($victim->fresh()->google_id);
+        $this->assertGuest();
+    }
+
+    public function test_google_admin_is_redirected_to_the_admin_area(): void
+    {
+        User::factory()->create(['email' => 'admin@example.test', 'role' => 'admin', 'is_active' => true]);
+        $this->mockGoogle($this->googleUser('admin@example.test'));
+
+        $this->get('/auth/google/callback')->assertRedirectContains('/admin');
+    }
+
+    public function test_changing_email_resets_verification_and_sends_a_new_link(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['role' => 'customer', 'is_active' => true, 'phone' => '0987654321']);
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/v1/customer/profile', ['name' => $user->name, 'email' => 'moi@example.test', 'phone' => '0987654321'])->assertOk();
+
+        $this->assertFalse($user->fresh()->hasVerifiedEmail());
+        Notification::assertSentTo($user->fresh(), VerifyEmailVi::class);
+
+        // Giữ nguyên email thì vẫn đã xác thực.
+        $user->markEmailAsVerified();
+        $this->putJson('/api/v1/customer/profile', ['name' => 'Tên mới', 'email' => 'moi@example.test', 'phone' => '0987654321'])->assertOk();
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+    }
+
+    public function test_google_only_account_can_set_a_first_password_without_current_one(): void
+    {
+        $user = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $user->forceFill(['password' => null])->save();
+        Sanctum::actingAs($user->fresh());
+
+        $this->putJson('/api/v1/customer/profile/password', ['password' => 'Password123!', 'password_confirmation' => 'Password123!'])->assertOk();
+        $this->assertNotNull($user->fresh()->password);
+
+        // Đã có mật khẩu thì bắt buộc nhập mật khẩu hiện tại.
+        $this->putJson('/api/v1/customer/profile/password', ['password' => 'Another123!', 'password_confirmation' => 'Another123!'])->assertStatus(422);
     }
 }

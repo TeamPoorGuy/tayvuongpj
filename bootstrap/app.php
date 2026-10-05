@@ -60,6 +60,15 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(['message' => 'Bạn cần đăng nhập để tiếp tục.'], 401);
         });
 
+        // Link xác thực email hết hạn/sai chữ ký → trang thông báo của frontend thay vì 403 thô.
+        $exceptions->render(function (\Illuminate\Routing\Exceptions\InvalidSignatureException $exception, Request $request) {
+            if ($request->routeIs('verification.verify')) {
+                return redirect(rtrim(config('frontend.url'), '/').'/email-verified?status=invalid');
+            }
+
+            return null;
+        });
+
         $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;

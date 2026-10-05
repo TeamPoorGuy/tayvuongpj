@@ -35,8 +35,9 @@ Route::middleware('throttle:10,1')->prefix('auth/google')->group(function () use
         $user = User::where('google_id', $google->getId())->first()
             ?? User::where('email', $google->getEmail())->first();
 
-        // Chỉ liên kết/tạo tài khoản khi Google xác nhận email đã được xác thực.
-        if (! $user && ! ($google->user['email_verified'] ?? false)) {
+        // Luôn yêu cầu Google xác nhận email — kể cả khi liên kết vào tài khoản có sẵn
+        // (nếu không, kẻ tấn công có thể chiếm tài khoản bằng email chưa được xác thực).
+        if (! ($google->user['email_verified'] ?? false)) {
             return $frontend('/login?error=google');
         }
 
@@ -54,6 +55,6 @@ Route::middleware('throttle:10,1')->prefix('auth/google')->group(function () use
         Auth::login($user, true);
         request()->session()->regenerate();
 
-        return $frontend('/');
+        return $frontend($user->isAdmin() ? '/admin' : '/');
     });
 });
