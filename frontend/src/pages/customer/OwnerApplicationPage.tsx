@@ -28,6 +28,38 @@ const STEPS = [
   { id: 4, label: 'Xác thực & Gửi', icon: ShieldCheck, desc: 'CCCD & điều khoản' },
 ]
 
+const APPLICATION_STATUSES = [
+  { id: 'submitted', label: 'Đã tiếp nhận hồ sơ' },
+  { id: 'reviewed', label: 'Ban quản trị đang xét duyệt' },
+  { id: 'approved', label: 'Đã cấp quyền chủ sân' },
+]
+
+function ApplicationTimeline({ status }: { status?: OwnerProfile['verification_status'] }) {
+  if (!status) return null
+  const completedCount = status === 'pending' ? 1 : status === 'rejected' ? 2 : 3
+
+  return (
+    <section className="application-timeline" aria-label="Tiến trình xét duyệt hồ sơ">
+      {APPLICATION_STATUSES.map((item, index) => {
+        const completed = index < completedCount
+        const current = status === 'pending' && index === 1
+        return (
+          <div className={`application-timeline__item ${completed ? 'is-complete' : ''} ${current ? 'is-current' : ''}`} key={item.id}>
+            <span className="application-timeline__marker" aria-hidden="true">
+              {completed ? <CheckCircle2 size={15} /> : index + 1}
+            </span>
+            <span>
+              <strong>{item.label}</strong>
+              {current && <small>Đang chờ xử lý</small>}
+              {status === 'rejected' && index === 1 && <small>Hồ sơ cần được bổ sung</small>}
+            </span>
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
 export function OwnerApplicationPage() {
   const client = useQueryClient()
   const { success, error } = useToast()
@@ -312,6 +344,8 @@ export function OwnerApplicationPage() {
         title="Đăng ký làm chủ sân"
         copy="Hoàn thiện 4 bước để ban quản trị thẩm định cơ sở thể thao của bạn."
       />
+
+      <ApplicationTimeline status={status} />
 
       {status === 'approved' && (
         <div className="notice notice--success">

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 
 interface ModalProps {
   isOpen: boolean
@@ -23,17 +23,45 @@ export function Modal({
   ariaLabel,
 }: ModalProps) {
   const cardClass = `modal__card ${wide ? 'modal__card--wide' : ''}`
+  const formRef = useRef<HTMLFormElement>(null)
+  const divRef = useRef<HTMLDivElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
 
   // Close on Escape key press
   useEffect(() => {
     if (!isOpen) return
+    previousFocus.current = document.activeElement as HTMLElement | null
+    const focusable = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    const getModal = () => formRef.current ?? divRef.current
+    const focusFirst = () => getModal()?.querySelector<HTMLElement>(focusable)?.focus()
+    requestAnimationFrame(focusFirst)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose()
+        return
+      }
+      if (e.key === 'Tab' && getModal()) {
+        const elements = [...getModal()!.querySelectorAll<HTMLElement>(focusable)]
+        if (!elements.length) return
+        const first = elements[0]
+        const last = elements[elements.length - 1]
+        if (!getModal()!.contains(document.activeElement)) {
+          e.preventDefault()
+          first.focus()
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      previousFocus.current?.focus()
+    }
   }, [isOpen, onClose])
 
   return (
@@ -54,6 +82,7 @@ export function Modal({
         >
           {asForm ? (
             <motion.form
+              ref={formRef}
               className={cardClass}
               onSubmit={onSubmit}
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
@@ -66,6 +95,7 @@ export function Modal({
             </motion.form>
           ) : (
             <motion.div
+              ref={divRef}
               className={cardClass}
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

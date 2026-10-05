@@ -18,6 +18,7 @@ import { AnimatedCounter } from '../../components/AnimatedCounter'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
+import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
 import type {
@@ -768,9 +769,16 @@ export function OwnerBookingsPage() {
         </select>
       </div>
       <section className="data-panel">
-        <BookingTable
-          bookings={bookings.data?.data ?? []}
-          actions={(booking) => (
+        <QueryState
+          isPending={bookings.isPending}
+          isError={bookings.isError}
+          isEmpty={!bookings.data?.data.length}
+          error={errorMessage(bookings.error)}
+          empty={<Empty text="Chưa có đơn đặt sân phù hợp." />}
+        >
+          <BookingTable
+            bookings={bookings.data?.data ?? []}
+            actions={(booking) => (
             <>
               {booking.status === 'pending' && (
                 <>
@@ -800,8 +808,9 @@ export function OwnerBookingsPage() {
                 </button>
               )}
             </>
-          )}
-        />
+            )}
+          />
+        </QueryState>
         <Pagination
           page={page}
           lastPage={bookings.data?.meta.last_page ?? 1}
@@ -873,8 +882,15 @@ export function OwnerReviewsPage() {
         title="Khách hàng nói gì?"
         copy="Lắng nghe trải nghiệm thật để cải thiện chất lượng sân."
       />
-      <div className="review-grid">
-        {reviews.data?.data.map((review) => (
+      <QueryState
+        isPending={reviews.isPending}
+        isError={reviews.isError}
+        isEmpty={!reviews.data?.data.length}
+        error={errorMessage(reviews.error)}
+        empty={<Empty text="Chưa có đánh giá nào từ khách hàng." />}
+      >
+        <div className="review-grid">
+          {reviews.data?.data.map((review) => (
           <article className="review-card" key={review.id}>
             <div>
               <div className="avatar">{review.user?.name.slice(0, 1)}</div>
@@ -889,11 +905,9 @@ export function OwnerReviewsPage() {
               Đánh giá cho <strong>{review.field?.name}</strong>
             </small>
           </article>
-        ))}
-      </div>
-      {!reviews.isPending && !reviews.data?.data.length && (
-        <Empty text="Chưa có phản hồi từ khách hàng." />
-      )}
+          ))}
+        </div>
+      </QueryState>
       <Pagination
         page={page}
         lastPage={reviews.data?.meta.last_page ?? 1}

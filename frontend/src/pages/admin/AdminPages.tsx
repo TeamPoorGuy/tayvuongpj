@@ -21,6 +21,7 @@ import { AnimatedCounter } from '../../components/AnimatedCounter'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
+import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
 import type {
@@ -158,10 +159,17 @@ export function AdminUsersPage() {
           <option value="field_owner">Chủ sân</option>
         </select>
       </div>
-      <DataTable
-        heads={['Người dùng', 'Liên hệ', 'Vai trò', 'Trạng thái', 'Thao tác']}
-        rows={
-          users.data?.data.map((user) => [
+      <QueryState
+        isPending={users.isPending}
+        isError={users.isError}
+        isEmpty={!users.data?.data.length}
+        error={errorMessage(users.error)}
+        empty={<Empty text="Chưa có người dùng phù hợp." />}
+      >
+        <DataTable
+          heads={['Người dùng', 'Liên hệ', 'Vai trò', 'Trạng thái', 'Thao tác']}
+          rows={
+            users.data?.data.map((user) => [
             <strong key="user">{user.name}</strong>,
             <Fragment key="contact">
               <span>{user.email}</span>
@@ -177,9 +185,10 @@ export function AdminUsersPage() {
             >
               {user.is_active ? 'Khóa' : 'Mở khóa'}
             </button>,
-          ]) ?? []
-        }
-      />
+            ]) ?? []
+          }
+        />
+      </QueryState>
       <Pagination
         page={page}
         lastPage={users.data?.meta.last_page ?? 1}
@@ -305,10 +314,17 @@ export function AdminOwnersPage() {
           <option value="rejected">Từ chối</option>
         </select>
       </div>
-      <DataTable
-        heads={['Chủ sân', 'Cơ sở', 'Địa chỉ', 'Giấy tờ', 'Trạng thái', 'Hành động']}
-        rows={
-          profiles.data?.data.map((profile) => [
+      <QueryState
+        isPending={profiles.isPending}
+        isError={profiles.isError}
+        isEmpty={!profiles.data?.data.length}
+        error={errorMessage(profiles.error)}
+        empty={<Empty text="Không có hồ sơ chủ sân phù hợp." />}
+      >
+        <DataTable
+          heads={['Chủ sân', 'Cơ sở', 'Địa chỉ', 'Giấy tờ', 'Trạng thái', 'Hành động']}
+          rows={
+            profiles.data?.data.map((profile) => [
             <Fragment key="owner">
               <strong>{profile.user?.name}</strong>
               <small>{profile.user?.email}</small>
@@ -394,9 +410,10 @@ export function AdminOwnersPage() {
                 <small className="muted-text">Đã từ chối</small>
               )}
             </div>,
-          ]) ?? []
-        }
-      />
+            ]) ?? []
+          }
+        />
+      </QueryState>
       <Pagination
         page={page}
         lastPage={profiles.data?.meta.last_page ?? 1}

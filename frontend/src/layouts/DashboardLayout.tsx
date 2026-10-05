@@ -12,7 +12,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
@@ -55,16 +55,19 @@ export function DashboardLayout() {
 
   // Mode switcher for approved owners
   const [activeMode, setActiveMode] = useState<'owner' | 'customer'>(() => {
-    return location.pathname.startsWith('/owner') ? 'owner' : 'customer'
+    if (location.pathname.startsWith('/owner')) return 'owner'
+    return localStorage.getItem('sporthub:last-mode') === 'owner' && isApprovedOwner ? 'owner' : 'customer'
   })
 
   useEffect(() => {
     if (location.pathname.startsWith('/owner')) {
       setActiveMode('owner')
+      localStorage.setItem('sporthub:last-mode', 'owner')
     } else if (location.pathname === '/bookings' || location.pathname === '/profile') {
       setActiveMode('customer')
+      localStorage.setItem('sporthub:last-mode', 'customer')
     }
-  }, [location.pathname])
+  }, [location.pathname, isApprovedOwner])
 
   if (!user) return null
 
@@ -80,7 +83,7 @@ export function DashboardLayout() {
   return (
     <div className={`dashboard ${isAdmin ? 'dashboard--admin' : ''}`}>
       <aside className="sidebar">
-        <a className="sidebar__brand" href="/">
+          <Link className="sidebar__brand" to="/">
           <span>
             <Activity />
           </span>
@@ -96,7 +99,7 @@ export function DashboardLayout() {
                 : 'Tài khoản khách'}
             </small>
           </div>
-        </a>
+          </Link>
 
         {/* Mode Switcher for Approved Owners */}
         {isApprovedOwner && (
@@ -106,6 +109,7 @@ export function DashboardLayout() {
               className={`mode-switcher__item ${activeMode === 'owner' ? 'mode-switcher__item--active' : ''}`}
               onClick={() => {
                 setActiveMode('owner')
+                localStorage.setItem('sporthub:last-mode', 'owner')
                 navigate('/owner')
               }}
             >
@@ -116,6 +120,7 @@ export function DashboardLayout() {
               className={`mode-switcher__item ${activeMode === 'customer' ? 'mode-switcher__item--active' : ''}`}
               onClick={() => {
                 setActiveMode('customer')
+                localStorage.setItem('sporthub:last-mode', 'customer')
                 navigate('/bookings')
               }}
             >
@@ -176,9 +181,9 @@ export function DashboardLayout() {
             <strong>Xin chào, {user.name}</strong>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <a className="button button--ghost" href="/">
+            <Link className="button button--ghost" to="/">
               Xem website
-            </a>
+            </Link>
             <button
               type="button"
               className="button button--ghost button--small mobile-logout-btn"

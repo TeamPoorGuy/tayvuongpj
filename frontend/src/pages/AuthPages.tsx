@@ -21,7 +21,12 @@ function GoogleButton() {
   </>
 }
 
-const destination = (user: User) => user.role === 'admin' ? '/admin' : '/bookings'
+const destination = (user: User) => {
+  if (user.role === 'admin') return '/admin'
+  return localStorage.getItem('sporthub:last-mode') === 'owner' && user.field_owner_profile?.verification_status === 'approved'
+    ? '/owner'
+    : '/bookings'
+}
 
 export function LoginPage() {
   const { user, login } = useAuth()
