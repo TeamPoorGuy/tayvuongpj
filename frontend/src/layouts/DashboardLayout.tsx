@@ -179,6 +179,18 @@ export function DashboardLayout() {
             <a className="button button--ghost" href="/">
               Xem website
             </a>
+            <button
+              type="button"
+              className="button button--ghost button--small mobile-logout-btn"
+              onClick={async () => {
+                await logout()
+                navigate('/')
+              }}
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         </header>
 
