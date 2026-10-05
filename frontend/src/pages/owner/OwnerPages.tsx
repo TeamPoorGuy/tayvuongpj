@@ -8,6 +8,8 @@ import {
   Image as ImageIcon,
   MessageSquareText,
   Plus,
+  QrCode,
+  ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -703,6 +705,8 @@ export function OwnerBookingsPage() {
   const [page, setPage] = useState(1)
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
+  const [checkInCode, setCheckInCode] = useState('')
 
   const bookings = useQuery({
     queryKey: ['owner', 'bookings', status, page],
@@ -739,9 +743,25 @@ export function OwnerBookingsPage() {
       setRejectingBooking(null)
       setRejectReason('')
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể cập nhật đơn')
+    },
+  })
+
+  const checkIn = useMutation({
+    mutationFn: async (code: string) =>
+      (await api.post<{ message: string; data: Booking }>('/field-owner/check-in', { code })).data,
+    onSuccess: (res) => {
+      toast.success(res.message || 'Check-in thành công! Đã cộng +10 điểm uy tín cho khách hàng.')
+      setShowCheckInModal(false)
+      setCheckInCode('')
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Check-in không thành công')
     },
   })
 
@@ -755,8 +775,17 @@ export function OwnerBookingsPage() {
       <PageTitle
         icon={<CalendarDays />}
         kicker="Vận hành"
-        title="Đơn đặt sân"
-        copy="Xác nhận yêu cầu và hoàn thành lịch chơi của khách hàng."
+        title="Đơn đặt sân & Check-in QR"
+        copy="Xác nhận yêu cầu, quét mã QR check-in tích điểm uy tín và hoàn tất lượt chơi."
+        action={
+          <button
+            type="button"
+            className="button button--brand"
+            onClick={() => setShowCheckInModal(true)}
+          >
+            <QrCode size={16} /> Quét / Check-in QR
+          </button>
+        }
       />
       <div className="toolbar">
         <select value={status} onChange={(event) => handleFilterChange(event.target.value)}>
@@ -779,35 +808,47 @@ export function OwnerBookingsPage() {
           <BookingTable
             bookings={bookings.data?.data ?? []}
             actions={(booking) => (
-            <>
-              {booking.status === 'pending' && (
-                <>
-                  <button
-                    className="button button--brand button--small"
-                    onClick={() => update.mutate({ booking, status: 'confirmed' })}
-                    disabled={update.isPending}
-                  >
-                    Xác nhận
-                  </button>
-                  <button
-                    className="button button--danger button--small"
-                    onClick={() => setRejectingBooking(booking)}
-                    disabled={update.isPending}
-                  >
-                    Từ chối
-                  </button>
-                </>
-              )}
-              {booking.status === 'confirmed' && (
-                <button
-                  className="button button--dark button--small"
-                  onClick={() => update.mutate({ booking, status: 'completed' })}
-                  disabled={update.isPending}
-                >
-                  Hoàn thành
-                </button>
-              )}
-            </>
+              <>
+                {booking.status === 'pending' && (
+                  <>
+                    <button
+                      className="button button--brand button--small"
+                      onClick={() => update.mutate({ booking, status: 'confirmed' })}
+                      disabled={update.isPending}
+                    >
+                      Xác nhận
+                    </button>
+                    <button
+                      className="button button--danger button--small"
+                      onClick={() => setRejectingBooking(booking)}
+                      disabled={update.isPending}
+                    >
+                      Từ chối
+                    </button>
+                  </>
+                )}
+                {booking.status === 'confirmed' && (
+                  <>
+                    {!booking.checked_in_at && (
+                      <button
+                        className="button button--ghost button--small"
+                        onClick={() => checkIn.mutate(booking.check_in_code ?? '')}
+                        disabled={checkIn.isPending}
+                        title="Xác nhận khách đã tới sân (tích +10 điểm uy tín)"
+                      >
+                        <QrCode size={13} /> Check-in
+                      </button>
+                    )}
+                    <button
+                      className="button button--dark button--small"
+                      onClick={() => update.mutate({ booking, status: 'completed' })}
+                      disabled={update.isPending}
+                    >
+                      Hoàn thành
+                    </button>
+                  </>
+                )}
+              </>
             )}
           />
         </QueryState>
@@ -819,6 +860,7 @@ export function OwnerBookingsPage() {
         />
       </section>
 
+      {/* Reject Modal */}
       <Modal
         isOpen={!!rejectingBooking}
         onClose={() => setRejectingBooking(null)}
@@ -859,6 +901,49 @@ export function OwnerBookingsPage() {
           </button>
           <button type="submit" disabled={update.isPending} className="button button--danger">
             {update.isPending ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Owner QR Check-in Modal */}
+      <Modal
+        isOpen={showCheckInModal}
+        onClose={() => setShowCheckInModal(false)}
+        title="Xác thực Check-in Khách Hàng"
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (checkInCode.trim()) {
+            checkIn.mutate(checkInCode.trim())
+          }
+        }}
+      >
+        <p>
+          Nhập mã Check-in được hiển thị trên thẻ vào sân của khách hàng (hoặc mã quét từ QR).
+          Hệ thống sẽ chuyển trạng thái đơn sang đã check-in và tự động <strong>cộng +10 điểm uy tín</strong> cho khách.
+        </p>
+        <label style={{ marginTop: 14 }}>
+          <span>Mã Check-in (VD: CK-A1B2C3D4)</span>
+          <input
+            type="text"
+            value={checkInCode}
+            onChange={(e) => setCheckInCode(e.target.value.toUpperCase())}
+            placeholder="CK-XXXXXXXX"
+            style={{ fontFamily: 'monospace', fontSize: '1.1rem', letterSpacing: '0.08em' }}
+            required
+            autoFocus
+          />
+        </label>
+        <div className="modal__actions" style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => setShowCheckInModal(false)}
+          >
+            Hủy
+          </button>
+          <button type="submit" disabled={checkIn.isPending} className="button button--brand">
+            {checkIn.isPending ? 'Đang xác thực...' : 'Xác nhận Check-in'}
           </button>
         </div>
       </Modal>
@@ -1047,7 +1132,18 @@ function BookingTable({
                 </td>
                 <td>{currency.format(booking.total_price)}đ</td>
                 <td>
-                  <StatusBadge status={booking.status} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                    <StatusBadge status={booking.status} />
+                    {booking.checked_in_at ? (
+                      <span className="badge badge--success" style={{ fontSize: '0.72rem', padding: '2px 6px' }} title={`Check-in: ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
+                        ✓ Đã Check-in
+                      </span>
+                    ) : booking.status === 'confirmed' ? (
+                      <span className="badge badge--soft" style={{ fontSize: '0.72rem', padding: '2px 6px' }}>
+                        Chưa check-in
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 {actions && (
                   <td>
@@ -1069,7 +1165,14 @@ function BookingTable({
                 <small className="mobile-booking-card__id">#BK-{String(booking.id).padStart(5, '0')}</small>
                 <h4>{booking.field?.name}</h4>
               </div>
-              <StatusBadge status={booking.status} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                <StatusBadge status={booking.status} />
+                {booking.checked_in_at && (
+                  <span className="badge badge--success" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                    ✓ Đã Check-in
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mobile-booking-card__grid">

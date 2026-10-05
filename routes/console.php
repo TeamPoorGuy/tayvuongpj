@@ -15,3 +15,19 @@ Artisan::command('bookings:sync', function (BookingService $bookings) {
 })->purpose('Tự động xử lý đơn đặt sân quá hạn / đã kết thúc');
 
 Schedule::command('bookings:sync')->everyFifteenMinutes()->withoutOverlapping();
+
+Artisan::command('waitlist:expire', function (\App\Services\WaitlistService $waitlist) {
+    $count = $waitlist->expireOffers();
+    $this->info("Đã quét và chuyển slot cho {$count} lời mời waitlist quá hạn.");
+})->purpose('Quét và chuyển lời mời waitlist quá hạn cho người tiếp theo');
+
+Schedule::command('waitlist:expire')->everyMinute()->withoutOverlapping();
+
+Artisan::command('matches:close-past', function () {
+    $count = \App\Models\MatchRequest::where('status', 'open')
+        ->where('play_date', '<', today())
+        ->update(['status' => 'completed']);
+    $this->info("Đã đóng {$count} trận đấu đã qua ngày thi đấu.");
+})->purpose('Đóng các trận đấu tìm đối đã qua ngày');
+
+Schedule::command('matches:close-past')->hourly()->withoutOverlapping();

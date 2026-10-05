@@ -87,11 +87,22 @@ class BookingService
             throw new ConflictException('Đơn đặt sân này không còn đủ điều kiện để hủy.');
         }
 
+        $isLate = $booking->startsAt()->diffInHours(now(), false) > -4;
+        if ($isLate) {
+            TrustScoreService::penalizeLateCancellation($user);
+        }
+
         $booking->update([
             'status' => BookingStatus::Cancelled->value,
             'cancelled_at' => now(),
             'cancel_reason' => $reason ?: 'Khách hàng tự hủy đơn.',
         ]);
+
+        app(WaitlistService::class)->handleSlotFreed(
+            $booking->sports_field_id,
+            $booking->time_slot_id,
+            $booking->booking_date->toDateString()
+        );
 
         return $booking->refresh()->load(Booking::resourceRelations());
     }
@@ -117,6 +128,11 @@ class BookingService
                         'cancel_reason' => 'Quá hạn xác nhận.',
                     ]);
                     SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+                    app(WaitlistService::class)->handleSlotFreed(
+                        $booking->sports_field_id,
+                        $booking->time_slot_id,
+                        $booking->booking_date->toDateString()
+                    );
                     $count['rejected']++;
                 } elseif ($booking->status === BookingStatus::Confirmed && $booking->endsAt()->isPast()) {
                     $booking->update(['status' => BookingStatus::Completed->value]);

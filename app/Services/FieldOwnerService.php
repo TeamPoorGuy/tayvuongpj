@@ -148,6 +148,14 @@ class FieldOwnerService
         $booking->update($attributes);
         $booking = $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
 
+        if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
+            app(\App\Services\WaitlistService::class)->handleSlotFreed(
+                $booking->sports_field_id,
+                $booking->time_slot_id,
+                $booking->booking_date->toDateString()
+            );
+        }
+
         if ($next !== BookingStatus::Completed) {
             SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
         }

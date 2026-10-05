@@ -13,6 +13,9 @@ import {
   Sun,
   Sunset,
   Moon,
+  ArrowRight,
+  BellRing,
+  Zap,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useState, useMemo } from 'react'
@@ -22,7 +25,7 @@ import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
 import { useToast } from '../components/Toast'
 import { getLocalTodayString } from '../utils/date'
-import type { ApiEnvelope, SportsField, TimeSlot } from '../types/api'
+import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
 
 const currency = new Intl.NumberFormat('vi-VN')
 
@@ -38,6 +41,7 @@ export function FieldDetailPage() {
   const [notes, setNotes] = useState('')
   const [activeImg, setActiveImg] = useState(0)
   const [periodFilter, setPeriodFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all')
+  const [selectedBookedSlot, setSelectedBookedSlot] = useState<TimeSlot | null>(null)
 
   const field = useQuery({
     queryKey: ['field', slug],
@@ -51,6 +55,34 @@ export function FieldDetailPage() {
       (await api.get<ApiEnvelope<{ date: string; slots: TimeSlot[] }>>(
         `/fields/${field.data?.id}/available-slots?date=${date}`,
       )).data.data.slots,
+  })
+
+  const suggestions = useQuery({
+    queryKey: ['suggestions', slug, selectedBookedSlot?.id, date],
+    enabled: !!selectedBookedSlot && !!slug,
+    queryFn: async () =>
+      (await api.get<ApiEnvelope<SlotSuggestion[]>>(
+        `/fields/${slug}/suggestions?slot_id=${selectedBookedSlot?.id}&date=${date}`,
+      )).data.data,
+  })
+
+  const joinWaitlist = useMutation({
+    mutationFn: async (slot: TimeSlot) =>
+      api.post('/customer/waitlist', {
+        sports_field_id: field.data?.id,
+        time_slot_id: slot.id,
+        booking_date: date,
+      }),
+    onSuccess: () => {
+      success(
+        'Đã tham gia hàng đợi thành công! Hệ thống sẽ ưu tiên gửi email giữ chỗ cho bạn ngay khi có người hủy.',
+        'Hàng đợi thông minh (Waitlist)',
+      )
+      setSelectedBookedSlot(null)
+    },
+    onError: (err) => {
+      error(errorMessage(err), 'Không thể vào hàng đợi')
+    },
   })
 
   const booking = useMutation({
@@ -351,14 +383,23 @@ export function FieldDetailPage() {
             <div className="slot-grid">
               {filteredSlots.map((slot) => {
                 const isSelected = slotId === slot.id
+                const isBookedSelected = selectedBookedSlot?.id === slot.id
                 return (
                   <button
                     type="button"
-                    disabled={slot.is_booked || slot.is_past}
+                    disabled={slot.is_past}
                     className={`slot-chip ${isSelected ? 'selected' : ''} ${
                       slot.is_booked ? 'slot-chip--booked' : ''
-                    } ${slot.is_past ? 'slot-chip--past' : ''}`}
-                    onClick={() => setSlotId(slot.id)}
+                    } ${isBookedSelected ? 'slot-chip--booked-active' : ''} ${slot.is_past ? 'slot-chip--past' : ''}`}
+                    onClick={() => {
+                      if (slot.is_booked) {
+                        setSlotId(null)
+                        setSelectedBookedSlot(slot)
+                      } else {
+                        setSelectedBookedSlot(null)
+                        setSlotId(slot.id)
+                      }
+                    }}
                     key={slot.id}
                   >
                     <span>
@@ -369,7 +410,7 @@ export function FieldDetailPage() {
                         {currency.format(slot.price_per_hour)}đ/h
                       </small>
                     )}
-                    {slot.is_booked && <small>Đã đặt</small>}
+                    {slot.is_booked && <small>Đã đặt (Chờ)</small>}
                     {slot.is_past && <small>Đã qua</small>}
                   </button>
                 )
@@ -378,6 +419,75 @@ export function FieldDetailPage() {
 
             {filteredSlots.length === 0 && !slots.isPending && (
               <p className="no-slot-notice">Không có khung giờ nào phù hợp bộ lọc.</p>
+            )}
+
+            {/* Phase 4: Smart Waitlist & Suggestion Block */}
+            {selectedBookedSlot && (
+              <div className="waitlist-card">
+                <div className="waitlist-card__head">
+                  <div className="waitlist-card__title">
+                    <Zap size={16} />
+                    <strong>Khung giờ {selectedBookedSlot.start_time} – {selectedBookedSlot.end_time} đã kín</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    onClick={() => setSelectedBookedSlot(null)}
+                  >
+                    Đóng
+                  </button>
+                </div>
+                <p className="waitlist-card__desc">
+                  Bạn có thể tham gia <strong>Hàng đợi thông minh (Smart Waitlist)</strong> để được ưu tiên nhận giữ chỗ ngay lập tức khi có người hủy hoặc đổi giờ!
+                </p>
+                {user ? (
+                  <button
+                    type="button"
+                    className="button button--brand button--small waitlist-btn"
+                    onClick={() => joinWaitlist.mutate(selectedBookedSlot)}
+                    disabled={joinWaitlist.isPending}
+                  >
+                    <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Tham gia Hàng đợi (Waitlist)'}
+                  </button>
+                ) : (
+                  <Link to="/login" className="button button--brand button--small">
+                    Đăng nhập để vào Hàng đợi
+                  </Link>
+                )}
+
+                {/* Smart suggestions */}
+                {suggestions.data && suggestions.data.length > 0 && (
+                  <div className="suggestions-block">
+                    <span className="suggestions-label">💡 Gợi ý khung giờ thay thế gần nhất:</span>
+                    <div className="suggestions-list">
+                      {suggestions.data.map((sug, idx) => (
+                        <div key={idx} className="suggestion-item">
+                          <div>
+                            <span className="suggestion-badge">{sug.badge}</span>
+                            <strong>{sug.field_name}</strong>
+                            <small>{sug.date_label} · {sug.start_time} – {sug.end_time}</small>
+                          </div>
+                          <button
+                            type="button"
+                            className="button button--ghost button--small"
+                            onClick={() => {
+                              if (sug.field_slug === slug) {
+                                setDate(sug.date)
+                                setSlotId(sug.time_slot_id)
+                                setSelectedBookedSlot(null)
+                              } else {
+                                window.location.href = `/fields/${sug.field_slug}`
+                              }
+                            }}
+                          >
+                            Chọn giờ này <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

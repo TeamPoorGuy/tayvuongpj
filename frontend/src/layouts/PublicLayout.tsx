@@ -33,6 +33,7 @@ export function PublicLayout() {
           <nav className="topnav" aria-label="Điều hướng chính">
             <NavLink to="/" end>Trang chủ</NavLink>
             <NavLink to="/fields">Tìm sân</NavLink>
+            <NavLink to="/matches">Tìm đối & Ghép đội</NavLink>
             <a href="/#how-it-works">Cách hoạt động</a>
           </nav>
           <div className="topbar__actions">
@@ -94,6 +95,7 @@ export function PublicLayout() {
                 <nav className="mobile-drawer__nav">
                   <NavLink to="/" end onClick={() => setMobileOpen(false)}>Trang chủ</NavLink>
                   <NavLink to="/fields" onClick={() => setMobileOpen(false)}>Tìm sân</NavLink>
+                  <NavLink to="/matches" onClick={() => setMobileOpen(false)}>Tìm đối & Ghép đội</NavLink>
                   <a href="/#how-it-works" onClick={() => setMobileOpen(false)}>Cách hoạt động</a>
                 </nav>
                 <div className="mobile-drawer__actions">

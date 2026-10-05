@@ -21,6 +21,9 @@ class Booking extends Model
         'notes',
         'cancelled_at',
         'cancel_reason',
+        'check_in_code',
+        'checked_in_at',
+        'checked_in_by',
     ];
 
     protected $casts = [
@@ -28,7 +31,22 @@ class Booking extends Model
         'status' => BookingStatus::class,
         'total_price' => 'decimal:2',
         'cancelled_at' => 'datetime',
+        'checked_in_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Booking $booking) {
+            if (empty($booking->check_in_code)) {
+                $booking->check_in_code = static::generateCheckInCode();
+            }
+        });
+    }
+
+    public static function generateCheckInCode(): string
+    {
+        return 'CK-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+    }
 
     public function customer()
     {

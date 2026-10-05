@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
+use App\Http\Controllers\Api\V1\FieldSuggestionController;
+use App\Http\Controllers\Api\V1\MatchmakingController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Api\V1\FieldOwner;
@@ -36,6 +38,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/fields', [CatalogController::class, 'fields']);
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
+    Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);
+    Route::get('/matches', [MatchmakingController::class, 'index']);
+    Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
@@ -49,6 +54,16 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/owner-application', [Customer\OwnerApplicationController::class, 'show']);
             Route::post('/owner-application', [Customer\OwnerApplicationController::class, 'store'])->middleware(['verified', 'throttle:writes']);
             Route::get('/owner-application/documents/{document}', [Customer\OwnerApplicationController::class, 'document']);
+
+            // Phase 4: Waitlist & Matchmaking
+            Route::get('/waitlist', [Customer\WaitlistController::class, 'index']);
+            Route::post('/waitlist', [Customer\WaitlistController::class, 'store'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/waitlist/{id}/accept', [Customer\WaitlistController::class, 'accept'])->middleware(['verified', 'throttle:writes']);
+            Route::delete('/waitlist/{id}', [Customer\WaitlistController::class, 'cancel'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/matches', [MatchmakingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/matches/{id}/join', [MatchmakingController::class, 'join'])->middleware(['verified', 'throttle:writes']);
+            Route::patch('/matches/{id}/participants/{participantId}', [MatchmakingController::class, 'updateParticipant'])->middleware(['verified', 'throttle:writes']);
+            Route::delete('/matches/{id}', [MatchmakingController::class, 'cancel'])->middleware(['verified', 'throttle:writes']);
         });
 
         Route::prefix('field-owner')
@@ -56,6 +71,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     // (đơn xin làm chủ sân nằm ở customer/owner-application, không cần duyệt để xem/nộp)
     ->middleware('owner.approved')
     ->group(function () {
+        Route::post('/check-in', [FieldOwner\CheckInController::class, 'checkIn'])->middleware('throttle:writes');
         Route::get(
             '/profile',
             [FieldOwner\ProfileController::class, 'show']

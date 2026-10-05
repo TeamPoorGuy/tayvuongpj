@@ -4,6 +4,7 @@ import { DashboardLayout } from './layouts/DashboardLayout'
 import { HomePage } from './pages/HomePage'
 import { FieldsPage } from './pages/FieldsPage'
 import { FieldDetailPage } from './pages/FieldDetailPage'
+import { MatchesPage } from './pages/MatchesPage'
 import { EmailVerifiedPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPages'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
@@ -18,6 +19,7 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="fields" element={<FieldsPage />} />
         <Route path="fields/:slug" element={<FieldDetailPage />} />
+        <Route path="matches" element={<MatchesPage />} />
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />

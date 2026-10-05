@@ -53,6 +53,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'trust_score' => 'integer',
         ];
     }
 
@@ -107,5 +108,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function bookingWaitlists()
+    {
+        return $this->hasMany(BookingWaitlist::class);
+    }
+
+    public function matchRequests()
+    {
+        return $this->hasMany(MatchRequest::class);
+    }
+
+    public function matchParticipations()
+    {
+        return $this->hasMany(MatchParticipant::class);
     }
 }
