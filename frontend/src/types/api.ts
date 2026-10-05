@@ -27,6 +27,8 @@ export interface OwnerProfile {
   bank_name?: string | null
   bank_account_number?: string | null
   bank_account_holder?: string | null
+  terms_version?: string | null
+  terms_accepted_at?: string | null
   documents?: { id: number; type: string; original_name: string; url: string }[]
   rejection_reason: string | null
   verified_at: string | null
@@ -76,6 +78,7 @@ export interface TimeSlot {
   is_active?: boolean
   is_booked?: boolean
   is_past?: boolean
+  price_per_hour?: number | null
 }
 
 export interface Review {

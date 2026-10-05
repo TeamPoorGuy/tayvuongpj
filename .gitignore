@@ -47,3 +47,6 @@ Thumbs.db
 
 # Google OAuth client secret downloads
 client_secret*.json
+
+# Playwright MCP test artifacts
+.playwright-mcp/

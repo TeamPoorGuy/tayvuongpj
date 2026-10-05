@@ -1,20 +1,32 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
-import { Activity, Building2, CalendarDays, ChartNoAxesCombined, CircleUserRound, FolderTree, LogOut, MessageSquareText, ShieldCheck, UsersRound } from 'lucide-react'
+import {
+  Activity,
+  Building2,
+  CalendarDays,
+  ChartNoAxesCombined,
+  CircleUserRound,
+  FolderTree,
+  LogOut,
+  MessageSquareText,
+  ShieldCheck,
+  UsersRound,
+} from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
 
 const customerNav = [
-  { to: '/bookings', label: 'Lịch đặt của tôi', icon: CalendarDays },
+  { to: '/bookings', label: 'Lịch chơi của tôi', icon: CalendarDays },
   { to: '/profile', label: 'Hồ sơ cá nhân', icon: CircleUserRound },
 ]
 
 const ownerNav = [
-  { to: '/owner', label: 'Tổng quan', icon: ChartNoAxesCombined },
-  { to: '/owner/fields', label: 'Sân của tôi', icon: Building2 },
+  { to: '/owner', label: 'Tổng quan sân', icon: ChartNoAxesCombined },
+  { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
-  { to: '/owner/reviews', label: 'Đánh giá', icon: MessageSquareText },
+  { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]
 
@@ -38,24 +50,83 @@ export function DashboardLayout() {
   const location = useLocation()
   useReveal([location.pathname])
 
+  const isAdmin = user?.role === 'admin'
+  const isApprovedOwner = user?.field_owner_profile?.verification_status === 'approved'
+
+  // Mode switcher for approved owners
+  const [activeMode, setActiveMode] = useState<'owner' | 'customer'>(() => {
+    return location.pathname.startsWith('/owner') ? 'owner' : 'customer'
+  })
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/owner')) {
+      setActiveMode('owner')
+    } else if (location.pathname === '/bookings' || location.pathname === '/profile') {
+      setActiveMode('customer')
+    }
+  }, [location.pathname])
+
   if (!user) return null
-  const isAdmin = user.role === 'admin'
-  const isApprovedOwner = user.field_owner_profile?.verification_status === 'approved'
-  const items = isAdmin ? navigation.admin : [...customerNav, ...(isApprovedOwner ? ownerNav : becomeOwnerNav)]
+
+  // Determine navigation items
+  const items = isAdmin
+    ? navigation.admin
+    : isApprovedOwner
+    ? activeMode === 'owner'
+      ? ownerNav
+      : customerNav
+    : [...customerNav, ...becomeOwnerNav]
 
   return (
     <div className={`dashboard ${isAdmin ? 'dashboard--admin' : ''}`}>
       <aside className="sidebar">
         <a className="sidebar__brand" href="/">
-          <span><Activity /></span>
+          <span>
+            <Activity />
+          </span>
           <div>
             <strong>SportHub</strong>
-            <small>{isAdmin ? 'System console' : isApprovedOwner ? 'Kênh chủ sân' : 'Tài khoản'}</small>
+            <small>
+              {isAdmin
+                ? 'System console'
+                : isApprovedOwner
+                ? activeMode === 'owner'
+                  ? 'Kênh chủ sân'
+                  : 'Khu vực khách hàng'
+                : 'Tài khoản khách'}
+            </small>
           </div>
         </a>
+
+        {/* Mode Switcher for Approved Owners */}
+        {isApprovedOwner && (
+          <div className="mode-switcher">
+            <button
+              type="button"
+              className={`mode-switcher__item ${activeMode === 'owner' ? 'mode-switcher__item--active' : ''}`}
+              onClick={() => {
+                setActiveMode('owner')
+                navigate('/owner')
+              }}
+            >
+              <Building2 size={13} /> Chủ sân
+            </button>
+            <button
+              type="button"
+              className={`mode-switcher__item ${activeMode === 'customer' ? 'mode-switcher__item--active' : ''}`}
+              onClick={() => {
+                setActiveMode('customer')
+                navigate('/bookings')
+              }}
+            >
+              <CalendarDays size={13} /> Khách đặt
+            </button>
+          </div>
+        )}
+
         <nav>
           {items.map(({ to, label, icon: Icon }) => {
-            const isExact = to === '/admin' || to === '/owner'
+            const isExact = to === '/admin' || to === '/owner' || to === '/bookings'
             const isActive = isExact ? location.pathname === to : location.pathname.startsWith(to)
             return (
               <NavLink to={to} end={isExact} key={to}>
@@ -72,6 +143,7 @@ export function DashboardLayout() {
             )
           })}
         </nav>
+
         <div className="sidebar__user">
           <div className="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
           <div>
@@ -79,16 +151,37 @@ export function DashboardLayout() {
             <small>{user.email}</small>
           </div>
         </div>
-        <button onClick={async () => { await logout(); navigate('/') }}><LogOut /> Đăng xuất</button>
+        <button
+          onClick={async () => {
+            await logout()
+            navigate('/')
+          }}
+        >
+          <LogOut /> Đăng xuất
+        </button>
       </aside>
+
       <main className="dashboard__main">
         <header className="dashboard__top">
           <div>
-            <span>{isAdmin ? 'Quản trị hệ thống' : isApprovedOwner ? 'Trung tâm vận hành' : 'Khu vực khách hàng'}</span>
+            <span>
+              {isAdmin
+                ? 'Quản trị hệ thống'
+                : isApprovedOwner
+                ? activeMode === 'owner'
+                  ? 'Trung tâm vận hành cơ sở'
+                  : 'Lịch sử đặt sân cá nhân'
+                : 'Khu vực khách hàng'}
+            </span>
             <strong>Xin chào, {user.name}</strong>
           </div>
-          <a className="button button--ghost" href="/">Xem trang công khai</a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a className="button button--ghost" href="/">
+              Xem website
+            </a>
+          </div>
         </header>
+
         <div className="dashboard__content">
           <AnimatePresence mode="wait">
             <motion.div
@@ -107,4 +200,3 @@ export function DashboardLayout() {
     </div>
   )
 }
-
