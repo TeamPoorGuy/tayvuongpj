@@ -13,6 +13,9 @@ import type { ApiEnvelope, Booking, Paginated, User } from '../../types/api'
 
 const currency = new Intl.NumberFormat('vi-VN')
 
+const fallbackFieldImage =
+  'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=800&q=80'
+
 export function CustomerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -83,7 +86,14 @@ export function CustomerBookingsPage() {
             key={booking.id}
           >
             <div className="booking-item__image">
-              {booking.field?.primary_image && <img src={booking.field.primary_image} alt="" />}
+              <img
+                src={booking.field?.primary_image || fallbackFieldImage}
+                alt={booking.field?.name ?? 'Sân thể thao'}
+                onError={(e) => {
+                  e.currentTarget.onerror = null
+                  e.currentTarget.src = fallbackFieldImage
+                }}
+              />
             </div>
             <div className="booking-item__body">
               <div className="booking-item__top">

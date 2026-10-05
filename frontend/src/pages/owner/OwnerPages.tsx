@@ -998,46 +998,92 @@ function BookingTable({
   bookings: Booking[]
   actions?: (booking: Booking) => React.ReactNode
 }) {
+  if (bookings.length === 0) {
+    return <p className="empty-inline" style={{ padding: 24, textAlign: 'center' }}>Chưa có yêu cầu đặt sân nào.</p>
+  }
+
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Đơn & sân</th>
-            <th>Khách hàng</th>
-            <th>Lịch chơi</th>
-            <th>Giá trị</th>
-            <th>Trạng thái</th>
-            {actions && <th />}
-          </tr>
-        </thead>
-        <tbody>
-          {bookings.map((booking) => (
-            <tr key={booking.id}>
-              <td>
-                <small>#BK-{booking.id}</small>
-                <strong>{booking.field?.name}</strong>
-              </td>
-              <td>{booking.customer?.name ?? '—'}</td>
-              <td>
-                {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
-                <small>
-                  {booking.time_slot?.start_time} – {booking.time_slot?.end_time}
-                </small>
-              </td>
-              <td>{currency.format(booking.total_price)}đ</td>
-              <td>
-                <StatusBadge status={booking.status} />
-              </td>
-              {actions && (
-                <td>
-                  <div className="row-actions">{actions(booking)}</div>
-                </td>
-              )}
+    <>
+      {/* Desktop Table View */}
+      <div className="table-wrap hide-on-mobile">
+        <table>
+          <thead>
+            <tr>
+              <th>Đơn & sân</th>
+              <th>Khách hàng</th>
+              <th>Lịch chơi</th>
+              <th>Giá trị</th>
+              <th>Trạng thái</th>
+              {actions && <th />}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {bookings.map((booking) => (
+              <tr key={booking.id}>
+                <td>
+                  <small>#BK-{booking.id}</small>
+                  <strong>{booking.field?.name}</strong>
+                </td>
+                <td>{booking.customer?.name ?? '—'}</td>
+                <td>
+                  {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
+                  <small>
+                    {booking.time_slot?.start_time} – {booking.time_slot?.end_time}
+                  </small>
+                </td>
+                <td>{currency.format(booking.total_price)}đ</td>
+                <td>
+                  <StatusBadge status={booking.status} />
+                </td>
+                {actions && (
+                  <td>
+                    <div className="row-actions">{actions(booking)}</div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="mobile-booking-cards hide-on-desktop">
+        {bookings.map((booking) => (
+          <article key={booking.id} className="mobile-booking-card">
+            <div className="mobile-booking-card__head">
+              <div>
+                <small className="mobile-booking-card__id">#BK-{String(booking.id).padStart(5, '0')}</small>
+                <h4>{booking.field?.name}</h4>
+              </div>
+              <StatusBadge status={booking.status} />
+            </div>
+
+            <div className="mobile-booking-card__grid">
+              <div className="mobile-booking-card__field">
+                <span>Khách hàng</span>
+                <strong>{booking.customer?.name ?? '—'}</strong>
+              </div>
+              <div className="mobile-booking-card__field">
+                <span>Tổng tiền</span>
+                <strong className="mobile-booking-card__price">{currency.format(booking.total_price)}đ</strong>
+              </div>
+            </div>
+
+            <div className="mobile-booking-card__time">
+              <CalendarDays size={13} />
+              <span>
+                {new Date(booking.booking_date).toLocaleDateString('vi-VN')} ({booking.time_slot?.start_time} – {booking.time_slot?.end_time})
+              </span>
+            </div>
+
+            {actions && (
+              <div className="mobile-booking-card__actions">
+                {actions(booking)}
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </>
   )
 }
