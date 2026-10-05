@@ -29,6 +29,9 @@ class WaitlistService
         if ($parsedDate->isPast() && ! $parsedDate->isToday()) {
             throw new DomainException('Không thể đăng ký hàng đợi cho ngày trong quá khứ.');
         }
+        if ($parsedDate->isToday() && Carbon::parse($date.' '.$slot->start_time)->isPast()) {
+            throw new DomainException('Không thể đăng ký hàng đợi cho khung giờ đã qua.');
+        }
 
         // Kiểm tra xem slot có thực sự bị đặt chưa
         $isBooked = Booking::where('sports_field_id', $fieldId)

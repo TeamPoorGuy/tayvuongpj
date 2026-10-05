@@ -32,6 +32,9 @@ class SmartSuggestionService
             ->all();
 
         foreach ($sameFieldOtherSlots as $slot) {
+            if ($date->isToday() && Carbon::parse($date->toDateString().' '.$slot->start_time)->isPast()) {
+                continue;
+            }
             if (! in_array($slot->id, $bookedSlotIdsToday, true)) {
                 $targetPrice = $targetSlot->price_per_hour ?? $field->price_per_hour;
                 $thisPrice = $slot->price_per_hour ?? $field->price_per_hour;

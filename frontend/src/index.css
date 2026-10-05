@@ -2740,6 +2740,41 @@ a svg {
   text-align: center;
   background: #f8fafc;
 }
+.field-map-fallback--error {
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+}
+.field-map-error-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #b45309;
+}
+.field-map-error-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #fde68a;
+  font-size: 13px;
+}
+.field-map-addr-text {
+  font-weight: 600;
+  color: #1e293b;
+}
+.field-map-coords-tag {
+  font-size: 11px;
+  font-family: monospace;
+  color: #64748b;
+}
 .fallback-inner {
   display: flex;
   flex-direction: column;
@@ -3222,6 +3257,60 @@ a svg {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+.mobile-week-day-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 2px 8px 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-day-pill {
+  flex: 1 1 0;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.mobile-day-pill.active {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.mobile-day-pill.is-today:not(.active) {
+  border-color: var(--brand);
+  background: #f0fdf4;
+}
+.mobile-day-name {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.mobile-day-num {
+  font-size: 14px;
+  font-weight: 800;
+}
+.mobile-day-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  margin-top: 2px;
+}
+.mobile-day-pill.active .mobile-day-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
 }
 .mobile-view-head {
   display: flex;

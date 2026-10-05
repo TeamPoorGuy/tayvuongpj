@@ -18,7 +18,7 @@ import {
   User,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
@@ -108,24 +108,11 @@ export function OwnerSchedulePage() {
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const [selectedFieldId, setSelectedFieldId] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
-  const [mobileView, setMobileView] = useState<'grid' | 'list'>('grid')
 
   // Booking detail modal
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [isRejecting, setIsRejecting] = useState(false)
-
-  // Auto-detect mobile width on mount
-  useEffect(() => {
-    const checkWidth = () => {
-      if (window.innerWidth < 768) {
-        setMobileView('list')
-      }
-    }
-    checkWidth()
-    window.addEventListener('resize', checkWidth)
-    return () => window.removeEventListener('resize', checkWidth)
-  }, [])
 
   // 1. Fetch Owner Fields
   const fieldsQuery = useQuery({
@@ -269,7 +256,7 @@ export function OwnerSchedulePage() {
       const datePart = b.booking_date.slice(0, 10)
       const startPart = b.time_slot?.start_time
       if (startPart) {
-        map.set(`${b.sports_field_id}_${datePart}_${startPart}`, b)
+        map.set(`${b.field?.id}_${datePart}_${startPart}`, b)
       }
     })
     return map
@@ -420,14 +407,47 @@ export function OwnerSchedulePage() {
 
       {/* MOBILE LIST VIEW (Auto on < 768px or toggle) */}
       <div className="mobile-schedule-wrap hide-on-desktop">
+        {viewMode === 'week' && (
+          <div className="mobile-week-day-tabs">
+            {currentWeekDays.map((wDate, idx) => {
+              const dayBookings = bookings.filter((b) => b.booking_date.slice(0, 10) === wDate)
+              const isSelected = wDate === selectedDate
+              const isToday = wDate === todayStr
+              const d = new Date(wDate)
+              return (
+                <button
+                  key={wDate}
+                  type="button"
+                  className={`mobile-day-pill ${isSelected ? 'active' : ''} ${isToday ? 'is-today' : ''}`}
+                  onClick={() => setSelectedDate(wDate)}
+                >
+                  <span className="mobile-day-name">{WEEKDAY_NAMES[idx].replace('Thứ ', 'T')}</span>
+                  <strong className="mobile-day-num">{d.getDate()}</strong>
+                  {dayBookings.length > 0 && (
+                    <span className="mobile-day-badge">{dayBookings.length}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <div className="mobile-view-head">
-          <span>Lịch ngày {new Date(selectedDate).toLocaleDateString('vi-VN')}</span>
-          <span className="badge badge--soft">{bookings.length} lịch đặt</span>
+          <span>
+            {viewMode === 'week' ? 'Ngày ' : 'Lịch ngày '}
+            {new Date(selectedDate).toLocaleDateString('vi-VN', {
+              weekday: 'short',
+              day: '2-digit',
+              month: '2-digit',
+            })}
+          </span>
+          <span className="badge badge--soft">
+            {bookings.filter((b) => b.booking_date.slice(0, 10) === selectedDate).length} lịch đặt
+          </span>
         </div>
 
         <div className="mobile-field-groups">
           {displayFields.map((f) => {
-            const fieldBookings = bookings.filter((b) => b.sports_field_id === f.id)
             return (
               <div key={f.id} className="mobile-field-card">
                 <div className="mobile-field-card__head">

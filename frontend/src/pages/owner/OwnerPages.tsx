@@ -9,7 +9,6 @@ import {
   MessageSquareText,
   Plus,
   QrCode,
-  ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react'

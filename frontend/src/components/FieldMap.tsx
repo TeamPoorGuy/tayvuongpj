@@ -1,4 +1,4 @@
-import { Compass, Copy, ExternalLink, MapPin, Navigation } from 'lucide-react'
+import { AlertCircle, Compass, Copy, ExternalLink, MapPin, Navigation, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useToast } from './Toast'
 import type { SportsField } from '../types/api'
@@ -27,10 +27,22 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(R * c * 10) / 10
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  })[character] ?? character)
+}
+
 export function FieldMap({ field }: FieldMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const [leafletLoaded, setLeafletLoaded] = useState(typeof window !== 'undefined' && !!window.L)
+  const [leafletError, setLeafletError] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [distanceKm, setDistanceKm] = useState<number | null>(null)
   const toast = useToast()
@@ -39,12 +51,15 @@ export function FieldMap({ field }: FieldMapProps) {
   const rawLng = field.longitude != null ? Number(field.longitude) : null
   const hasValidCoords = rawLat !== null && rawLng !== null && !isNaN(rawLat) && !isNaN(rawLng)
 
-  // 1. Load Leaflet script and CSS if needed
+  // 1. Load Leaflet script and CSS with timeout and error handling
   useEffect(() => {
     if (window.L) {
       setLeafletLoaded(true)
+      setLeafletError(false)
       return
     }
+
+    setLeafletError(false)
 
     const cssHref = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
     if (!document.querySelector(`link[href="${cssHref}"]`)) {
@@ -55,17 +70,51 @@ export function FieldMap({ field }: FieldMapProps) {
     }
 
     const scriptSrc = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-    const existingScript = document.querySelector(`script[src="${scriptSrc}"]`)
+    let existingScript = document.querySelector(`script[src="${scriptSrc}"]`) as HTMLScriptElement | null
+
+    // 4.5 second timeout to catch blocked CDN, offline mode or hung connections
+    const timeoutId = setTimeout(() => {
+      if (!window.L) {
+        setLeafletError(true)
+      }
+    }, 4500)
+
+    const handleSuccess = () => {
+      clearTimeout(timeoutId)
+      setLeafletLoaded(true)
+      setLeafletError(false)
+    }
+
+    const handleFailure = () => {
+      clearTimeout(timeoutId)
+      setLeafletError(true)
+    }
+
     if (existingScript) {
-      existingScript.addEventListener('load', () => setLeafletLoaded(true))
+      if (window.L) {
+        handleSuccess()
+      } else {
+        existingScript.addEventListener('load', handleSuccess)
+        existingScript.addEventListener('error', handleFailure)
+      }
     } else {
       const script = document.createElement('script')
       script.src = scriptSrc
       script.async = true
-      script.onload = () => setLeafletLoaded(true)
+      script.onload = handleSuccess
+      script.onerror = handleFailure
       document.body.appendChild(script)
+      existingScript = script
     }
-  }, [])
+
+    return () => {
+      clearTimeout(timeoutId)
+      if (existingScript) {
+        existingScript.removeEventListener('load', handleSuccess)
+        existingScript.removeEventListener('error', handleFailure)
+      }
+    }
+  }, [retryKey])
 
   // 2. Request user geolocation to calculate distance
   useEffect(() => {
@@ -91,12 +140,15 @@ export function FieldMap({ field }: FieldMapProps) {
 
   // 3. Render Leaflet Map
   useEffect(() => {
-    if (!leafletLoaded || !hasValidCoords || !mapContainerRef.current || rawLat === null || rawLng === null) {
+    if (!leafletLoaded || leafletError || !hasValidCoords || !mapContainerRef.current || rawLat === null || rawLng === null) {
       return
     }
 
     const L = window.L
-    if (!L) return
+    if (!L) {
+      setLeafletError(true)
+      return
+    }
 
     // Clean previous instance
     if (mapInstanceRef.current) {
@@ -127,8 +179,8 @@ export function FieldMap({ field }: FieldMapProps) {
 
       const popupContent = `
         <div style="font-family: inherit; padding: 4px 6px;">
-          <strong style="font-size: 14px; color: #113324; display: block; margin-bottom: 2px;">${field.name}</strong>
-          <span style="font-size: 12px; color: #475569; display: block; line-height: 1.4;">${field.address}</span>
+          <strong style="font-size: 14px; color: #113324; display: block; margin-bottom: 2px;">${escapeHtml(field.name)}</strong>
+          <span style="font-size: 12px; color: #475569; display: block; line-height: 1.4;">${escapeHtml(field.address)}</span>
         </div>
       `
       marker.bindPopup(popupContent).openPopup()
@@ -147,8 +199,9 @@ export function FieldMap({ field }: FieldMapProps) {
       }
 
       mapInstanceRef.current = map
-    } catch {
-      // Map init error fallback
+    } catch (err) {
+      console.warn('Leaflet map initialization failed:', err)
+      setLeafletError(true)
     }
 
     return () => {
@@ -157,7 +210,7 @@ export function FieldMap({ field }: FieldMapProps) {
         mapInstanceRef.current = null
       }
     }
-  }, [leafletLoaded, hasValidCoords, rawLat, rawLng, field.name, field.address, userLocation])
+  }, [leafletLoaded, leafletError, hasValidCoords, rawLat, rawLng, field.name, field.address, userLocation, retryKey])
 
   // Navigation Links
   const googleMapsUrl = hasValidCoords
@@ -204,8 +257,55 @@ export function FieldMap({ field }: FieldMapProps) {
 
       {/* Map Display / Fallback */}
       <div className="field-map-frame-wrap">
-        {hasValidCoords ? (
+        {hasValidCoords && !leafletError ? (
           <div ref={mapContainerRef} className="field-map-container" style={{ height: 320, width: '100%', borderRadius: 16 }} />
+        ) : leafletError ? (
+          <div className="field-map-fallback field-map-fallback--error">
+            <div className="fallback-inner">
+              <div className="field-map-error-badge">
+                <AlertCircle size={28} />
+              </div>
+              <h4>Không thể tải bản đồ trực tuyến (CDN gián đoạn)</h4>
+              <p>
+                Trình duyệt không thể kết nối đến máy chủ bản đồ OpenStreetMap / Leaflet.
+                Tuy nhiên bạn vẫn có thể mở chỉ đường ngay trên Google Maps hoặc Apple Maps:
+              </p>
+              <div className="field-map-error-details">
+                <span className="field-map-addr-text">{field.address}</span>
+                {hasValidCoords && (
+                  <span className="field-map-coords-tag">
+                    Tọa độ: {rawLat?.toFixed(5)}, {rawLng?.toFixed(5)}
+                  </span>
+                )}
+              </div>
+              <div className="directions-btn-group" style={{ marginTop: 8 }}>
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="button button--brand button--small"
+                >
+                  <Navigation size={14} /> Mở Google Maps <ExternalLink size={12} />
+                </a>
+                <a
+                  href={appleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="button button--ghost button--small"
+                >
+                  <Navigation size={14} /> Apple Maps <ExternalLink size={12} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setRetryKey((k) => k + 1)}
+                  className="button button--secondary button--small"
+                  title="Thử tải lại bản đồ"
+                >
+                  <RefreshCw size={13} /> Thử lại
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="field-map-fallback">
             <div className="fallback-inner">
@@ -220,6 +320,14 @@ export function FieldMap({ field }: FieldMapProps) {
                   className="button button--brand button--small"
                 >
                   <Navigation size={14} /> Chỉ đường Google Maps <ExternalLink size={12} />
+                </a>
+                <a
+                  href={appleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="button button--ghost button--small"
+                >
+                  <Navigation size={14} /> Apple Maps <ExternalLink size={12} />
                 </a>
               </div>
             </div>
