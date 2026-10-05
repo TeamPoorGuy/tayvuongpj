@@ -105,6 +105,10 @@ class SmartSuggestionService
                 ->first(fn ($s) => substr($s->start_time, 0, 5) === substr($targetSlot->start_time, 0, 5));
 
             if ($matchedSlot) {
+                if ($date->isToday() && Carbon::parse($date->toDateString().' '.$matchedSlot->start_time)->isPast()) {
+                    continue;
+                }
+
                 $isOtherBooked = Booking::where('sports_field_id', $otherField->id)
                     ->where('time_slot_id', $matchedSlot->id)
                     ->whereDate('booking_date', $date)

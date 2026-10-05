@@ -189,6 +189,81 @@ class SmartMatchdayTest extends TestCase
         $this->assertEquals(110, $customer->fresh()->trust_score);
     }
 
+    public function test_cannot_check_in_cancelled_or_completed_booking(): void
+    {
+        [$owner, $field, $slot] = $this->createFieldWithSlot('san-checkin-cancel');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        $cancelledBooking = Booking::create([
+            'user_id' => $customer->id,
+            'sports_field_id' => $field->id,
+            'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(),
+            'status' => BookingStatus::Cancelled->value,
+            'total_price' => 150000,
+            'check_in_code' => 'CK-CANCELLED',
+        ]);
+
+        Sanctum::actingAs($owner);
+        $res = $this->postJson('/api/v1/field-owner/check-in', ['code' => 'CK-CANCELLED']);
+        $res->assertStatus(422)
+            ->assertJsonPath('message', 'Đơn đặt sân này không còn hiệu lực để check-in.');
+    }
+
+    public function test_cannot_check_in_twice(): void
+    {
+        [$owner, $field, $slot] = $this->createFieldWithSlot('san-checkin-dup');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        $booking = Booking::create([
+            'user_id' => $customer->id,
+            'sports_field_id' => $field->id,
+            'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(),
+            'status' => BookingStatus::Confirmed->value,
+            'total_price' => 150000,
+            'check_in_code' => 'CK-ALREADY-IN',
+            'checked_in_at' => now(),
+            'checked_in_by' => $owner->id,
+        ]);
+
+        Sanctum::actingAs($owner);
+        $res = $this->postJson('/api/v1/field-owner/check-in', ['code' => 'CK-ALREADY-IN']);
+        $res->assertStatus(422);
+    }
+
+    public function test_cannot_join_waitlist_when_slot_is_empty(): void
+    {
+        [$owner, $field, $slot] = $this->createFieldWithSlot('san-waitlist-empty');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $date = today()->addDays(2)->toDateString();
+
+        Sanctum::actingAs($customer);
+        $res = $this->postJson('/api/v1/customer/waitlist', [
+            'sports_field_id' => $field->id,
+            'time_slot_id' => $slot->id,
+            'booking_date' => $date,
+        ]);
+
+        $res->assertStatus(409)
+            ->assertJsonPath('message', 'Khung giờ này hiện đang còn trống, bạn có thể đặt trực tiếp mà không cần vào hàng đợi.');
+    }
+
+    public function test_cannot_join_waitlist_for_past_date(): void
+    {
+        [$owner, $field, $slot] = $this->createFieldWithSlot('san-waitlist-past');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        Sanctum::actingAs($customer);
+        $res = $this->postJson('/api/v1/customer/waitlist', [
+            'sports_field_id' => $field->id,
+            'time_slot_id' => $slot->id,
+            'booking_date' => today()->subDays(2)->toDateString(),
+        ]);
+
+        $res->assertStatus(422);
+    }
+
     public function test_smart_suggestions_return_alternatives(): void
     {
         [$owner, $field, $slot] = $this->createFieldWithSlot('san-suggestions-1');
