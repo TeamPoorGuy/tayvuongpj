@@ -81,5 +81,9 @@ return [
         'current_password' => 'mật khẩu hiện tại',
         'comment' => 'nhận xét',
         'rating' => 'số sao',
+        'documents' => 'tài liệu',
+        'documents.id_front' => 'ảnh CCCD mặt trước',
+        'documents.id_back' => 'ảnh CCCD mặt sau',
+        'documents.business_license' => 'giấy phép kinh doanh',
     ],
 ];

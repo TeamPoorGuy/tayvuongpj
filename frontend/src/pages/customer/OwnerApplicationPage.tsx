@@ -11,7 +11,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Store,
-  Upload,
   UserCheck,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
