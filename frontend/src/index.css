@@ -505,3 +505,12 @@ button { cursor:pointer; }
 .status--pending i {
   animation: statusDotPulse 1.8s ease-in-out infinite;
 }
+.notice--warn { color:#7a5200; background:#fff6dd; }
+.verify-banner { margin:0; border-radius:0; text-align:center; font-weight:600; }
+.link-button { padding:0; border:0; color:inherit; background:none; font:inherit; font-weight:800; text-decoration:underline; cursor:pointer; }
+.google-btn { display:flex; align-items:center; justify-content:center; gap:10px; min-height:46px; border:1px solid #cfd8ce; border-radius:12px; background:#fff; color:var(--ink); font-size:11px; font-weight:800; text-decoration:none; }
+.google-btn:hover { background:#f4f7f2; }
+.or-divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:10px; }
+.or-divider::before,.or-divider::after { content:''; flex:1; height:1px; background:#d9e0d7; }
+.form-aside { text-align:right; margin-top:-6px; font-size:10px; }
+.form-aside a { color:#1f875e; font-weight:800; }

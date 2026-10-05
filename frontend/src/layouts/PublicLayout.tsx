@@ -1,3 +1,4 @@
+import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import { Menu, UserRound } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -14,6 +15,7 @@ export function PublicLayout() {
 
   return (
     <div className="app-shell">
+      <VerifyEmailBanner />
       <header className="topbar">
         <div className="shell topbar__inner">
           <Brand />

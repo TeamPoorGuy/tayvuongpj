@@ -4,7 +4,7 @@ import { DashboardLayout } from './layouts/DashboardLayout'
 import { HomePage } from './pages/HomePage'
 import { FieldsPage } from './pages/FieldsPage'
 import { FieldDetailPage } from './pages/FieldDetailPage'
-import { LoginPage, RegisterPage } from './pages/AuthPages'
+import { EmailVerifiedPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPages'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
 import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
@@ -21,6 +21,9 @@ export default function App() {
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
+      <Route path="email-verified" element={<EmailVerifiedPage />} />
 
       <Route element={<ProtectedRoute roles={['customer']} />}>
         <Route element={<DashboardLayout />}>

@@ -9,6 +9,8 @@ export interface User {
   avatar: string | null
   address: string | null
   is_active: boolean
+  email_verified?: boolean
+  has_password?: boolean
   field_owner_profile?: OwnerProfile | null
 }
 

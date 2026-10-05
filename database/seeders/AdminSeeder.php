@@ -15,6 +15,7 @@ class AdminSeeder extends Seeder
             ['email' => 'admin@sportfield.com'],
             [
                 'name' => 'Quản trị viên Hệ thống',
+                'email_verified_at' => now(),
                 'password' => Hash::make('password'),
                 'role' => 'admin',
                 'phone' => '0901234567',

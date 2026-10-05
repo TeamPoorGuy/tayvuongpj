@@ -1,3 +1,4 @@
+import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import { Activity, Building2, CalendarDays, ChartNoAxesCombined, CircleUserRound, FolderTree, LogOut, MessageSquareText, ShieldCheck, UsersRound } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -97,6 +98,7 @@ export function DashboardLayout() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
             >
+              <VerifyEmailBanner />
               <Outlet />
             </motion.div>
           </AnimatePresence>

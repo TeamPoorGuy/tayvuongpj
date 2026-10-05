@@ -15,6 +15,7 @@ class UserSeeder extends Seeder
         // 1. Chủ sân 1 (Đã duyệt) — role vẫn là customer, quyền chủ sân suy ra từ verification_status.
         $owner1 = User::create([
             'name' => 'Nguyễn Văn Chủ',
+            'email_verified_at' => now(),
             'email' => 'owner1@sportfield.com',
             'password' => Hash::make('password'),
             'role' => 'customer',
@@ -39,6 +40,7 @@ class UserSeeder extends Seeder
         // 2. Chủ sân 2 (Đã duyệt)
         $owner2 = User::create([
             'name' => 'Trần Thị Sân',
+            'email_verified_at' => now(),
             'email' => 'owner2@sportfield.com',
             'password' => Hash::make('password'),
             'role' => 'customer',
@@ -63,6 +65,7 @@ class UserSeeder extends Seeder
         // 3. Chủ sân 3 (Mới đăng ký - Chờ duyệt)
         $owner3 = User::create([
             'name' => 'Hoàng Minh Tuấn',
+            'email_verified_at' => now(),
             'email' => 'owner3@sportfield.com',
             'password' => Hash::make('password'),
             'role' => 'customer',
@@ -95,6 +98,7 @@ class UserSeeder extends Seeder
         foreach ($customers as $c) {
             User::create([
                 'name' => $c['name'],
+                'email_verified_at' => now(),
                 'email' => $c['email'],
                 'password' => Hash::make('password'),
                 'role' => 'customer',
