@@ -480,4 +480,24 @@ class SmartMatchdayTest extends TestCase
         Sanctum::actingAs($customer);
         $this->postJson('/api/v1/customer/reviews', ['booking_id' => $booking->id, 'rating' => 5, 'comment' => 'x'])->assertNotFound();
     }
+
+    public function test_suggestions_use_real_date_labels_and_skip_held_slots(): void
+    {
+        [$field, $slot] = $this->heldSlotFixture();
+        $other = \App\Models\TimeSlot::create(['sports_field_id' => $field->id, 'start_time' => '20:00:00', 'end_time' => '21:30:00', 'is_active' => true]);
+        $date = now()->addDays(3)->toDateString();
+        $user = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        \App\Models\BookingWaitlist::create([
+            'user_id' => $user->id, 'sports_field_id' => $field->id, 'time_slot_id' => $other->id, 'booking_date' => $date,
+            'status' => 'offered', 'priority_score' => 100, 'offered_at' => now(), 'offer_expires_at' => now()->addMinutes(10),
+        ]);
+
+        $data = $this->getJson("/api/v1/fields/{$field->slug}/suggestions?slot_id={$slot->id}&date={$date}")->assertOk()->json('data');
+
+        $labels = collect($data)->pluck('date_label')->implode('|');
+        $this->assertStringNotContainsString('Hôm nay', $labels);
+        $this->assertStringContainsString(now()->addDays(3)->format('d/m'), $labels);
+        // Slot 20:00 đang được giữ chỗ nên không được gợi ý.
+        $this->assertNotContains($other->id, collect($data)->where('type', 'same_field_today')->pluck('time_slot_id')->all());
+    }
 }

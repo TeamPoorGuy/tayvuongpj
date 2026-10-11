@@ -2,138 +2,161 @@
 
 namespace App\Services;
 
-use App\Enums\BookingStatus;
 use App\Models\Booking;
+use App\Models\BookingWaitlist;
 use App\Models\SportsField;
 use App\Models\TimeSlot;
 use Carbon\Carbon;
 
 class SmartSuggestionService
 {
+    private const MAX_SUGGESTIONS = 5;
+
     /**
-     * Gợi ý các khung giờ hoặc sân thay thế thông minh khi một slot đã kín.
+     * Gợi ý khung giờ/sân thay thế khi một slot đã kín.
+     *
+     * @return list<array<string, mixed>>
      */
     public function getSuggestions(SportsField $field, TimeSlot $targetSlot, string $dateString): array
     {
         $date = Carbon::parse($dateString)->startOfDay();
+        $tomorrow = $date->copy()->addDay();
         $suggestions = [];
 
-        // 1. Gợi ý cùng sân, cùng ngày nhưng khung giờ khác còn trống
-        $sameFieldOtherSlots = TimeSlot::where('sports_field_id', $field->id)
+        // 1. Cùng sân, cùng ngày, khung giờ khác còn trống.
+        $busyToday = $this->busySlots([$field->id], $date);
+        $targetPrice = $targetSlot->price_per_hour ?? $field->price_per_hour;
+
+        $sameDay = TimeSlot::where('sports_field_id', $field->id)
             ->where('id', '!=', $targetSlot->id)
             ->where('is_active', true)
             ->orderBy('start_time')
+            ->get()
+            ->filter(fn (TimeSlot $s) => ! $this->isPast($date, $s) && ! isset($busyToday[$field->id.':'.$s->id]))
+            ->take(2);
+
+        foreach ($sameDay as $slot) {
+            $price = $slot->price_per_hour ?? $field->price_per_hour;
+            $badge = $price < $targetPrice
+                ? 'Tiết kiệm '.round((($targetPrice - $price) / $targetPrice) * 100).'% chi phí'
+                : 'Cùng sân, cùng ngày';
+            $suggestions[] = $this->item('same_field_today', $field, $slot, $date, $price, $badge);
+        }
+
+        // 2. Cùng sân, cùng khung giờ, ngày hôm sau (tính từ ngày đang xem).
+        $busyTomorrow = $this->busySlots([$field->id], $tomorrow);
+        if (! isset($busyTomorrow[$field->id.':'.$targetSlot->id])) {
+            $suggestions[] = $this->item('same_slot_tomorrow', $field, $targetSlot, $tomorrow, $targetPrice, 'Cùng khung giờ ngày hôm sau');
+        }
+
+        // 3. Sân khác cùng loại, cùng giờ bắt đầu, gần nhất trước.
+        $others = SportsField::approved()
+            ->where('field_type_id', $field->field_type_id)
+            ->where('id', '!=', $field->id)
+            ->with('timeSlots')
+            ->limit(20)
             ->get();
 
-        $bookedSlotIdsToday = Booking::where('sports_field_id', $field->id)
-            ->whereDate('booking_date', $date)
-            ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-            ->pluck('time_slot_id')
-            ->all();
+        $busyOthers = $this->busySlots($others->pluck('id')->all(), $date);
+        $start = substr($targetSlot->start_time, 0, 5);
 
-        foreach ($sameFieldOtherSlots as $slot) {
-            if ($date->isToday() && Carbon::parse($date->toDateString().' '.$slot->start_time)->isPast()) {
+        $candidates = [];
+        foreach ($others as $other) {
+            $slot = $other->timeSlots->where('is_active', true)
+                ->first(fn ($s) => substr($s->start_time, 0, 5) === $start);
+            if (! $slot || $this->isPast($date, $slot) || isset($busyOthers[$other->id.':'.$slot->id])) {
                 continue;
             }
-            if (! in_array($slot->id, $bookedSlotIdsToday, true)) {
-                $targetPrice = $targetSlot->price_per_hour ?? $field->price_per_hour;
-                $thisPrice = $slot->price_per_hour ?? $field->price_per_hour;
+            $candidates[] = [$other, $slot, $this->distanceKm($field, $other)];
+        }
+        usort($candidates, fn ($a, $b) => ($a[2] ?? INF) <=> ($b[2] ?? INF));
 
-                $reason = 'Cùng sân hôm nay';
-                if ($thisPrice < $targetPrice) {
-                    $savingPercent = round((($targetPrice - $thisPrice) / $targetPrice) * 100);
-                    $reason = "Tiết kiệm {$savingPercent}% chi phí";
-                }
-
-                $suggestions[] = [
-                    'type' => 'same_field_today',
-                    'field_id' => $field->id,
-                    'field_name' => $field->name,
-                    'field_slug' => $field->slug,
-                    'time_slot_id' => $slot->id,
-                    'start_time' => substr($slot->start_time, 0, 5),
-                    'end_time' => substr($slot->end_time, 0, 5),
-                    'date' => $date->toDateString(),
-                    'date_label' => 'Hôm nay (' . $date->format('d/m') . ')',
-                    'price_per_hour' => $thisPrice,
-                    'badge' => $reason,
-                ];
-
-                if (count($suggestions) >= 2) {
-                    break;
-                }
-            }
+        foreach (array_slice($candidates, 0, 2) as [$other, $slot, $km]) {
+            $item = $this->item('other_field_today', $other, $slot, $date, $slot->price_per_hour ?? $other->price_per_hour,
+                $km !== null ? 'Sân khác cùng bộ môn · cách '.number_format($km, 1).' km' : 'Sân khác cùng bộ môn');
+            $item['distance_km'] = $km !== null ? round($km, 1) : null;
+            $suggestions[] = $item;
         }
 
-        // 2. Gợi ý cùng sân, cùng khung giờ nhưng ngày mai
-        $tomorrow = (clone $date)->addDay();
-        $isBookedTomorrow = Booking::where('sports_field_id', $field->id)
-            ->where('time_slot_id', $targetSlot->id)
-            ->whereDate('booking_date', $tomorrow)
-            ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-            ->exists();
+        return array_slice($suggestions, 0, self::MAX_SUGGESTIONS);
+    }
 
-        if (! $isBookedTomorrow) {
-            $suggestions[] = [
-                'type' => 'same_slot_tomorrow',
-                'field_id' => $field->id,
-                'field_name' => $field->name,
-                'field_slug' => $field->slug,
-                'time_slot_id' => $targetSlot->id,
-                'start_time' => substr($targetSlot->start_time, 0, 5),
-                'end_time' => substr($targetSlot->end_time, 0, 5),
-                'date' => $tomorrow->toDateString(),
-                'date_label' => 'Ngày mai (' . $tomorrow->format('d/m') . ')',
-                'price_per_hour' => $targetSlot->price_per_hour ?? $field->price_per_hour,
-                'badge' => 'Cùng khung giờ ngày mai',
-            ];
+    /** Các cặp "sân:slot" đã có đơn hoặc đang được giữ chỗ trong ngày (2 truy vấn cho cả danh sách sân). */
+    private function busySlots(array $fieldIds, Carbon $date): array
+    {
+        if ($fieldIds === []) {
+            return [];
         }
 
-        // 3. Gợi ý sân khác cùng loại sân (FieldType) còn trống khung giờ này hôm nay
-        $otherFields = SportsField::where('field_type_id', $field->field_type_id)
-            ->where('id', '!=', $field->id)
-            ->where('is_active', true)
-            ->where('status', 'approved')
-            ->with(['timeSlots'])
-            ->limit(3)
-            ->get();
+        $busy = [];
+        Booking::whereIn('sports_field_id', $fieldIds)
+            ->whereDate('booking_date', $date)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->get(['sports_field_id', 'time_slot_id'])
+            ->each(function ($b) use (&$busy) {
+                $busy[$b->sports_field_id.':'.$b->time_slot_id] = true;
+            });
 
-        foreach ($otherFields as $otherField) {
-            // Tìm slot có giờ bắt đầu tương tự
-            $matchedSlot = $otherField->timeSlots
-                ->where('is_active', true)
-                ->first(fn ($s) => substr($s->start_time, 0, 5) === substr($targetSlot->start_time, 0, 5));
+        BookingWaitlist::whereIn('sports_field_id', $fieldIds)
+            ->whereDate('booking_date', $date)
+            ->where('status', 'offered')
+            ->where('offer_expires_at', '>', now())
+            ->get(['sports_field_id', 'time_slot_id'])
+            ->each(function ($w) use (&$busy) {
+                $busy[$w->sports_field_id.':'.$w->time_slot_id] = true;
+            });
 
-            if ($matchedSlot) {
-                if ($date->isToday() && Carbon::parse($date->toDateString().' '.$matchedSlot->start_time)->isPast()) {
-                    continue;
-                }
+        return $busy;
+    }
 
-                $isOtherBooked = Booking::where('sports_field_id', $otherField->id)
-                    ->where('time_slot_id', $matchedSlot->id)
-                    ->whereDate('booking_date', $date)
-                    ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-                    ->exists();
+    private function isPast(Carbon $date, TimeSlot $slot): bool
+    {
+        return Carbon::parse($date->toDateString().' '.$slot->start_time)->isPast();
+    }
 
-                if (! $isOtherBooked) {
-                    $suggestions[] = [
-                        'type' => 'other_field_today',
-                        'field_id' => $otherField->id,
-                        'field_name' => $otherField->name,
-                        'field_slug' => $otherField->slug,
-                        'time_slot_id' => $matchedSlot->id,
-                        'start_time' => substr($matchedSlot->start_time, 0, 5),
-                        'end_time' => substr($matchedSlot->end_time, 0, 5),
-                        'date' => $date->toDateString(),
-                        'date_label' => 'Hôm nay (' . $date->format('d/m') . ')',
-                        'price_per_hour' => $matchedSlot->price_per_hour ?? $otherField->price_per_hour,
-                        'badge' => 'Sân khác cùng bộ môn',
-                    ];
-                    break;
-                }
-            }
+    private function distanceKm(SportsField $a, SportsField $b): ?float
+    {
+        if ($a->latitude === null || $a->longitude === null || $b->latitude === null || $b->longitude === null) {
+            return null;
         }
 
-        return $suggestions;
+        $lat1 = deg2rad((float) $a->latitude);
+        $lat2 = deg2rad((float) $b->latitude);
+        $dLat = $lat2 - $lat1;
+        $dLng = deg2rad((float) $b->longitude - (float) $a->longitude);
+        $h = sin($dLat / 2) ** 2 + cos($lat1) * cos($lat2) * sin($dLng / 2) ** 2;
+
+        return 6371 * 2 * asin(min(1, sqrt($h)));
+    }
+
+    private function dateLabel(Carbon $date): string
+    {
+        $short = $date->format('d/m');
+        if ($date->isToday()) {
+            return "Hôm nay ($short)";
+        }
+        if ($date->isTomorrow()) {
+            return "Ngày mai ($short)";
+        }
+        $weekday = $date->dayOfWeekIso === 7 ? 'Chủ nhật' : 'Thứ '.($date->dayOfWeekIso + 1);
+
+        return "$weekday ($short)";
+    }
+
+    private function item(string $type, SportsField $field, TimeSlot $slot, Carbon $date, mixed $price, string $badge): array
+    {
+        return [
+            'type' => $type,
+            'field_id' => $field->id,
+            'field_name' => $field->name,
+            'field_slug' => $field->slug,
+            'time_slot_id' => $slot->id,
+            'start_time' => substr($slot->start_time, 0, 5),
+            'end_time' => substr($slot->end_time, 0, 5),
+            'date' => $date->toDateString(),
+            'date_label' => $this->dateLabel($date),
+            'price_per_hour' => (float) $price,
+            'badge' => $badge,
+        ];
     }
 }
