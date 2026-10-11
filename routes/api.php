@@ -63,6 +63,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::post('/matches', [MatchmakingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
             Route::post('/matches/{id}/join', [MatchmakingController::class, 'join'])->middleware(['verified', 'throttle:writes']);
             Route::patch('/matches/{id}/participants/{participantId}', [MatchmakingController::class, 'updateParticipant'])->middleware(['verified', 'throttle:writes']);
+            Route::delete('/matches/{id}/participation', [MatchmakingController::class, 'leave'])->middleware('throttle:writes');
             Route::delete('/matches/{id}', [MatchmakingController::class, 'cancel'])->middleware(['verified', 'throttle:writes']);
         });
 

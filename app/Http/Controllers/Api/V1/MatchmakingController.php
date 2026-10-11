@@ -9,6 +9,7 @@ use App\Models\MatchRequest;
 use App\Services\MatchmakingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class MatchmakingController extends Controller
 {
@@ -32,15 +33,15 @@ class MatchmakingController extends Controller
     {
         $validated = $request->validate([
             'sport_category_id' => ['required', 'integer', 'exists:sport_categories,id'],
-            'sports_field_id' => ['nullable', 'integer', 'exists:sports_fields,id'],
+            'sports_field_id' => ['nullable', 'integer', Rule::exists('sports_fields', 'id')->where('status', 'approved')->where('is_active', true)->whereNull('deleted_at')],
             'title' => ['required', 'string', 'max:150'],
             'play_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
-            'start_time' => ['required', 'string', 'max:10'],
-            'end_time' => ['required', 'string', 'max:10'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
             'skill_level' => ['required', 'in:beginner,intermediate,advanced,any'],
             'players_needed' => ['required', 'integer', 'min:1', 'max:30'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'contact_phone' => ['required', 'string', 'max:20'],
+            'contact_phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
         ]);
 
         $match = $this->service->create($request->user(), $validated);
@@ -79,6 +80,13 @@ class MatchmakingController extends Controller
             'message' => "Đã {$label} thành viên tham gia.",
             'data' => new MatchParticipantResource($participant->load('matchRequest')),
         ]);
+    }
+
+    public function leave(Request $request, int $id): JsonResponse
+    {
+        $this->service->leave($request->user(), $id);
+
+        return response()->json(['message' => 'Đã rút khỏi trận đấu.']);
     }
 
     public function cancel(Request $request, int $id): JsonResponse

@@ -17,7 +17,7 @@ import {
   BellRing,
   Zap,
 } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useState, useMemo } from 'react'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -37,7 +37,12 @@ export function FieldDetailPage() {
   const queryClient = useQueryClient()
 
   const todayStr = useMemo(() => getLocalTodayString(), [])
-  const [date, setDate] = useState(todayStr)
+  const [searchParams] = useSearchParams()
+  // Cho phép mở từ trang tìm đối với ngày đã chọn (?date=YYYY-MM-DD), bỏ qua ngày quá khứ.
+  const dateParam = searchParams.get('date')
+  const [date, setDate] = useState(
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : todayStr,
+  )
   const [slotId, setSlotId] = useState<number | null>(null)
   const [notes, setNotes] = useState('')
   const [activeImg, setActiveImg] = useState(0)

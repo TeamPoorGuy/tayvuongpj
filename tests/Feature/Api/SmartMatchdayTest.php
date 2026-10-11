@@ -500,4 +500,44 @@ class SmartMatchdayTest extends TestCase
         // Slot 20:00 đang được giữ chỗ nên không được gợi ý.
         $this->assertNotContains($other->id, collect($data)->where('type', 'same_field_today')->pluck('time_slot_id')->all());
     }
+
+    public function test_match_validation_leave_and_cancel_notifications(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $host = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $player = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $category = \App\Models\SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-match']);
+        $payload = [
+            'sport_category_id' => $category->id, 'title' => 'Kèo', 'play_date' => now()->addDay()->toDateString(),
+            'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any', 'players_needed' => 1, 'contact_phone' => '0912345678',
+        ];
+
+        Sanctum::actingAs($host);
+        $this->postJson('/api/v1/customer/matches', ['end_time' => '17:00'] + $payload)->assertStatus(422);
+        $this->postJson('/api/v1/customer/matches', ['start_time' => '8h chieu'] + $payload)->assertStatus(422);
+        $id = $this->postJson('/api/v1/customer/matches', $payload)->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($player);
+        $this->postJson("/api/v1/customer/matches/{$id}/join", [])->assertCreated();
+        $participantId = MatchRequest::find($id)->participants()->first()->id;
+
+        Sanctum::actingAs($host);
+        $this->patchJson("/api/v1/customer/matches/{$id}/participants/{$participantId}", ['status' => 'accepted'])->assertOk();
+        $this->assertSame('full', MatchRequest::find($id)->status);
+
+        // Người chơi rút lui: phòng mở lại.
+        Sanctum::actingAs($player);
+        $this->deleteJson("/api/v1/customer/matches/{$id}/participation")->assertOk();
+        $match = MatchRequest::find($id);
+        $this->assertSame('open', $match->status);
+        $this->assertSame(1, $match->joined_count);
+
+        // Vào lại, được chấp nhận, host huỷ phòng → participant nhận mail.
+        $this->postJson("/api/v1/customer/matches/{$id}/join", [])->assertCreated();
+        $participantId = MatchRequest::find($id)->participants()->first()->id;
+        Sanctum::actingAs($host);
+        $this->patchJson("/api/v1/customer/matches/{$id}/participants/{$participantId}", ['status' => 'accepted'])->assertOk();
+        $this->deleteJson("/api/v1/customer/matches/{$id}")->assertOk();
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\MatchCancelled::class, fn ($m) => $m->hasTo($player->email));
+    }
 }

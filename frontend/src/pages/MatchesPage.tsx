@@ -15,7 +15,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
 import { Modal } from '../components/Modal'
@@ -141,6 +141,18 @@ export function MatchesPage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể huỷ bài')
+    },
+  })
+
+  const leaveMatch = useMutation({
+    mutationFn: async (matchId: number) =>
+      (await api.delete(`/customer/matches/${matchId}/participation`)).data,
+    onSuccess: () => {
+      toast.success('Đã rút khỏi trận đấu.')
+      void client.invalidateQueries({ queryKey: ['matches'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể rút lui')
     },
   })
 
@@ -343,6 +355,15 @@ export function MatchesPage() {
                   <p className="match-card__desc">{match.description}</p>
                 )}
 
+                {match.sports_field?.slug && match.status !== 'cancelled' && match.status !== 'completed' && (
+                  <Link
+                    className="button button--ghost button--small"
+                    to={`/fields/${match.sports_field.slug}?date=${match.play_date}`}
+                  >
+                    Đặt sân này
+                  </Link>
+                )}
+
                 {/* Progress bar for slots */}
                 <div className="match-slots-progress">
                   <div className="match-slots-progress__text">
@@ -413,6 +434,18 @@ export function MatchesPage() {
                         <span className="badge badge--danger">
                           ✕ Đã bị từ chối
                         </span>
+                      )}
+                      {myParticipant.status !== 'rejected' && match.status !== 'completed' && (
+                        <button
+                          type="button"
+                          className="button button--ghost button--small"
+                          disabled={leaveMatch.isPending}
+                          onClick={() => {
+                            if (window.confirm('Bạn muốn rút khỏi trận đấu này?')) leaveMatch.mutate(match.id)
+                          }}
+                        >
+                          Rút lui
+                        </button>
                       )}
                     </div>
                   ) : match.status === 'open' && slotsRemaining > 0 ? (

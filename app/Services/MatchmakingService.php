@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Exceptions\ConflictException;
 use App\Exceptions\DomainException;
+use App\Mail\MatchCancelled;
 use App\Models\MatchParticipant;
 use App\Models\MatchRequest;
 use App\Models\User;
+use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +35,11 @@ class MatchmakingService
      */
     public function create(User $user, array $data): MatchRequest
     {
+        $open = MatchRequest::where('user_id', $user->id)->whereIn('status', ['open', 'full'])->count();
+        if ($open >= 5) {
+            throw new ConflictException('Bạn chỉ có thể mở tối đa 5 phòng tìm đối cùng lúc.');
+        }
+
         return MatchRequest::create([
             'user_id' => $user->id,
             'sport_category_id' => $data['sport_category_id'],
@@ -129,7 +136,7 @@ class MatchmakingService
      */
     public function cancel(User $host, int $matchId): MatchRequest
     {
-        $match = MatchRequest::where('id', $matchId)->firstOrFail();
+        $match = MatchRequest::with('participants.user')->where('id', $matchId)->firstOrFail();
 
         if ($match->user_id !== $host->id && ! $host->isAdmin()) {
             throw new DomainException('Bạn không có quyền hủy trận đấu này.');
@@ -137,6 +144,39 @@ class MatchmakingService
 
         $match->update(['status' => 'cancelled']);
 
+        // Báo cho người đã được chấp nhận để họ không đến sân vô ích.
+        foreach ($match->participants->where('status', 'accepted') as $participant) {
+            SafeMail::queue($participant->user?->email, new MatchCancelled($match));
+        }
+
         return $match;
+    }
+
+    /**
+     * Người tham gia tự rút lui (hoặc rút yêu cầu đang chờ).
+     */
+    public function leave(User $user, int $matchId): void
+    {
+        DB::transaction(function () use ($user, $matchId) {
+            $match = MatchRequest::where('id', $matchId)->lockForUpdate()->firstOrFail();
+            $participant = MatchParticipant::where('match_request_id', $matchId)
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $participant) {
+                throw new DomainException('Bạn chưa tham gia trận đấu này.');
+            }
+
+            $wasAccepted = $participant->status === 'accepted';
+            $participant->delete();
+
+            if ($wasAccepted) {
+                $match->decrement('joined_count');
+                if ($match->status === 'full') {
+                    $match->update(['status' => 'open']);
+                }
+            }
+        });
     }
 }
