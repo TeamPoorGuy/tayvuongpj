@@ -3428,3 +3428,15 @@ label.check-line { font-size:13px; align-items:center; }
 
 /* textarea/select dùng chung font với input (trước đây textarea rơi về monospace) */
 textarea,select { font-family:inherit; }
+
+/* Biến thể đã dùng trong TSX nhưng trước đây chưa có style */
+.badge--success { background: #e8f7ef; color: #146b49; }
+.badge--warning { background: #fff6dd; color: #7a5200; }
+.badge--danger { background: #ffeef1; color: #a52e42; }
+.badge--brand { background: var(--lime); color: var(--ink); }
+.notice--soft { color: var(--soft); background: #eef3ea; }
+.query-state { padding: 18px; border-radius: 15px; font-size: 13px; font-weight: 700; text-align: center; color: var(--soft); background: #eef3ea; }
+.query-state--error { color: #a52e42; background: #ffeef1; }
+.button--secondary { border-color: var(--line); background: #fff; color: var(--ink); }
+.button--large { min-height: 50px; padding: 13px 24px; font-size: 14px; }
+.modal__title { margin: 0 0 14px; font-size: 20px; font-weight: 800; }

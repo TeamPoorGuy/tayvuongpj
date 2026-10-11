@@ -85,6 +85,8 @@ export function MatchesPage() {
       if (mine && user) params.set('mine', '1')
       return (await api.get<Paginated<MatchRequest>>(`/matches?${params.toString()}`)).data
     },
+    // Chủ phòng thấy yêu cầu tham gia mới và người xin thấy kết quả mà không cần tải lại.
+    refetchInterval: 30_000,
   })
 
   // Mutations

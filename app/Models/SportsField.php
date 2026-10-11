@@ -86,7 +86,8 @@ class SportsField extends Model
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved')->where('is_active', true)
-            // Chủ sân bị thu hồi (suspended) thì sân tự ẩn khỏi danh sách công khai.
-            ->whereHas('owner.fieldOwnerProfile', fn ($q) => $q->where('verification_status', 'approved'));
+            // Chủ sân bị thu hồi (suspended) hoặc bị khoá tài khoản thì sân tự ẩn khỏi danh sách công khai.
+            ->whereHas('owner', fn ($owner) => $owner->where('is_active', true)
+                ->whereHas('fieldOwnerProfile', fn ($q) => $q->where('verification_status', 'approved')));
     }
 }

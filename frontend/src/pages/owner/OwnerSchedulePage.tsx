@@ -263,7 +263,10 @@ export function OwnerSchedulePage() {
       const datePart = b.booking_date.slice(0, 10)
       const startPart = b.time_slot?.start_time
       if (startPart) {
-        map.set(`${b.field?.id}_${datePart}_${startPart}`, b)
+        const key = `${b.field?.id}_${datePart}_${startPart}`
+        // Đơn đã huỷ/từ chối không chiếm khung giờ: không để nó ghi đè đơn đang hiệu lực.
+        const inactive = b.status === 'cancelled' || b.status === 'rejected'
+        if (!inactive || !map.has(key)) map.set(key, b)
       }
     })
     return map

@@ -20,7 +20,7 @@ class FieldController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return FieldResource::collection($this->service->fields($request->user()));
+        return FieldResource::collection($this->service->fields($request->user(), (int) $request->query('per_page', 10)));
     }
 
     public function store(UpsertFieldRequest $request): JsonResponse

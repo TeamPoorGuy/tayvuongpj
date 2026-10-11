@@ -6,9 +6,10 @@
     "scripts": {
         "start": "npm run dev",
         "build": "npm --prefix frontend run build",
-        "dev": "concurrently --names api,frontend --prefix-colors blue,green \"php artisan serve --port=8011\" \"npm --prefix frontend run dev\"",
+        "dev": "concurrently --names api,queue,schedule,frontend --prefix-colors blue,magenta,yellow,green \"php artisan serve --port=8011\" \"php artisan queue:work --tries=1\" \"php artisan schedule:work\" \"npm --prefix frontend run dev\"",
         "dev:api": "php artisan serve --port=8011",
         "dev:frontend": "npm --prefix frontend run dev",
+        "dev:worker": "concurrently --names queue,schedule --prefix-colors magenta,yellow \"php artisan queue:work --tries=1\" \"php artisan schedule:work\"",
         "lint": "npm --prefix frontend run lint"
     },
     "devDependencies": {

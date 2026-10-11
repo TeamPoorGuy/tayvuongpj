@@ -233,7 +233,7 @@ export function FieldDetailPage() {
             <strong>{item.average_rating ? item.average_rating.toFixed(1) : 'Mới'}</strong>
             <span>({item.reviews_count} đánh giá)</span>
           </div>
-          {item.bookings_count && item.bookings_count > 5 && (
+          {(item.bookings_count ?? 0) > 5 && (
             <span className="badge badge--hot">
               <Flame size={12} /> {item.bookings_count} lượt đặt
             </span>

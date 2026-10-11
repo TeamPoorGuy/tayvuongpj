@@ -40,14 +40,14 @@ class FieldOwnerService
         ];
     }
 
-    public function fields(User $owner): LengthAwarePaginator
+    public function fields(User $owner, int $perPage = 10): LengthAwarePaginator
     {
         return SportsField::where('field_owner_id', $owner->id)
             ->with(['fieldType.sportCategory', 'primaryImage', 'images', 'timeSlots'])
             ->withRating()
             ->withCount('bookings')
             ->latest()
-            ->paginate(10);
+            ->paginate(min(max($perPage, 1), 100));
     }
 
     public function createField(User $owner, UpsertFieldData $data): SportsField
@@ -63,6 +63,7 @@ class FieldOwnerService
                 'price_per_hour' => $data->pricePerHour,
                 'status' => FieldStatus::Pending->value,
                 'is_active' => true,
+                ...$data->coordinates,
             ]);
 
             foreach ($data->images as $index => $image) {
@@ -97,6 +98,7 @@ class FieldOwnerService
             'address' => $data->address,
             'price_per_hour' => $data->pricePerHour,
             'description' => $data->description,
+            ...$data->coordinates,
             ...($resubmit ? ['status' => FieldStatus::Pending->value, 'rejection_reason' => null] : []),
         ]);
 

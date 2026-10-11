@@ -82,8 +82,22 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            $status = $exception->getStatusCode();
+            $message = $exception->getMessage();
+            $default = match ($status) {
+                403 => 'Bạn không có quyền thực hiện thao tác này.',
+                404 => 'Không tìm thấy dữ liệu yêu cầu.',
+                429 => 'Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.',
+                default => 'Không thể xử lý yêu cầu.',
+            };
+            // Message mặc định của framework (tiếng Anh, 404 còn lộ tên model) thay bằng tiếng Việt;
+            // message tự viết (có dấu) được giữ nguyên.
+            $frameworkDefault = $message === ''
+                || $exception->getPrevious() instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                || (in_array($status, [403, 404, 429], true) && preg_match('/^[\x20-\x7E]+$/', $message));
+
             return response()->json([
-                'message' => $exception->getMessage() ?: 'Không thể xử lý yêu cầu.',
-            ], $exception->getStatusCode());
+                'message' => $frameworkDefault ? $default : $message,
+            ], $status, $exception->getHeaders());
         });
     })->create();

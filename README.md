@@ -30,10 +30,11 @@ Hệ thống trung gian kết nối khách hàng có nhu cầu thể thao với 
 
 ## 🛠️ Công Nghệ Sử Dụng
 
-- **Backend**: Laravel 13.x, PHP 8.2+ / 8.3+
-- **Database**: MySQL / SQLite (Eloquent ORM, Migrations, Seeders)
-- **Frontend**: Blade Template, Tailwind CSS v4, JavaScript (ES6+, Fetch API AJAX)
-- **Phân quyền**: Role-based Middleware (`admin`, `field_owner`, `customer`)
+- **Backend**: Laravel 13.x (API-only, `/api/v1`), PHP 8.3+, Sanctum (session cookie SPA)
+- **Database**: MySQL (mặc định trong `.env.example`) / SQLite
+- **Frontend**: React 19 + Vite + TypeScript (thư mục `frontend/`), TanStack Query, Leaflet
+- **Phân quyền**: `admin` và `customer`. Chủ sân là `customer` có hồ sơ chủ sân đã duyệt (`field_owner_profiles.verification_status = approved`)
+- **Hàng đợi & lịch chạy**: queue `database` (gửi mail) và scheduler (đóng đơn quá hạn, phạt no-show, hết hạn lời mời waitlist)
 
 ---
 
@@ -56,6 +57,13 @@ erDiagram
     
     TimeSlot ||--o{ Booking : "has many"
     Booking ||--o| Review : "has one"
+    User ||--o{ BookingWaitlist : "queues"
+    SportsField ||--o{ BookingWaitlist : "has many"
+    User ||--o{ MatchRequest : "hosts"
+    MatchRequest ||--o{ MatchParticipant : "has many"
+    User ||--o{ MatchParticipant : "joins"
+    User ||--o{ TrustScoreLog : "has many"
+    FieldOwnerProfile ||--o{ OwnerDocument : "has many"
 ```
 
 ---
@@ -63,73 +71,44 @@ erDiagram
 ## ⚙️ Hướng Dẫn Cài Đặt Dự Án (Installation Guide)
 
 ### 1. Yêu cầu hệ thống
-- PHP >= 8.2 (đã bật các extension: `pdo`, `mbstring`, `openssl`, `sqlite3` hoặc `mysqli`)
-- Composer >= 2.x
-- Node.js & NPM (tùy chọn nếu build assets)
+- PHP >= 8.3, Composer 2.x
+- Node.js 20+ và NPM
+- MySQL 8 (hoặc SQLite nếu đổi `DB_CONNECTION` trong `.env`)
 
-### 2. Cài đặt các bước
+### 2. Cài đặt (chạy local)
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/KhangNG2603/tayvuongpj.git
-cd tayvuongpj
-
-# 2. Cài đặt thư viện PHP
+cp .env.example .env            # chỉnh DB_* cho khớp MySQL local (mặc định database `sporthub`)
 composer install
-
-# 3. Tạo file môi trường .env
-cp .env.example .env
-
-# 4. Tạo Application Key
 php artisan key:generate
+php artisan migrate:fresh --seed   # tạo bảng + dữ liệu demo
+php artisan storage:link           # để xem ảnh upload
 
-# 5. Tạo file database SQLite (hoặc cấu hình MySQL trong file .env)
-touch database/database.sqlite
-
-# 6. Chạy Migration và Seed dữ liệu mẫu
-php artisan migrate:fresh --seed
-
-# 7. Tạo Symbolic Link cho Storage (để xem ảnh upload)
-php artisan storage:link
+npm install                      # công cụ chạy song song (concurrently)
+npm --prefix frontend install
 ```
 
----
+### 3. Chạy hệ thống
 
-## 🗃️ Export / Import Database SQL
-
-Dự án đã chuẩn bị sẵn file Dump SQL chứa toàn bộ lệnh `CREATE TABLE` (DDL) và `INSERT INTO` (Dữ liệu mẫu đầy đủ):
-
-- **Đường dẫn file SQL Dump**: `database/tayvuong_sports_field_dump.sql`
-
-### Import vào MySQL / phpMyAdmin / DBeaver:
 ```bash
-mysql -u [username] -p [database_name] < database/tayvuong_sports_field_dump.sql
+npm run dev
 ```
 
----
+Lệnh này chạy cùng lúc 4 tiến trình:
 
-## 🌐 Cấu Hình Tên Miền Local `http://tayvuong.com`
+| Tên | Lệnh | Vai trò |
+|---|---|---|
+| api | `php artisan serve --port=8011` | Backend: http://127.0.0.1:8011 |
+| queue | `php artisan queue:work --tries=1` | Gửi mail (xác nhận đơn, lời mời waitlist, huỷ trận…) |
+| schedule | `php artisan schedule:work` | `bookings:sync` (15 phút), `waitlist:expire` (mỗi phút), `matches:close-past` (mỗi giờ) |
+| frontend | `npm --prefix frontend run dev` | Giao diện: http://127.0.0.1:5173 |
 
-### Cách 1: Sử dụng FlyEnv (Recommended trên Linux)
-1. Mở ứng dụng **FlyEnv**.
-2. Thêm hoặc Sửa Site:
-   - **Domain**: `tayvuong.com`
-   - **Path (Đường dẫn)**: Trỏ chính xác vào thư mục **`public`** của dự án:
-     `/home/bonkerzz/Documents/tayvuongpj/public`
-3. Lưu cấu hình và truy cập: **`http://tayvuong.com`**
+Thiếu `queue` thì mail không được gửi; thiếu `schedule` thì đơn quá hạn không tự đóng, no-show không bị phạt, lời mời waitlist không hết hạn.
 
-> 💡 **Lưu ý khắc phục lỗi 403 Forbidden trong FlyEnv**: Đảm bảo đường dẫn thư mục trỏ tới subfolder `/public` chứ không trỏ ở thư mục gốc project.
-
-### Cách 2: Sử dụng Artisan Serve
-1. Thêm domain vào `/etc/hosts`:
-   ```bash
-   echo "127.0.0.1 tayvuong.com" | sudo tee -a /etc/hosts
-   ```
-2. Chạy lệnh:
-   ```bash
-   php artisan serve --port=8000
-   ```
-3. Truy cập: **`http://localhost:8000`** hoặc **`http://tayvuong.com:8000`**
+### 4. Cấu hình tuỳ chọn
+- **Mail**: mặc định `MAIL_MAILER=log` (xem `storage/logs`). Dùng Mailpit/ServBay bằng cách đổi `MAIL_*` trong `.env`.
+- **Đăng nhập Google**: điền `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` trong `.env`. Không commit file `client_secret*.json`.
+- **Chạy test**: `php artisan test` (dùng SQLite in-memory, không đụng DB local).
 
 ---
 

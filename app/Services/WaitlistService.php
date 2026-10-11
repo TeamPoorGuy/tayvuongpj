@@ -162,6 +162,8 @@ class WaitlistService
     public function acceptOffer(User $user, int $waitlistId): Booking
     {
         $booking = DB::transaction(function () use ($user, $waitlistId) {
+            // Các nhánh hết hạn/bị chiếm vẫn phải ghi trạng thái; ném lỗi trong transaction sẽ rollback chúng,
+            // nên trả message ra ngoài và ném sau khi commit.
             $waitlist = BookingWaitlist::where('id', $waitlistId)
                 ->where('user_id', $user->id)
                 ->lockForUpdate()
@@ -174,7 +176,7 @@ class WaitlistService
             if ($waitlist->offer_expires_at && now()->gt($waitlist->offer_expires_at)) {
                 $waitlist->update(['status' => 'expired']);
                 $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->time_slot_id, $waitlist->booking_date->toDateString());
-                throw new ConflictException('Rất tiếc, thời hạn 15 phút xác nhận lời mời đã hết.');
+                return 'Rất tiếc, thời hạn 15 phút xác nhận lời mời đã hết.';
             }
 
             // Kiểm tra phòng ngừa tranh chấp slot đồng thời
@@ -187,7 +189,7 @@ class WaitlistService
 
             if ($isOccupied) {
                 $waitlist->update(['status' => 'expired']);
-                throw new ConflictException('Khung giờ này đã được người khác xác nhận trước.');
+                return 'Khung giờ này đã được người khác xác nhận trước.';
             }
 
             $slot = $waitlist->timeSlot;
@@ -209,6 +211,11 @@ class WaitlistService
 
             return $booking->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
         });
+
+        if (is_string($booking)) {
+            throw new ConflictException($booking);
+        }
+
         SafeMail::queue($booking->sportsField->owner->email, new NewBookingRequest($booking));
 
         return $booking;

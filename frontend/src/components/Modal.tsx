@@ -26,6 +26,9 @@ export function Modal({
   const formRef = useRef<HTMLFormElement>(null)
   const divRef = useRef<HTMLDivElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
+  // onClose thường là closure inline; giữ trong ref để effect không chạy lại (và giật focus) mỗi lần cha re-render.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   // Close on Escape key press
   useEffect(() => {
@@ -37,7 +40,7 @@ export function Modal({
     requestAnimationFrame(focusFirst)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key === 'Tab' && getModal()) {
@@ -62,7 +65,7 @@ export function Modal({
       window.removeEventListener('keydown', handleKeyDown)
       previousFocus.current?.focus()
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   return (
     <AnimatePresence>

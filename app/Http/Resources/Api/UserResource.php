@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'email_verified' => $this->hasVerifiedEmail(),
             'has_password' => $this->password !== null,
             'field_owner_profile' => $this->whenLoaded('fieldOwnerProfile', fn () => new OwnerProfileResource($this->fieldOwnerProfile)),
+            'is_field_owner' => (bool) ($this->is_field_owner ?? $this->isApprovedOwner()),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

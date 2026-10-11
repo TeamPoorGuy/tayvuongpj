@@ -12,6 +12,7 @@ export interface User {
   trust_score?: number
   email_verified?: boolean
   has_password?: boolean
+  is_field_owner?: boolean
   field_owner_profile?: OwnerProfile | null
 }
 
@@ -62,6 +63,7 @@ export interface SportsField {
   description: string | null
   price_per_hour: number
   status: string
+  rejection_reason?: string | null
   is_active: boolean
   average_rating: number
   reviews_count: number

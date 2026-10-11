@@ -209,7 +209,7 @@ export function AdminUsersPage() {
                   <span>{user.email}</span>
                   <small>{user.phone ?? '—'}</small>
                 </Fragment>,
-                user.role === 'field_owner' ? 'Chủ sân' : 'Khách hàng',
+                user.is_field_owner ? 'Chủ sân' : 'Khách hàng',
                 <StatusBadge key="status" status={user.is_active ? 'approved' : 'inactive'} />,
                 <button
                   key="action"
@@ -1300,10 +1300,12 @@ export function AdminCategoriesPage() {
     mutation: typeof createCategory | typeof createType,
   ) => {
     event.preventDefault()
+    const form = event.currentTarget
     mutation.mutate(
-      Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>,
+      Object.fromEntries(new FormData(form).entries()) as Record<string, string>,
+      // Chỉ xoá form khi lưu thành công, tránh mất dữ liệu đã nhập nếu API báo lỗi.
+      { onSuccess: () => form.reset() },
     )
-    event.currentTarget.reset()
   }
 
   return (

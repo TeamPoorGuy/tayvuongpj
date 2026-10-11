@@ -178,6 +178,9 @@ export function OwnerFieldsPage() {
                   <td>{currency.format(field.price_per_hour)}đ</td>
                   <td>
                     <StatusBadge status={field.status} />
+                    {field.rejection_reason && field.status !== 'approved' && (
+                      <small title="Lý do từ phía quản trị viên">Lý do: {field.rejection_reason}</small>
+                    )}
                   </td>
                   <td>
                     <button
@@ -330,6 +333,14 @@ function FieldModal({
         <label>
           <span>Địa chỉ</span>
           <input name="address" defaultValue={current?.address} required />
+        </label>
+        <label>
+          <span>Vĩ độ (tuỳ chọn)</span>
+          <input name="latitude" type="number" step="any" min="-90" max="90" placeholder="VD: 21.0285" defaultValue={current?.latitude ?? ''} />
+        </label>
+        <label>
+          <span>Kinh độ (tuỳ chọn)</span>
+          <input name="longitude" type="number" step="any" min="-180" max="180" placeholder="VD: 105.8542" defaultValue={current?.longitude ?? ''} />
         </label>
         <label>
           <span>Giá cơ bản mỗi giờ (VNĐ)</span>
@@ -760,7 +771,9 @@ export function OwnerBookingsPage() {
           ? 'xác nhận'
           : vars.status === 'completed'
             ? 'hoàn thành'
-            : 'từ chối'
+            : vars.status === 'cancelled'
+              ? 'huỷ'
+              : 'từ chối'
       toast.success(`Đã ${label} đơn đặt sân #BK-${vars.booking.id}.`)
       setRejectingBooking(null)
       setRejectReason('')
@@ -887,6 +900,13 @@ export function OwnerBookingsPage() {
                     >
                       Hoàn thành
                     </button>
+                    <button
+                      className="button button--danger button--small"
+                      onClick={() => setRejectingBooking(booking)}
+                      disabled={update.isPending}
+                    >
+                      Huỷ đơn
+                    </button>
                   </>
                 )}
               </>
@@ -905,25 +925,25 @@ export function OwnerBookingsPage() {
       <Modal
         isOpen={!!rejectingBooking}
         onClose={() => setRejectingBooking(null)}
-        title="Từ chối đơn đặt sân"
+        title={rejectingBooking?.status === 'confirmed' ? 'Huỷ đơn đã xác nhận' : 'Từ chối đơn đặt sân'}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
           if (rejectingBooking) {
             update.mutate({
               booking: rejectingBooking,
-              status: 'rejected',
+              status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
               reason: rejectReason || 'Chủ sân bận khung giờ này.',
             })
           }
         }}
       >
         <p>
-          Bạn có chắc chắn muốn từ chối đơn <strong>#BK-{rejectingBooking?.id}</strong> của khách hàng{' '}
+          Bạn có chắc chắn muốn {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} đơn <strong>#BK-{rejectingBooking?.id}</strong> của khách hàng{' '}
           <strong>{rejectingBooking?.customer?.name}</strong>?
         </p>
         <label style={{ marginTop: 12 }}>
-          <span>Lý do từ chối (thông báo tới khách)</span>
+          <span>Lý do {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} (thông báo tới khách)</span>
           <textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
@@ -941,7 +961,7 @@ export function OwnerBookingsPage() {
             Đóng
           </button>
           <button type="submit" disabled={update.isPending} className="button button--danger">
-            {update.isPending ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+            {update.isPending ? 'Đang xử lý...' : rejectingBooking?.status === 'confirmed' ? 'Xác nhận huỷ đơn' : 'Xác nhận từ chối'}
           </button>
         </div>
       </Modal>

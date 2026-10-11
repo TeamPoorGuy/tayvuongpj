@@ -143,6 +143,12 @@ class MatchmakingService
             }
 
             $oldStatus = $participant->status;
+
+            // Chỉ duyệt thêm người khi phòng còn mở: phòng đã đủ người/huỷ/kết thúc thì từ chối duyệt.
+            if ($status === 'accepted' && $oldStatus !== 'accepted' && $match->status !== 'open') {
+                throw new ConflictException('Phòng đã đủ người hoặc đã đóng, không thể duyệt thêm.');
+            }
+
             $participant->update(['status' => $status]);
 
             // Cập nhật joined_count nếu được duyệt
@@ -167,13 +173,21 @@ class MatchmakingService
      */
     public function cancel(User $host, int $matchId, ?string $reason = null): MatchRequest
     {
-        $match = MatchRequest::with(['participants.user', 'host'])->where('id', $matchId)->firstOrFail();
+        $match = DB::transaction(function () use ($host, $matchId) {
+            $match = MatchRequest::with(['participants.user', 'host'])->where('id', $matchId)->lockForUpdate()->firstOrFail();
 
-        if ($match->user_id !== $host->id && ! $host->isAdmin()) {
-            throw new DomainException('Bạn không có quyền hủy trận đấu này.');
-        }
+            if ($match->user_id !== $host->id && ! $host->isAdmin()) {
+                throw new DomainException('Bạn không có quyền hủy trận đấu này.');
+            }
 
-        $match->update(['status' => 'cancelled']);
+            if (in_array($match->status, ['cancelled', 'completed'], true)) {
+                throw new ConflictException('Trận đấu này đã đóng, không thể huỷ lại.');
+            }
+
+            $match->update(['status' => 'cancelled']);
+
+            return $match;
+        });
 
         $cancelReason = $reason ?: ($host->isAdmin() ? 'Quản trị viên đã huỷ phòng thi đấu.' : 'Chủ phòng đã huỷ trận đấu.');
 

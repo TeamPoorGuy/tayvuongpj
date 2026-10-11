@@ -44,8 +44,14 @@ class AdminService
 
     public function users(array $filters): LengthAwarePaginator
     {
+        // Chủ sân có role=customer; vai trò hiển thị/lọc suy ra từ hồ sơ đã duyệt.
+        $approvedOwner = fn ($query) => $query->where('verification_status', VerificationStatus::Approved);
+
         return User::where('role', '!=', UserRole::Admin->value)
-            ->when($filters['role'] ?? null, fn ($query, $role) => $query->where('role', $role))
+            ->withExists(['fieldOwnerProfile as is_field_owner' => $approvedOwner])
+            ->when($filters['role'] ?? null, fn ($query, $role) => $role === 'field_owner'
+                ? $query->whereHas('fieldOwnerProfile', $approvedOwner)
+                : $query->whereDoesntHave('fieldOwnerProfile', $approvedOwner))
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where(fn ($inner) => $inner
                 ->where('name', 'like', "%".addcslashes($keyword, '%_\\')."%")
                 ->orWhere('email', 'like', "%".addcslashes($keyword, '%_\\')."%")
