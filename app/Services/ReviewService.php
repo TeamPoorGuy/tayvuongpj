@@ -15,6 +15,7 @@ class ReviewService
         $booking = Booking::query()
             ->where('user_id', $user->id)
             ->where('status', BookingStatus::Completed->value)
+            ->whereNull('no_show_at')
             ->with('review')
             ->findOrFail($bookingId);
 

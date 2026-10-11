@@ -24,6 +24,7 @@ class Booking extends Model
         'check_in_code',
         'checked_in_at',
         'checked_in_by',
+        'no_show_at',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class Booking extends Model
         'total_price' => 'decimal:2',
         'cancelled_at' => 'datetime',
         'checked_in_at' => 'datetime',
+        'no_show_at' => 'datetime',
     ];
 
     protected static function booted(): void

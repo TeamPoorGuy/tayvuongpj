@@ -151,7 +151,13 @@ class BookingService
                     );
                     $count['rejected']++;
                 } elseif ($booking->status === BookingStatus::Confirmed && $booking->endsAt()->isPast()) {
-                    $booking->update(['status' => BookingStatus::Completed->value]);
+                    $attributes = ['status' => BookingStatus::Completed->value];
+                    // Đã xác nhận nhưng không check-in: ghi nhận vắng mặt và trừ điểm uy tín đúng 1 lần.
+                    if ($booking->checked_in_at === null && $booking->no_show_at === null) {
+                        $attributes['no_show_at'] = now();
+                        TrustScoreService::penalizeNoShow($booking->customer);
+                    }
+                    $booking->update($attributes);
                     $count['completed']++;
                 }
             });

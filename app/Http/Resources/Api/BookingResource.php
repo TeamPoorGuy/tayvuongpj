@@ -20,6 +20,7 @@ class BookingResource extends JsonResource
             'can_be_cancelled' => $this->canBeCancelled(),
             'check_in_code' => $this->check_in_code,
             'checked_in_at' => $this->checked_in_at?->toISOString(),
+            'no_show' => $this->no_show_at !== null,
             'field' => $this->whenLoaded('sportsField', fn () => new FieldResource($this->sportsField)),
             'customer' => $this->whenLoaded('customer', fn () => new UserResource($this->customer)),
             'time_slot' => $this->whenLoaded('timeSlot', fn () => [

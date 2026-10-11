@@ -379,7 +379,7 @@ export function MatchesPage() {
                   <div className="host-info">
                     <span className="host-name">{match.host?.name ?? 'Chủ phòng'}</span>
                     <span className="host-trust">
-                      <ShieldCheck size={12} /> {match.host?.trust_score ?? 100}đ uy tín
+                      <ShieldCheck size={12} /> {match.host?.trust_score ?? 100} điểm uy tín
                     </span>
                   </div>
                   <div className="host-contact">

@@ -174,6 +174,7 @@ class SmartMatchdayTest extends TestCase
             'total_price' => 150000,
             'check_in_code' => 'CK-TEST1234',
         ]);
+        $this->travelTo($booking->load('timeSlot')->startsAt()->subMinutes(10)); // trong cửa sổ check-in
 
         Sanctum::actingAs($owner);
         $response = $this->postJson('/api/v1/field-owner/check-in', [
@@ -434,5 +435,49 @@ class SmartMatchdayTest extends TestCase
 
         $this->travel(16)->minutes();
         $this->postJson('/api/v1/customer/bookings', $payload)->assertCreated();
+    }
+
+    public function test_check_in_is_only_allowed_inside_the_time_window(): void
+    {
+        [$owner, $field, $slot] = $this->createFieldWithSlot('san-checkin-window');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true, 'trust_score' => 100]);
+        $booking = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(), 'status' => BookingStatus::Confirmed->value,
+            'total_price' => 1, 'check_in_code' => 'CK-WINDOW01',
+        ]);
+        $booking->load('timeSlot');
+        Sanctum::actingAs($owner);
+
+        $this->travelTo($booking->startsAt()->subHours(3));
+        $this->postJson('/api/v1/field-owner/check-in', ['code' => 'CK-WINDOW01'])->assertStatus(422);
+
+        $this->travelTo($booking->endsAt()->addMinutes(5));
+        $this->postJson('/api/v1/field-owner/check-in', ['code' => 'CK-WINDOW01'])->assertStatus(422);
+        $this->assertSame(100, $customer->fresh()->trust_score);
+
+        $this->travelTo($booking->startsAt()->subMinutes(30));
+        $this->postJson('/api/v1/field-owner/check-in', ['code' => 'CK-WINDOW01'])->assertOk();
+        $this->assertSame(110, $customer->fresh()->trust_score);
+    }
+
+    public function test_no_show_is_penalised_exactly_once_and_blocks_review(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        [, $field, $slot] = $this->createFieldWithSlot('san-no-show');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true, 'trust_score' => 100]);
+        $booking = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(), 'status' => BookingStatus::Confirmed->value, 'total_price' => 1,
+        ]);
+        $this->travelTo($booking->load('timeSlot')->endsAt()->addMinutes(1));
+
+        $this->artisan('bookings:sync')->assertSuccessful();
+        $this->artisan('bookings:sync')->assertSuccessful();
+
+        $this->assertSame(75, $customer->fresh()->trust_score);
+        $this->assertNotNull($booking->fresh()->no_show_at);
+        Sanctum::actingAs($customer);
+        $this->postJson('/api/v1/customer/reviews', ['booking_id' => $booking->id, 'rating' => 5, 'comment' => 'x'])->assertNotFound();
     }
 }
