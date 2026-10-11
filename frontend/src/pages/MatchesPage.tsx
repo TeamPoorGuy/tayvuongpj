@@ -63,6 +63,8 @@ export function MatchesPage() {
   const [joiningMatch, setJoiningMatch] = useState<MatchRequest | null>(null)
   const [joinMessage, setJoinMessage] = useState('')
   const [managingMatch, setManagingMatch] = useState<MatchRequest | null>(null)
+  const [cancellingMatch, setCancellingMatch] = useState<MatchRequest | null>(null)
+  const [matchCancelReason, setMatchCancelReason] = useState('')
 
   // Categories & Fields queries
   const categoriesQuery = useQuery({
@@ -143,11 +145,13 @@ export function MatchesPage() {
   })
 
   const cancelMatch = useMutation({
-    mutationFn: async (matchId: number) =>
-      (await api.delete(`/customer/matches/${matchId}`)).data,
+    mutationFn: async ({ matchId, reason }: { matchId: number; reason?: string }) =>
+      (await api.delete(`/customer/matches/${matchId}`, { data: { reason } })).data,
     onSuccess: () => {
-      toast.success('Đã huỷ bài tìm đối.')
+      toast.success('Đã huỷ bài tìm đối và thông báo cho người tham gia.')
       setManagingMatch(null)
+      setCancellingMatch(null)
+      setMatchCancelReason('')
       void client.invalidateQueries({ queryKey: ['matches'] })
     },
     onError: (err) => {
@@ -677,8 +681,8 @@ export function MatchesPage() {
               style={{ visibility: managingMatch?.status === 'open' || managingMatch?.status === 'full' ? 'visible' : 'hidden' }}
               disabled={cancelMatch.isPending}
               onClick={() => {
-                if (managingMatch && confirm('Bạn có chắc muốn huỷ bài tìm đối này?')) {
-                  cancelMatch.mutate(managingMatch.id)
+                if (managingMatch) {
+                  setCancellingMatch(managingMatch)
                 }
               }}
             >
@@ -692,6 +696,57 @@ export function MatchesPage() {
               Xong
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal huỷ bài tìm đối có lý do */}
+      <Modal
+        isOpen={!!cancellingMatch}
+        onClose={() => {
+          setCancellingMatch(null)
+          setMatchCancelReason('')
+        }}
+        title="Huỷ bài tìm đối"
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (cancellingMatch) {
+            cancelMatch.mutate({
+              matchId: cancellingMatch.id,
+              reason: matchCancelReason.trim() || undefined,
+            })
+          }
+        }}
+      >
+        <p>
+          Bạn có chắc muốn huỷ bài tìm đối <strong>{cancellingMatch?.title}</strong>?
+        </p>
+        <p className="form-help">
+          Những người đã được chấp nhận sẽ nhận email thông báo bài đăng đã bị huỷ kèm lý do.
+        </p>
+        <label style={{ marginTop: 12 }}>
+          <span>Lý do huỷ bài (tuỳ chọn)</span>
+          <textarea
+            value={matchCancelReason}
+            onChange={(e) => setMatchCancelReason(e.target.value)}
+            placeholder="Ví dụ: Đội mình bận đột xuất, không đủ người đá..."
+            rows={3}
+          />
+        </label>
+        <div className="modal__actions" style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => {
+              setCancellingMatch(null)
+              setMatchCancelReason('')
+            }}
+          >
+            Đóng
+          </button>
+          <button type="submit" disabled={cancelMatch.isPending} className="button button--danger">
+            {cancelMatch.isPending ? 'Đang huỷ...' : 'Xác nhận huỷ bài'}
+          </button>
         </div>
       </Modal>
     </div>

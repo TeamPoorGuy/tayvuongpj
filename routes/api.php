@@ -136,6 +136,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
             Route::get('/users', [Admin\UserController::class, 'index']);
+            Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);
             Route::patch('/users/{user}/toggle', [Admin\UserController::class, 'toggle']);
             Route::get('/field-owners', [Admin\FieldOwnerController::class, 'index']);
             Route::get('/field-owners/{profile}/documents/{document}', [Admin\FieldOwnerController::class, 'document']);

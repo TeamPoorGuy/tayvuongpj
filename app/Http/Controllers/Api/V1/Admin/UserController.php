@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\TrustScoreLogResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\User;
 use App\Services\AdminService;
@@ -24,5 +25,10 @@ class UserController extends Controller
     public function toggle(User $user): JsonResponse
     {
         return response()->json(['message' => 'Đã cập nhật trạng thái tài khoản.', 'data' => new UserResource($this->service->toggleUser($user))]);
+    }
+
+    public function trustScoreLogs(User $user): AnonymousResourceCollection
+    {
+        return TrustScoreLogResource::collection($this->service->userTrustScoreLogs($user));
     }
 }

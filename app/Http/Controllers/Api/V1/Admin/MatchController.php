@@ -27,7 +27,11 @@ class MatchController extends Controller
     /** Admin gỡ phòng vi phạm; người đã được chấp nhận nhận mail như khi chủ phòng huỷ. */
     public function cancel(Request $request, int $id): JsonResponse
     {
-        $match = $this->matches->cancel($request->user(), $id);
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $match = $this->matches->cancel($request->user(), $id, $validated['reason'] ?? null);
 
         return response()->json([
             'message' => 'Đã huỷ phòng tìm đối.',

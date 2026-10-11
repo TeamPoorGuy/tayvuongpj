@@ -165,9 +165,9 @@ class MatchmakingService
     /**
      * Hủy bài đăng tìm đối.
      */
-    public function cancel(User $host, int $matchId): MatchRequest
+    public function cancel(User $host, int $matchId, ?string $reason = null): MatchRequest
     {
-        $match = MatchRequest::with('participants.user')->where('id', $matchId)->firstOrFail();
+        $match = MatchRequest::with(['participants.user', 'host'])->where('id', $matchId)->firstOrFail();
 
         if ($match->user_id !== $host->id && ! $host->isAdmin()) {
             throw new DomainException('Bạn không có quyền hủy trận đấu này.');
@@ -175,9 +175,16 @@ class MatchmakingService
 
         $match->update(['status' => 'cancelled']);
 
+        $cancelReason = $reason ?: ($host->isAdmin() ? 'Quản trị viên đã huỷ phòng thi đấu.' : 'Chủ phòng đã huỷ trận đấu.');
+
         // Báo cho người đã được chấp nhận để họ không đến sân vô ích.
         foreach ($match->participants->where('status', 'accepted') as $participant) {
-            SafeMail::queue($participant->user?->email, new MatchCancelled($match));
+            SafeMail::queue($participant->user?->email, new MatchCancelled($match, $cancelReason));
+        }
+
+        // Nếu admin huỷ phòng của người khác, thông báo cho cả chủ phòng
+        if ($host->isAdmin() && $match->user_id !== $host->id && $match->host?->email) {
+            SafeMail::queue($match->host->email, new MatchCancelled($match, $cancelReason));
         }
 
         return $match;

@@ -214,3 +214,14 @@ export interface MatchRequest {
   participants?: MatchParticipant[]
   created_at: string
 }
+
+export interface TrustScoreLog {
+  id: number
+  user_id: number
+  change: number
+  score_after: number
+  reason: string
+  booking_id: number | null
+  sports_field_name?: string | null
+  created_at: string
+}

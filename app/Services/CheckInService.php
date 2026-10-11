@@ -66,7 +66,7 @@ class CheckInService
 
             // Cộng điểm tin cậy cho khách hàng vì đã có mặt đúng hẹn
             if ($booking->customer) {
-                TrustScoreService::rewardCheckIn($booking->customer);
+                TrustScoreService::rewardCheckIn($booking->customer, $booking);
             }
 
             return $booking->refresh();

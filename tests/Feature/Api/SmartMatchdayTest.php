@@ -702,4 +702,94 @@ class SmartMatchdayTest extends TestCase
         $this->assertSame('cancelled', $futureBooking->fresh()->status->value);
         $this->assertStringContainsString('Vi phạm nghiêm trọng', (string) $futureBooking->fresh()->cancel_reason);
     }
+
+    public function test_admin_and_host_can_cancel_match_with_custom_reason(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $host = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $participant = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        $cat = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-cancel-reason']);
+        $match = MatchRequest::create([
+            'user_id' => $host->id, 'sport_category_id' => $cat->id,
+            'title' => 'Kèo giao lưu cuối tuần', 'play_date' => today()->addDays(1),
+            'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any',
+            'players_needed' => 2, 'contact_phone' => '0912345678', 'status' => 'open',
+        ]);
+        $match->participants()->create([
+            'user_id' => $participant->id,
+            'status' => 'accepted',
+        ]);
+
+        // Host tự huỷ bài kèm lý do
+        Sanctum::actingAs($host);
+        $this->deleteJson("/api/v1/customer/matches/{$match->id}", [
+            'reason' => 'Đội mình thiếu người quá nhiều',
+        ])->assertOk();
+
+        $this->assertSame('cancelled', $match->fresh()->status);
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\MatchCancelled::class, function ($mail) {
+            return $mail->reason === 'Đội mình thiếu người quá nhiều';
+        });
+
+        // Tạo match mới để test admin huỷ kèm lý do
+        $match2 = MatchRequest::create([
+            'user_id' => $host->id, 'sport_category_id' => $cat->id,
+            'title' => 'Kèo vi phạm quy tắc', 'play_date' => today()->addDays(1),
+            'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any',
+            'players_needed' => 2, 'contact_phone' => '0912345678', 'status' => 'open',
+        ]);
+
+        Sanctum::actingAs($admin);
+        $this->deleteJson("/api/v1/admin/matches/{$match2->id}", [
+            'reason' => 'Nội dung phòng chứa ngôn từ phản cảm',
+        ])->assertOk();
+
+        $this->assertSame('cancelled', $match2->fresh()->status);
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\MatchCancelled::class, function ($mail) {
+            return $mail->reason === 'Nội dung phòng chứa ngôn từ phản cảm';
+        });
+    }
+
+    public function test_trust_score_logs_are_recorded_and_can_be_viewed_by_admin(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true, 'trust_score' => 100]);
+
+        // Test reward check-in log
+        \App\Services\TrustScoreService::rewardCheckIn($customer);
+        $this->assertSame(110, $customer->fresh()->trust_score);
+        $this->assertDatabaseHas('trust_score_logs', [
+            'user_id' => $customer->id,
+            'change' => 10,
+            'score_after' => 110,
+        ]);
+
+        // Test penalize late cancellation log
+        \App\Services\TrustScoreService::penalizeLateCancellation($customer);
+        $this->assertSame(95, $customer->fresh()->trust_score);
+        $this->assertDatabaseHas('trust_score_logs', [
+            'user_id' => $customer->id,
+            'change' => -15,
+            'score_after' => 95,
+        ]);
+
+        // Test penalize no show log
+        \App\Services\TrustScoreService::penalizeNoShow($customer);
+        $this->assertSame(70, $customer->fresh()->trust_score);
+        $this->assertDatabaseHas('trust_score_logs', [
+            'user_id' => $customer->id,
+            'change' => -25,
+            'score_after' => 70,
+        ]);
+
+        // Test admin API endpoint
+        Sanctum::actingAs($admin);
+        $response = $this->getJson("/api/v1/admin/users/{$customer->id}/trust-score-logs");
+        $response->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('data.0.score_after', 70)
+            ->assertJsonPath('data.0.change', -25);
+    }
 }

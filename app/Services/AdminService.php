@@ -267,4 +267,13 @@ class AdminService
             'is_active' => true,
         ])->load('sportCategory');
     }
+
+    public function userTrustScoreLogs(User $user): LengthAwarePaginator
+    {
+        return $user->trustScoreLogs()
+            ->with('booking.sportsField')
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+    }
 }

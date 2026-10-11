@@ -124,4 +124,9 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(MatchParticipant::class);
     }
+
+    public function trustScoreLogs()
+    {
+        return $this->hasMany(TrustScoreLog::class)->latest();
+    }
 }

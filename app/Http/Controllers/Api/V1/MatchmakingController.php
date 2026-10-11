@@ -94,7 +94,11 @@ class MatchmakingController extends Controller
 
     public function cancel(Request $request, int $id): JsonResponse
     {
-        $match = $this->service->cancel($request->user(), $id);
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $match = $this->service->cancel($request->user(), $id, $validated['reason'] ?? null);
 
         return response()->json([
             'message' => 'Đã huỷ bài tìm đối.',

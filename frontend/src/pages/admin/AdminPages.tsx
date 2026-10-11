@@ -38,6 +38,7 @@ import type {
   Paginated,
   Review,
   SportsField,
+  TrustScoreLog,
   User,
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
@@ -106,6 +107,7 @@ export function AdminUsersPage() {
   const [role, setRole] = useState('')
   const [page, setPage] = useState(1)
   const [togglingUser, setTogglingUser] = useState<User | null>(null)
+  const [viewingTrustUser, setViewingTrustUser] = useState<User | null>(null)
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -123,6 +125,17 @@ export function AdminUsersPage() {
           `/admin/users?page=${page}&keyword=${encodeURIComponent(debouncedKeyword)}&role=${role}`,
         )
       ).data,
+  })
+
+  const trustLogs = useQuery({
+    queryKey: ['admin', 'trust-score-logs', viewingTrustUser?.id],
+    queryFn: async () =>
+      (
+        await api.get<Paginated<TrustScoreLog>>(
+          `/admin/users/${viewingTrustUser?.id}/trust-score-logs`,
+        )
+      ).data,
+    enabled: !!viewingTrustUser,
   })
 
   const toggle = useMutation({
@@ -174,25 +187,40 @@ export function AdminUsersPage() {
         empty={<Empty text="Chưa có người dùng phù hợp." />}
       >
         <DataTable
-          heads={['Người dùng', 'Liên hệ', 'Vai trò', 'Trạng thái', 'Thao tác']}
+          heads={['Người dùng', 'Điểm uy tín', 'Liên hệ', 'Vai trò', 'Trạng thái', 'Thao tác']}
           rows={
-            users.data?.data.map((user) => [
-            <strong key="user">{user.name}</strong>,
-            <Fragment key="contact">
-              <span>{user.email}</span>
-              <small>{user.phone ?? '—'}</small>
-            </Fragment>,
-            user.role === 'field_owner' ? 'Chủ sân' : 'Khách hàng',
-            <StatusBadge key="status" status={user.is_active ? 'approved' : 'inactive'} />,
-            <button
-              key="action"
-              className={`button button--small ${user.is_active ? 'button--danger' : 'button--brand'}`}
-              onClick={() => setTogglingUser(user)}
-              disabled={toggle.isPending}
-            >
-              {user.is_active ? 'Khóa' : 'Mở khóa'}
-            </button>,
-            ]) ?? []
+            users.data?.data.map((user) => {
+              const score = user.trust_score ?? 100
+              const badgeClass =
+                score >= 100 ? 'badge--success' : score >= 60 ? 'badge--warning' : 'badge--danger'
+              return [
+                <strong key="user">{user.name}</strong>,
+                <button
+                  key="trust"
+                  type="button"
+                  className={`badge ${badgeClass}`}
+                  style={{ cursor: 'pointer', border: 'none', font: 'inherit', fontWeight: 600 }}
+                  onClick={() => setViewingTrustUser(user)}
+                  title="Bấm để xem lịch sử biến động điểm uy tín"
+                >
+                  {score} điểm
+                </button>,
+                <Fragment key="contact">
+                  <span>{user.email}</span>
+                  <small>{user.phone ?? '—'}</small>
+                </Fragment>,
+                user.role === 'field_owner' ? 'Chủ sân' : 'Khách hàng',
+                <StatusBadge key="status" status={user.is_active ? 'approved' : 'inactive'} />,
+                <button
+                  key="action"
+                  className={`button button--small ${user.is_active ? 'button--danger' : 'button--brand'}`}
+                  onClick={() => setTogglingUser(user)}
+                  disabled={toggle.isPending}
+                >
+                  {user.is_active ? 'Khóa' : 'Mở khóa'}
+                </button>,
+              ]
+            }) ?? []
           }
         />
       </QueryState>
@@ -220,6 +248,93 @@ export function AdminUsersPage() {
           if (togglingUser) toggle.mutate(togglingUser)
         }}
       />
+
+      <Modal
+        isOpen={!!viewingTrustUser}
+        onClose={() => setViewingTrustUser(null)}
+        title={`Lịch sử điểm uy tín: ${viewingTrustUser?.name}`}
+      >
+        <div
+          style={{
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            background: 'var(--surface-muted, #f8f9fa)',
+            borderRadius: 8,
+          }}
+        >
+          <div>
+            <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Điểm hiện tại</span>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+              {viewingTrustUser?.trust_score ?? 100} / 150 điểm
+            </div>
+          </div>
+          <span
+            className={`badge ${(viewingTrustUser?.trust_score ?? 100) >= 100 ? 'badge--success' : (viewingTrustUser?.trust_score ?? 100) >= 60 ? 'badge--warning' : 'badge--danger'}`}
+          >
+            {(viewingTrustUser?.trust_score ?? 100) >= 120
+              ? 'Rất uy tín'
+              : (viewingTrustUser?.trust_score ?? 100) >= 90
+              ? 'Bình thường'
+              : (viewingTrustUser?.trust_score ?? 100) >= 60
+              ? 'Cảnh báo'
+              : 'Nguy hiểm'}
+          </span>
+        </div>
+
+        <QueryState
+          isPending={trustLogs.isPending}
+          isError={trustLogs.isError}
+          isEmpty={!trustLogs.data?.data?.length}
+          error={errorMessage(trustLogs.error)}
+          empty={
+            <p className="empty-inline" style={{ padding: '24px 0', textAlign: 'center' }}>
+              Chưa có lịch sử biến động điểm nào.
+            </p>
+          }
+        >
+          <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+            <DataTable
+              heads={['Thời gian', 'Biến động', 'Sau đổi', 'Lý do & Sân']}
+              rows={
+                trustLogs.data?.data?.map((log) => [
+                  <small key="time" style={{ whiteSpace: 'nowrap' }}>
+                    {new Date(log.created_at).toLocaleString('vi-VN')}
+                  </small>,
+                  <strong
+                    key="change"
+                    style={{
+                      color:
+                        log.change > 0 ? 'var(--color-success, #10b981)' : 'var(--color-danger, #ef4444)',
+                    }}
+                  >
+                    {log.change > 0 ? `+${log.change}` : log.change}
+                  </strong>,
+                  <span key="after">{log.score_after}</span>,
+                  <Fragment key="reason">
+                    <div>{log.reason}</div>
+                    {log.sports_field_name && (
+                      <small style={{ color: 'var(--muted)' }}>Sân: {log.sports_field_name}</small>
+                    )}
+                  </Fragment>,
+                ]) ?? []
+              }
+            />
+          </div>
+        </QueryState>
+
+        <div className="modal__actions" style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => setViewingTrustUser(null)}
+          >
+            Đóng
+          </button>
+        </div>
+      </Modal>
     </>
   )
 }
@@ -1322,6 +1437,7 @@ export function AdminMatchesPage() {
   const search = useDebouncedValue(keyword.trim())
   const [page, setPage] = useState(1)
   const [cancelling, setCancelling] = useState<MatchRequest | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
 
   const matches = useQuery({
     queryKey: ['admin', 'matches', status, search, page],
@@ -1334,10 +1450,12 @@ export function AdminMatchesPage() {
   })
 
   const cancel = useMutation({
-    mutationFn: async (match: MatchRequest) => api.delete(`/admin/matches/${match.id}`),
+    mutationFn: async ({ match, reason }: { match: MatchRequest; reason?: string }) =>
+      api.delete(`/admin/matches/${match.id}`, { data: { reason } }),
     onSuccess: () => {
-      toast.success('Đã huỷ phòng tìm đối. Người đã được chấp nhận sẽ nhận email thông báo.')
+      toast.success('Đã huỷ phòng tìm đối. Người đã được chấp nhận và chủ phòng sẽ nhận email thông báo.')
       setCancelling(null)
+      setCancelReason('')
       void client.invalidateQueries({ queryKey: ['admin', 'matches'] })
     },
     onError: (err) => {
@@ -1439,19 +1557,56 @@ export function AdminMatchesPage() {
         total={matches.data?.meta.total}
         onPageChange={setPage}
       />
-      <ConfirmModal
+      <Modal
         isOpen={!!cancelling}
-        title="Gỡ phòng tìm đối"
-        message={`Huỷ phòng "${cancelling?.title}" của ${cancelling?.host?.name ?? 'chủ phòng'}? Người đã được chấp nhận sẽ nhận email.`}
-        confirmText="Gỡ phòng"
-        cancelText="Giữ lại"
-        danger
-        busy={cancel.isPending}
-        onClose={() => setCancelling(null)}
-        onConfirm={() => {
-          if (cancelling) cancel.mutate(cancelling)
+        onClose={() => {
+          setCancelling(null)
+          setCancelReason('')
         }}
-      />
+        title="Gỡ phòng tìm đối vi phạm"
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (cancelling) {
+            cancel.mutate({
+              match: cancelling,
+              reason: cancelReason.trim() || undefined,
+            })
+          }
+        }}
+      >
+        <p>
+          Bạn có chắc muốn gỡ phòng <strong>{cancelling?.title}</strong> của{' '}
+          {cancelling?.host?.name ?? 'chủ phòng'}?
+        </p>
+        <p className="form-help">
+          Chủ phòng và các thành viên đã được chấp nhận sẽ nhận email thông báo kèm lý do huỷ này.
+        </p>
+        <label style={{ marginTop: 12 }}>
+          <span>Lý do gỡ phòng (sẽ gửi vào email người tham gia)</span>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Ví dụ: Phòng vi phạm tiêu chuẩn cộng đồng, ngôn từ không phù hợp..."
+            rows={3}
+          />
+        </label>
+        <div className="modal__actions" style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => {
+              setCancelling(null)
+              setCancelReason('')
+            }}
+          >
+            Đóng
+          </button>
+          <button type="submit" disabled={cancel.isPending} className="button button--danger">
+            {cancel.isPending ? 'Đang xử lý...' : 'Xác nhận gỡ phòng'}
+          </button>
+        </div>
+      </Modal>
     </>
   )
 }

@@ -109,7 +109,7 @@ class BookingService
         }
 
         if ($booking->isLateToCancel()) {
-            TrustScoreService::penalizeLateCancellation($user);
+            TrustScoreService::penalizeLateCancellation($user, $booking);
         }
 
         $booking->update([
@@ -166,7 +166,7 @@ class BookingService
                     // Đã xác nhận nhưng không check-in: ghi nhận vắng mặt và trừ điểm uy tín đúng 1 lần.
                     if ($booking->checked_in_at === null && $booking->no_show_at === null) {
                         $attributes['no_show_at'] = now();
-                        TrustScoreService::penalizeNoShow($booking->customer);
+                        TrustScoreService::penalizeNoShow($booking->customer, $booking);
                     }
                     $booking->update($attributes);
                     $count['completed']++;
