@@ -8,8 +8,10 @@ use App\Enums\VerificationStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
 use App\Mail\BookingStatusChanged;
+use App\Mail\MatchCancelled;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\Booking;
+use App\Models\BookingWaitlist;
 use App\Models\FieldOwnerProfile;
 use App\Models\FieldType;
 use App\Models\MatchRequest;
@@ -20,6 +22,8 @@ use App\Models\User;
 use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class AdminService
@@ -114,37 +118,69 @@ class AdminService
 
     public function verifyField(SportsField $field, string $status, ?string $reason = null, bool $cancelFutureBookings = false): SportsField
     {
-        $field->update([
-            'status' => $status,
-            'rejection_reason' => $status === 'rejected' ? $reason : null,
-        ]);
+        DB::transaction(function () use ($field, $status, $reason, $cancelFutureBookings) {
+            $field->update([
+                'status' => $status,
+                'rejection_reason' => $status === 'rejected' ? $reason : null,
+            ]);
 
-        if ($status === 'rejected' && $cancelFutureBookings) {
-            $cancelReason = $reason ? "Sân đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân đã bị gỡ khỏi hệ thống.';
+            if ($status === 'rejected') {
+                // Sân đã bị gỡ: hàng đợi của sân này không còn ý nghĩa, đóng để khách không nhận lời mời giữ chỗ vô ích.
+                BookingWaitlist::where('sports_field_id', $field->id)
+                    ->whereIn('status', ['waiting', 'offered'])
+                    ->update(['status' => 'cancelled']);
 
-            $futureBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
-                ->where('sports_field_id', $field->id)
-                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-                ->where(fn ($q) => $q->where('booking_date', '>', today())
-                    ->orWhere(fn ($todayQ) => $todayQ->whereDate('booking_date', today())))
-                ->get();
+                // Sân đã bị gỡ: đóng các phòng tìm đối sắp tới gắn với sân này và gửi mail cho chủ phòng + người đã duyệt.
+                $affectedMatches = MatchRequest::with(['host', 'participants.user'])
+                    ->where('sports_field_id', $field->id)
+                    ->whereIn('status', ['open', 'full'])
+                    ->whereDate('play_date', '>=', today())
+                    ->get();
 
-            foreach ($futureBookings as $booking) {
-                if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
-                    continue;
-                }
+                foreach ($affectedMatches as $match) {
+                    if ($match->play_date->isToday() && Carbon::parse($match->end_time)->isPast()) {
+                        continue;
+                    }
 
-                $booking->update([
-                    'status' => BookingStatus::Cancelled->value,
-                    'cancelled_at' => now(),
-                    'cancel_reason' => $cancelReason,
-                ]);
+                    $match->update(['status' => 'cancelled']);
 
-                if ($booking->customer?->email) {
-                    SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+                    if ($match->host?->email) {
+                        SafeMail::queue($match->host->email, new MatchCancelled($match));
+                    }
+                    foreach ($match->participants->where('status', 'accepted') as $participant) {
+                        if ($participant->user?->email) {
+                            SafeMail::queue($participant->user->email, new MatchCancelled($match));
+                        }
+                    }
                 }
             }
-        }
+
+            if ($status === 'rejected' && $cancelFutureBookings) {
+                $cancelReason = $reason ? "Sân đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân đã bị gỡ khỏi hệ thống.';
+
+                $futureBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                    ->where('sports_field_id', $field->id)
+                    ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                    ->whereDate('booking_date', '>=', today())
+                    ->get();
+
+                foreach ($futureBookings as $booking) {
+                    if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
+                        continue;
+                    }
+
+                    $booking->update([
+                        'status' => BookingStatus::Cancelled->value,
+                        'cancelled_at' => now(),
+                        'cancel_reason' => $cancelReason,
+                    ]);
+
+                    if ($booking->customer?->email) {
+                        SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+                    }
+                }
+            }
+        });
 
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }

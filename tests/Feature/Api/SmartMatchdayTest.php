@@ -662,6 +662,18 @@ class SmartMatchdayTest extends TestCase
             'total_price' => 150000,
         ]);
 
+        $waiting = BookingWaitlist::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(2), 'status' => 'waiting', 'priority_score' => 100,
+        ]);
+
+        $match = MatchRequest::create([
+            'user_id' => $customer->id, 'sport_category_id' => $cat->id, 'sports_field_id' => $field->id,
+            'title' => 'Đá giao hữu sân bị gỡ', 'play_date' => today()->addDays(2),
+            'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any', 'players_needed' => 1,
+            'contact_phone' => '0912345678', 'status' => 'open',
+        ]);
+
         Sanctum::actingAs($admin);
 
         // Trường hợp 1: Gỡ sân nhưng không huỷ đơn tương lai
@@ -673,6 +685,8 @@ class SmartMatchdayTest extends TestCase
 
         $this->assertSame('rejected', $field->fresh()->status);
         $this->assertSame('confirmed', $futureBooking->fresh()->status->value);
+        $this->assertSame('cancelled', $waiting->fresh()->status); // hàng đợi của sân đã gỡ bị đóng
+        $this->assertSame('cancelled', $match->fresh()->status); // phòng tìm đối gắn với sân đã gỡ bị huỷ
 
         // Phục hồi lại approved để test trường hợp 2
         $field->update(['status' => 'approved']);

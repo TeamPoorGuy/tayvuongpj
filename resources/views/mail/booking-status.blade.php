@@ -6,6 +6,8 @@
 Đơn đặt sân **{{ $booking->sportsField->name }}** của bạn đã được chủ sân **xác nhận**.
 @elseif ($status === 'rejected')
 Rất tiếc, đơn đặt sân **{{ $booking->sportsField->name }}** của bạn **không được chấp nhận**.
+@elseif (str_contains((string) $booking->cancel_reason, 'Sân đã bị gỡ'))
+Rất tiếc, đơn đặt sân **{{ $booking->sportsField->name }}** của bạn đã bị **huỷ do sân thể thao bị gỡ khỏi hệ thống**.
 @else
 Đơn đặt sân **{{ $booking->sportsField->name }}** của bạn đã bị **huỷ**.
 @endif

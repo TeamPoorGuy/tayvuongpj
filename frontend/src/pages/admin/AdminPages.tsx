@@ -920,7 +920,7 @@ export function AdminFieldsPage() {
             <p className="form-help">
               Sân sẽ biến mất khỏi trang tìm sân và không nhận đặt mới.
             </p>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+            <label className="check-line" style={{ display: 'flex', alignItems: 'flex-start', marginTop: 12 }}>
               <input
                 type="checkbox"
                 checked={cancelFutureBookings}
@@ -929,7 +929,7 @@ export function AdminFieldsPage() {
               />
               <span style={{ fontSize: '0.875rem' }}>
                 <strong>Tự động huỷ các đơn đặt trong tương lai</strong> và gửi email thông báo cho khách hàng
-                <span style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: '0.8rem', marginTop: 2 }}>
+                <span style={{ display: 'block', color: 'var(--muted)', fontSize: '0.8rem', marginTop: 2 }}>
                   (Nếu không chọn, các đơn đã đặt vẫn giữ nguyên và chủ sân cần tự liên hệ xử lý với khách).
                 </span>
               </span>

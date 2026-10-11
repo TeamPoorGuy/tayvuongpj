@@ -3372,6 +3372,8 @@ a svg {
 .form-stack label input[type="radio"],
 .panel-form label input[type="checkbox"],
 .panel-form label input[type="radio"],
+.modal__card label input[type="checkbox"],
+.modal__card label input[type="radio"],
 label.check-line input[type="checkbox"] {
   flex: none;
   width: 18px;
