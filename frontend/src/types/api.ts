@@ -200,7 +200,7 @@ export interface MatchRequest {
   players_needed: number
   joined_count: number
   description?: string | null
-  contact_phone: string
+  contact_phone: string | null
   status: 'open' | 'full' | 'cancelled' | 'completed'
   host?: Pick<User, 'id' | 'name' | 'avatar' | 'trust_score'>
   sport_category?: Category

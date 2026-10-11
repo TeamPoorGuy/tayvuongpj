@@ -383,7 +383,7 @@ export function MatchesPage() {
                     </span>
                   </div>
                   <div className="host-contact">
-                    <Phone size={13} /> {match.contact_phone}
+                    <Phone size={13} /> {match.contact_phone ?? 'SĐT hiện sau khi chủ phòng chấp nhận'}
                   </div>
                 </div>
 
@@ -647,7 +647,7 @@ export function MatchesPage() {
                   <div className="participant-name">
                     <strong>{participant.user?.name ?? 'Thành viên'}</strong>
                     <span className="badge badge--soft">
-                      <ShieldCheck size={12} /> {participant.user?.phone ? `${participant.user.phone} · ` : ''}Điểm: 100
+                      <ShieldCheck size={12} /> {participant.user?.phone ? `${participant.user.phone} · ` : ''}Điểm: {participant.user?.trust_score ?? 100}
                     </span>
                   </div>
                   {participant.message && (

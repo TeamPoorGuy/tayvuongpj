@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\MatchParticipantResource;
+use App\Http\Resources\Api\MatchRequestResource;
 use App\Models\MatchRequest;
 use App\Services\MatchmakingService;
 use Illuminate\Http\JsonResponse;
@@ -16,14 +18,14 @@ class MatchmakingController extends Controller
     {
         $matches = $this->service->list($request->only(['category_id', 'skill_level', 'status', 'date']));
 
-        return response()->json($matches);
+        return MatchRequestResource::collection($matches)->response();
     }
 
     public function show(int $id): JsonResponse
     {
         $match = MatchRequest::with(['host', 'sportCategory', 'sportsField', 'participants.user'])->findOrFail($id);
 
-        return response()->json(['data' => $match]);
+        return response()->json(['data' => new MatchRequestResource($match)]);
     }
 
     public function store(Request $request): JsonResponse
@@ -45,7 +47,7 @@ class MatchmakingController extends Controller
 
         return response()->json([
             'message' => 'Tạo phòng tìm đối/người chơi thành công!',
-            'data' => $match,
+            'data' => new MatchRequestResource($match->load('participants.user')),
         ], 201);
     }
 
@@ -59,7 +61,7 @@ class MatchmakingController extends Controller
 
         return response()->json([
             'message' => 'Đã gửi lời mời tham gia trận đấu đến chủ phòng.',
-            'data' => $participant,
+            'data' => new MatchParticipantResource($participant),
         ], 201);
     }
 
@@ -75,7 +77,7 @@ class MatchmakingController extends Controller
 
         return response()->json([
             'message' => "Đã {$label} thành viên tham gia.",
-            'data' => $participant,
+            'data' => new MatchParticipantResource($participant->load('matchRequest')),
         ]);
     }
 
@@ -85,7 +87,7 @@ class MatchmakingController extends Controller
 
         return response()->json([
             'message' => 'Đã huỷ bài tìm đối.',
-            'data' => $match,
+            'data' => new MatchRequestResource($match->load(['host', 'sportCategory', 'sportsField', 'participants.user'])),
         ]);
     }
 }

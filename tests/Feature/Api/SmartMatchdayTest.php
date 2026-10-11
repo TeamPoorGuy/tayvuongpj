@@ -319,4 +319,37 @@ class SmartMatchdayTest extends TestCase
         $match = MatchRequest::find($matchId);
         $this->assertEquals(2, $match->joined_count);
     }
+    public function test_public_matches_endpoint_never_leaks_user_pii_or_contact_phone(): void
+    {
+        $host = User::factory()->create(['email' => 'host-secret@example.test', 'phone' => '0911111111', 'address' => 'Dia chi rieng', 'role' => 'customer', 'is_active' => true]);
+        $guest = User::factory()->create(['email' => 'guest-secret@example.test', 'phone' => '0922222222', 'role' => 'customer', 'is_active' => true]);
+        $category = \App\Models\SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bong-da-pii']);
+        $match = MatchRequest::create([
+            'user_id' => $host->id, 'sport_category_id' => $category->id, 'title' => 'Kèo test',
+            'play_date' => now()->addDay()->toDateString(), 'start_time' => '18:00', 'end_time' => '19:30',
+            'skill_level' => 'any', 'players_needed' => 3, 'joined_count' => 1,
+            'contact_phone' => '0933333333', 'status' => 'open',
+        ]);
+        $match->participants()->create(['user_id' => $guest->id, 'status' => 'pending', 'message' => 'cho em di']);
+
+        $body = $this->getJson('/api/v1/matches')->assertOk()->getContent();
+
+        foreach (['host-secret@example.test', 'guest-secret@example.test', '0911111111', '0922222222', '0933333333', 'Dia chi rieng', 'google_id', 'cho em di'] as $secret) {
+            $this->assertStringNotContainsString($secret, $body);
+        }
+        $this->assertNotNull($this->getJson('/api/v1/matches')->json('meta.last_page'));
+
+        // Chủ phòng thấy SĐT phòng và SĐT người xin tham gia.
+        Sanctum::actingAs($host);
+        $hostView = $this->getJson("/api/v1/matches/{$match->id}")->assertOk();
+        $hostView->assertJsonPath('data.contact_phone', '0933333333');
+        $hostView->assertJsonPath('data.participants.0.user.phone', '0922222222');
+        $this->assertStringNotContainsString('host-secret@example.test', $hostView->getContent());
+
+        // Người xin tham gia chưa được chấp nhận vẫn chưa thấy SĐT phòng; được chấp nhận thì thấy.
+        Sanctum::actingAs($guest);
+        $this->getJson("/api/v1/matches/{$match->id}")->assertJsonPath('data.contact_phone', null);
+        $match->participants()->update(['status' => 'accepted']);
+        $this->getJson("/api/v1/matches/{$match->id}")->assertJsonPath('data.contact_phone', '0933333333');
+    }
 }

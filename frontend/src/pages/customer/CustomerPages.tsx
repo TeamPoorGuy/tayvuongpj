@@ -328,7 +328,7 @@ export function CustomerBookingsPage() {
                   </span>
                   <span>
                     <ShieldCheck />
-                    Điểm uy tín khi xếp hàng: {item.priority_score}đ
+                    Điểm ưu tiên xếp hàng: {item.priority_score} điểm
                   </span>
                 </div>
 

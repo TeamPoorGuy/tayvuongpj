@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Customer;
 
+use App\Http\Resources\Api\BookingWaitlistResource;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\BookingResource;
 use App\Services\WaitlistService;
@@ -19,7 +20,7 @@ class WaitlistController extends Controller
             ->latest()
             ->get();
 
-        return response()->json(['data' => $waitlists]);
+        return response()->json(['data' => BookingWaitlistResource::collection($waitlists)]);
     }
 
     public function store(Request $request): JsonResponse
@@ -39,7 +40,7 @@ class WaitlistController extends Controller
 
         return response()->json([
             'message' => 'Đã tham gia hàng đợi thông minh thành công. Chúng tôi sẽ thông báo ngay khi có chỗ!',
-            'data' => $waitlist,
+            'data' => new BookingWaitlistResource($waitlist),
         ], 201);
     }
 
@@ -59,7 +60,7 @@ class WaitlistController extends Controller
 
         return response()->json([
             'message' => 'Đã huỷ hàng đợi.',
-            'data' => $waitlist,
+            'data' => new BookingWaitlistResource($waitlist),
         ]);
     }
 }
