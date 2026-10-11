@@ -20,7 +20,7 @@ class FieldIndexRequest extends FormRequest
             'min_price' => ['nullable', 'numeric', 'min:0'],
             'max_price' => ['nullable', 'numeric', 'gte:min_price'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'per_page' => ['nullable', 'integer', 'between:1,30'],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
         ];
     }
 }

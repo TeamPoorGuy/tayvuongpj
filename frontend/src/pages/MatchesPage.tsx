@@ -467,7 +467,13 @@ export function MatchesPage() {
           })}
         </div>
 
-        {!matchesQuery.isPending && matches.length === 0 && (
+        {matchesQuery.isError && (
+          <div className="notice notice--error" role="alert">
+            Không thể tải danh sách trận đấu. Vui lòng thử lại sau.
+          </div>
+        )}
+
+        {!matchesQuery.isPending && !matchesQuery.isError && matches.length === 0 && (
           <div className="empty-panel">
             <Trophy size={48} />
             <h2>Chưa có bài tìm đối nào phù hợp</h2>

@@ -78,6 +78,9 @@ export function CustomerBookingsPage() {
   const waitlists = useQuery({
     queryKey: ['customer', 'waitlist'],
     queryFn: async () => (await api.get<Paginated<BookingWaitlist>>('/customer/waitlist')).data,
+    // Có lời mời/đang chờ thì kiểm tra lại mỗi 30 giây để không lỡ suất 15 phút.
+    refetchInterval: (query) =>
+      query.state.data?.data?.some((w) => w.status === 'offered' || w.status === 'waiting') ? 30_000 : false,
   })
 
   const cancel = useMutation({
@@ -306,7 +309,7 @@ export function CustomerBookingsPage() {
                     {item.status === 'offered' ? (
                       <span className="badge badge--success">🎉 Đã có suất trống!</span>
                     ) : item.status === 'waiting' ? (
-                      <span className="badge badge--soft">Đang chờ lượt (Ưu tiên: {item.priority_score}đ)</span>
+                      <span className="badge badge--soft">Đang chờ lượt</span>
                     ) : item.status === 'accepted' ? (
                       <span className="badge badge--success">Đã nhận sân</span>
                     ) : item.status === 'expired' ? (
