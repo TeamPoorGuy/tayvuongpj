@@ -15,7 +15,8 @@ class UpdatePasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'current_password' => ['required', 'current_password'],
+            // Tài khoản đăng ký bằng Google chưa có mật khẩu nên được tạo mà không cần mật khẩu cũ.
+            'current_password' => $this->user()->password === null ? ['nullable'] : ['required', 'current_password'],
             'password' => ['required', 'confirmed', Password::defaults()],
         ];
     }

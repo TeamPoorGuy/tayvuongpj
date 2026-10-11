@@ -19,6 +19,8 @@ class UpsertFieldRequest extends FormRequest
             'address' => ['required', 'string', 'max:255'],
             'price_per_hour' => ['required', 'numeric', 'gt:0'],
             'description' => ['nullable', 'string'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
             'images' => ['sometimes', 'array', 'max:8'],
             'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:4096'],
         ];

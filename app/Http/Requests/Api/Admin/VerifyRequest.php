@@ -14,6 +14,10 @@ class VerifyRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['status' => ['required', Rule::in(['approved', 'rejected'])]];
+        return [
+            'status' => ['required', Rule::in(['approved', 'rejected'])],
+            'rejection_reason' => ['required_if:status,rejected', 'nullable', 'string', 'max:500'],
+            'cancel_future_bookings' => ['nullable', 'boolean'],
+        ];
     }
 }

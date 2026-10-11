@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\DTOs\Auth\RegisterUserData;
-use App\Enums\UserRole;
 use App\Exceptions\ForbiddenException;
 use App\Models\User;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -36,11 +36,11 @@ class AuthService
             'name' => $data->name,
             'email' => $data->email,
             'password' => Hash::make($data->password),
-            'role' => UserRole::Customer->value,
             'phone' => $data->phone,
             'address' => $data->address,
-            'is_active' => true,
-        ]);
+        ])->refresh(); // load DB defaults: role=customer, is_active=true
+
+        event(new Registered($user)); // gửi email xác thực
 
         Auth::login($user);
         $request->session()->regenerate();

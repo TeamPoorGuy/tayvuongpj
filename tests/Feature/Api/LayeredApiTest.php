@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Api;
 
+use App\Mail\BookingStatusChanged;
+use App\Mail\NewBookingRequest;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\Booking;
 use App\Models\FieldOwnerProfile;
@@ -236,7 +238,7 @@ class LayeredApiTest extends TestCase
         $this->assertSame('completed', $booking->fresh()->status->value);
     }
 
-    public function test_a_past_dated_booking_cannot_be_cancelled(): void
+    public function test_an_overdue_pending_request_can_still_be_cancelled_without_penalty(): void
     {
         [$field, $slot] = $this->createApprovedFieldWithSlot('san-past');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
@@ -252,10 +254,10 @@ class LayeredApiTest extends TestCase
 
         Sanctum::actingAs($customer);
 
-        $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel", [])
-            ->assertStatus(409);
+        $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel", [])->assertOk();
 
-        $this->assertSame('pending', $booking->fresh()->status->value);
+        $this->assertSame('cancelled', $booking->fresh()->status->value);
+        $this->assertSame(100, $customer->fresh()->trust_score);
     }
 
     public function test_register_always_creates_a_customer_without_an_owner_profile(): void
@@ -277,27 +279,41 @@ class LayeredApiTest extends TestCase
         $this->assertDatabaseCount('field_owner_profiles', 0);
     }
 
-    public function test_customer_can_submit_an_owner_application_with_a_license_file(): void
+    public function test_customer_can_submit_an_owner_application_with_documents_and_terms(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
         Sanctum::actingAs($customer);
 
-        $this->postJson('/api/v1/customer/owner-application', [
-            'owner_name' => 'Nguyễn Văn A',
-            'owner_id_number' => '001099001234',
-            'business_name' => 'Sân Thể Thao ABC',
-            'business_address' => 'Hà Nội',
-            'business_phone' => '0900000002',
-            'business_license' => 'GPKD-001',
-            'license_file' => UploadedFile::fake()->create('giay-phep.pdf', 100),
-        ])->assertCreated()
-            ->assertJsonPath('data.verification_status', 'pending');
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload())
+            ->assertCreated()
+            ->assertJsonPath('data.verification_status', 'pending')
+            ->assertJsonCount(3, 'data.documents');
 
-        $this->assertDatabaseHas('field_owner_profiles', [
-            'user_id' => $customer->id,
-            'verification_status' => 'pending',
-        ]);
+        $profile = FieldOwnerProfile::where('user_id', $customer->id)->first();
+        $this->assertSame(config('booking.owner_terms_version'), $profile->terms_version);
+        $this->assertNotNull($profile->terms_accepted_at);
+        $this->assertNotSame('001099001234', $profile->getRawOriginal('owner_id_number')); // mã hoá trong DB
+        $this->assertSame('001099001234', $profile->owner_id_number);
+    }
+
+    public function test_owner_application_requires_terms_and_mandatory_documents(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload(['accept_terms' => false, 'documents' => []]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['accept_terms', 'documents.id_front', 'documents.id_back', 'documents.business_license']);
+    }
+
+    public function test_same_id_number_cannot_be_used_by_two_accounts(): void
+    {
+        Storage::fake('local');
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload())->assertCreated();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload())->assertStatus(409);
     }
 
     public function test_customer_cannot_resubmit_a_pending_owner_application(): void
@@ -312,14 +328,7 @@ class LayeredApiTest extends TestCase
         ]);
         Sanctum::actingAs($customer);
 
-        $this->postJson('/api/v1/customer/owner-application', [
-            'owner_name' => 'Nguyễn Văn A',
-            'owner_id_number' => '001099001234',
-            'business_name' => 'Sân X',
-            'business_address' => 'Hà Nội',
-            'business_phone' => '0900000003',
-            'business_license' => 'GPKD-001',
-        ])->assertStatus(409);
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload())->assertStatus(409);
     }
 
     public function test_unapproved_customer_is_rejected_from_owner_api(): void
@@ -334,6 +343,7 @@ class LayeredApiTest extends TestCase
     public function test_admin_reject_requires_a_reason_sends_email_and_allows_resubmission(): void
     {
         Mail::fake();
+        Storage::fake('local');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
         $profile = FieldOwnerProfile::create([
             'user_id' => $customer->id,
@@ -353,18 +363,12 @@ class LayeredApiTest extends TestCase
             'rejection_reason' => 'Thiếu giấy phép kinh doanh.',
         ])->assertOk()->assertJsonPath('data.verification_status', 'rejected');
 
-        Mail::assertSent(OwnerApplicationVerified::class, fn ($mail) => $mail->hasTo($customer->email)
+        Mail::assertQueued(OwnerApplicationVerified::class, fn ($mail) => $mail->hasTo($customer->email)
             && $mail->profile->verification_status->value === 'rejected');
 
         Sanctum::actingAs($customer);
-        $this->postJson('/api/v1/customer/owner-application', [
-            'owner_name' => 'Nguyễn Văn B',
-            'owner_id_number' => '001099005678',
-            'business_name' => 'Sân Y',
-            'business_address' => 'Hà Nội',
-            'business_phone' => '0900000004',
-            'business_license' => 'GPKD-002',
-        ])->assertCreated()->assertJsonPath('data.verification_status', 'pending');
+        $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload(['owner_id_number' => '001099005678']))
+            ->assertCreated()->assertJsonPath('data.verification_status', 'pending');
     }
 
     public function test_admin_approve_sends_confirmation_email(): void
@@ -383,7 +387,7 @@ class LayeredApiTest extends TestCase
         $this->patchJson("/api/v1/admin/field-owners/{$profile->id}/verify", ['status' => 'approved'])
             ->assertOk()->assertJsonPath('data.verification_status', 'approved');
 
-        Mail::assertSent(OwnerApplicationVerified::class, fn ($mail) => $mail->hasTo($customer->email)
+        Mail::assertQueued(OwnerApplicationVerified::class, fn ($mail) => $mail->hasTo($customer->email)
             && $mail->profile->verification_status->value === 'approved');
     }
 
@@ -417,6 +421,28 @@ class LayeredApiTest extends TestCase
 
         $this->getJson('/api/v1/customer/bookings')->assertOk();
         $this->getJson('/api/v1/field-owner/dashboard')->assertOk();
+    }
+
+
+    private function applicationPayload(array $override = []): array
+    {
+        return array_merge([
+            'owner_name' => 'Nguyễn Văn A',
+            'owner_id_number' => '001099001234',
+            'business_name' => 'Sân Thể Thao ABC',
+            'business_address' => 'Hà Nội',
+            'business_phone' => '0900000002',
+            'business_license' => 'GPKD-001',
+            'bank_name' => 'Vietcombank',
+            'bank_account_number' => '0123456789',
+            'bank_account_holder' => 'NGUYEN VAN A',
+            'accept_terms' => true,
+            'documents' => [
+                'id_front' => UploadedFile::fake()->image('front.jpg'),
+                'id_back' => UploadedFile::fake()->image('back.jpg'),
+                'business_license' => UploadedFile::fake()->create('gp.pdf', 100),
+            ],
+        ], $override);
     }
 
     /** @return array{SportsField, TimeSlot} */
@@ -459,5 +485,289 @@ class LayeredApiTest extends TestCase
         ]);
 
         return [$field, $slot];
+    }
+    public function test_public_field_detail_never_leaks_owner_private_data_or_hidden_reviews(): void
+    {
+        $owner = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        FieldOwnerProfile::create([
+            'user_id' => $owner->id, 'owner_name' => 'A', 'owner_id_number' => '001099001234',
+            'business_name' => 'Sân Y', 'business_address' => 'HN', 'business_phone' => '0900000009',
+            'verification_status' => 'approved',
+        ]);
+        $cat = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bong-da']);
+        $type = FieldType::create(['sport_category_id' => $cat->id, 'name' => 'Sân 5', 'slug' => 'san-5']);
+        $field = SportsField::create([
+            'field_owner_id' => $owner->id, 'field_type_id' => $type->id, 'name' => 'Sân Y', 'slug' => 'san-y',
+            'address' => 'HN', 'price_per_hour' => 100000, 'status' => 'approved', 'is_active' => true,
+        ]);
+        $viewer = User::factory()->create();
+        $field->reviews()->create(['user_id' => $viewer->id, 'rating' => 1, 'comment' => 'HIDDEN-TEXT', 'is_visible' => false]);
+
+        $body = $this->getJson('/api/v1/fields/san-y')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('001099001234', $body);
+        $this->assertStringNotContainsString('HIDDEN-TEXT', $body);
+    }
+
+    public function test_owner_documents_are_private_to_admin_and_the_applicant(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('licenses/x.pdf', 'pdf');
+        $applicant = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $profile = FieldOwnerProfile::create([
+            'user_id' => $applicant->id, 'owner_name' => 'A', 'owner_id_number' => '001099001234',
+            'business_name' => 'S', 'business_address' => 'HN', 'business_phone' => '0900000009',
+            'verification_status' => 'pending',
+        ]);
+        $doc = $profile->documents()->create(['type' => 'business_license', 'path' => 'licenses/x.pdf', 'original_name' => 'x.pdf']);
+        $adminUrl = "/api/v1/admin/field-owners/{$profile->id}/documents/{$doc->id}";
+
+        $this->getJson($adminUrl)->assertUnauthorized();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+        $this->getJson($adminUrl)->assertForbidden();
+        $this->getJson("/api/v1/customer/owner-application/documents/{$doc->id}")->assertNotFound(); // không phải của họ
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        $this->get($adminUrl)->assertOk();
+
+        Sanctum::actingAs($applicant);
+        $this->get("/api/v1/customer/owner-application/documents/{$doc->id}")->assertOk();
+    }
+
+    public function test_login_is_rate_limited_after_five_attempts(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/login', ['email' => 'x@example.test', 'password' => 'bad'])->assertStatus(401);
+        }
+
+        $this->postJson('/api/v1/auth/login', ['email' => 'x@example.test', 'password' => 'bad'])->assertStatus(429);
+    }
+
+    public function test_responses_carry_security_headers(): void
+    {
+        $this->getJson('/api/v1/home')
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+    }
+    private function bookingPayload(SportsField $field, TimeSlot $slot, string $date): array
+    {
+        return ['sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date];
+    }
+
+    public function test_booking_a_slot_that_already_started_today_is_rejected(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-qua-gio', '08:00:00', '09:30:00');
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+
+        $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, today()->toDateString()))->assertStatus(409);
+
+        $slots = $this->getJson("/api/v1/fields/{$field->id}/available-slots?date=".today()->toDateString())->json('data.slots');
+        $this->assertTrue($slots[0]['is_past']);
+    }
+
+    public function test_owner_cannot_book_their_own_field(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot();
+        Sanctum::actingAs($field->owner);
+
+        $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))->assertForbidden();
+    }
+
+    public function test_confirmed_booking_can_only_be_cancelled_within_two_hours_of_confirmation(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-huy', '18:00:00', '19:30:00');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $make = fn () => Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(), 'status' => 'confirmed', 'confirmed_at' => now(), 'total_price' => 1,
+        ]);
+        Sanctum::actingAs($customer);
+
+        $within = $make(); // vừa duyệt, còn 6 giờ tới giờ chơi → huỷ được, không bị trừ điểm
+        $this->patchJson("/api/v1/customer/bookings/{$within->id}/cancel")->assertOk();
+        $this->assertSame(100, $customer->fresh()->trust_score);
+
+        $expired = $make();
+        $this->travelTo(now()->addHours(2)->addMinute()); // quá 2 giờ kể từ lúc duyệt
+        $this->patchJson("/api/v1/customer/bookings/{$expired->id}/cancel")->assertStatus(409);
+        $this->assertSame('confirmed', $expired->fresh()->status->value);
+    }
+
+    public function test_pending_requests_are_auto_cancelled_when_owner_does_not_respond(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-treo', '18:00:00', '19:30:00');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $old = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(5)->toDateString(), 'status' => 'pending', 'total_price' => 1,
+        ]);
+        $old->forceFill(['created_at' => now()->subHours(25)])->save();
+        $fresh = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(6)->toDateString(), 'status' => 'pending', 'total_price' => 1,
+        ]);
+
+        app(\App\Services\BookingService::class)->syncStatuses();
+
+        $this->assertSame('rejected', $old->fresh()->status->value);
+        $this->assertStringContainsString('không phản hồi', $old->fresh()->cancel_reason);
+        $this->assertSame('pending', $fresh->fresh()->status->value);
+    }
+
+    public function test_owner_completes_only_after_slot_ends_and_cancel_needs_reason(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        Mail::fake();
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-hoan-thanh', '18:00:00', '19:30:00');
+        $booking = Booking::create([
+            'user_id' => User::factory()->create(['role' => 'customer', 'is_active' => true])->id,
+            'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(), 'status' => 'confirmed', 'total_price' => 1,
+        ]);
+        Sanctum::actingAs($field->owner);
+
+        $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", ['status' => 'completed'])->assertStatus(409);
+        $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", ['status' => 'cancelled'])->assertStatus(422);
+
+        $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", ['status' => 'cancelled', 'reason' => 'Sân bảo trì'])
+            ->assertOk()->assertJsonPath('data.cancel_reason', 'Sân bảo trì');
+        Mail::assertQueued(BookingStatusChanged::class, fn ($m) => $m->hasTo($booking->customer->email));
+    }
+
+    public function test_new_booking_notifies_the_owner_by_queued_mail(): void
+    {
+        Mail::fake();
+        [$field, $slot] = $this->createApprovedFieldWithSlot();
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+
+        $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))->assertCreated();
+
+        Mail::assertQueued(NewBookingRequest::class, fn ($m) => $m->hasTo($field->owner->email));
+    }
+
+    public function test_sync_command_expires_pending_and_completes_confirmed_bookings(): void
+    {
+        Mail::fake();
+        $this->travelTo(now()->setTime(22, 0));
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-sync', '18:00:00', '19:30:00');
+        $user = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $mk = fn (string $status) => Booking::create([
+            'user_id' => $user->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->toDateString(), 'status' => $status, 'total_price' => 1,
+        ]);
+        $pending = $mk('pending');
+        $confirmed = $mk('confirmed');
+
+        $this->artisan('bookings:sync')->assertSuccessful();
+
+        $this->assertSame('rejected', $pending->fresh()->status->value);
+        $this->assertSame('completed', $confirmed->fresh()->status->value);
+    }
+
+    public function test_owner_manages_time_slots_without_overlap_and_keeps_booking_history(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-slot', '18:00:00', '19:30:00');
+        Sanctum::actingAs($field->owner);
+
+        $this->postJson("/api/v1/field-owner/fields/{$field->id}/slots", ['start_time' => '19:00', 'end_time' => '20:00'])->assertStatus(409);
+        $created = $this->postJson("/api/v1/field-owner/fields/{$field->id}/slots", ['start_time' => '19:30', 'end_time' => '21:00', 'price_per_hour' => 300000])
+            ->assertCreated()->json('data');
+        $this->postJson("/api/v1/field-owner/fields/{$field->id}/slots", ['start_time' => '21:00', 'end_time' => '20:00'])->assertStatus(422);
+
+        // Slot có đơn trong quá khứ: xoá → chỉ ngưng hoạt động, không mất lịch sử.
+        Booking::create([
+            'user_id' => User::factory()->create()->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => now()->subDays(3)->toDateString(), 'status' => 'completed', 'total_price' => 1,
+        ]);
+        $this->deleteJson("/api/v1/field-owner/fields/{$field->id}/slots/{$slot->id}")->assertOk();
+        $this->assertFalse($slot->fresh()->is_active);
+        $this->deleteJson("/api/v1/field-owner/fields/{$field->id}/slots/{$created['id']}")->assertOk();
+        $this->assertDatabaseMissing('time_slots', ['id' => $created['id']]);
+    }
+
+    public function test_slot_price_override_is_used_for_booking_total(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-peak', '18:00:00', '19:00:00');
+        $slot->update(['price_per_hour' => 500000]);
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+
+        $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))
+            ->assertCreated()->assertJsonPath('data.total_price', 500000);
+    }
+
+    public function test_field_delete_is_soft_and_blocked_by_upcoming_bookings(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-xoa');
+        $booking = Booking::create([
+            'user_id' => User::factory()->create()->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => now()->addDay()->toDateString(), 'status' => 'confirmed', 'total_price' => 1,
+        ]);
+        Sanctum::actingAs($field->owner);
+
+        $this->deleteJson("/api/v1/field-owner/fields/{$field->id}")->assertStatus(409);
+
+        $booking->update(['status' => 'cancelled']);
+        $this->deleteJson("/api/v1/field-owner/fields/{$field->id}")->assertOk();
+        $this->assertSoftDeleted('sports_fields', ['id' => $field->id]);
+        $this->assertDatabaseHas('bookings', ['id' => $booking->id]); // lịch sử còn nguyên
+    }
+
+    public function test_editing_an_approved_field_name_requires_reapproval_but_price_does_not(): void
+    {
+        [$field] = $this->createApprovedFieldWithSlot('san-sua');
+        Sanctum::actingAs($field->owner);
+        $payload = ['name' => $field->name, 'field_type_id' => $field->field_type_id, 'address' => $field->address, 'price_per_hour' => 250000];
+
+        $this->putJson("/api/v1/field-owner/fields/{$field->id}", $payload)->assertOk();
+        $this->assertSame('approved', $field->fresh()->status);
+
+        $this->putJson("/api/v1/field-owner/fields/{$field->id}", ['name' => 'Tên mới'] + $payload)->assertOk();
+        $this->assertSame('pending', $field->fresh()->status);
+    }
+
+    public function test_admin_can_suspend_owner_which_hides_fields_and_blocks_owner_area(): void
+    {
+        Mail::fake();
+        [$field] = $this->createApprovedFieldWithSlot('san-suspend');
+        $profile = $field->owner->fieldOwnerProfile;
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        $url = "/api/v1/admin/field-owners/{$profile->id}/verify";
+
+        $this->patchJson($url, ['status' => 'suspended'])->assertStatus(422); // cần lý do
+        $this->patchJson($url, ['status' => 'suspended', 'rejection_reason' => 'Vi phạm điều khoản'])->assertOk();
+
+        $this->getJson("/api/v1/fields/{$field->slug}")->assertNotFound();
+        Sanctum::actingAs($field->owner->fresh());
+        $this->getJson('/api/v1/field-owner/dashboard')->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        $this->patchJson($url, ['status' => 'approved'])->assertOk(); // khôi phục
+        $this->getJson("/api/v1/fields/{$field->slug}")->assertOk();
+    }
+
+    public function test_admin_rejecting_a_field_requires_a_reason_and_owner_can_see_it(): void
+    {
+        [$field] = $this->createApprovedFieldWithSlot('san-tu-choi');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+
+        $this->patchJson("/api/v1/admin/fields/{$field->id}/verify", ['status' => 'rejected'])->assertStatus(422);
+        $this->patchJson("/api/v1/admin/fields/{$field->id}/verify", ['status' => 'rejected', 'rejection_reason' => 'Ảnh không rõ'])
+            ->assertOk()->assertJsonPath('data.rejection_reason', 'Ảnh không rõ');
+    }
+
+    public function test_admin_can_update_category_and_reject_duplicate_field_type_names(): void
+    {
+        [$field] = $this->createApprovedFieldWithSlot('san-dm');
+        $type = $field->fieldType;
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+
+        $this->putJson("/api/v1/admin/categories/{$type->sport_category_id}", ['name' => 'Bóng đá mini', 'is_active' => false])
+            ->assertOk()->assertJsonPath('data.is_active', false);
+        $this->putJson("/api/v1/admin/field-types/{$type->id}", ['is_active' => false])->assertOk();
+        $this->postJson('/api/v1/admin/field-types', ['sport_category_id' => $type->sport_category_id, 'name' => $type->name])
+            ->assertStatus(422);
     }
 }

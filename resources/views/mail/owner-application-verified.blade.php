@@ -9,6 +9,12 @@ Bạn có thể đăng nhập và bắt đầu quản lý sân ngay bây giờ.
 @component('mail::button', ['url' => config('frontend.url').'/owner'])
 Vào trang quản lý chủ sân
 @endcomponent
+@elseif ($profile->verification_status->value === 'suspended')
+Quyền chủ sân của cơ sở **{{ $profile->business_name }}** đã bị **tạm khoá**.
+
+**Lý do:** {{ $profile->rejection_reason }}
+
+Các sân của bạn tạm thời không hiển thị công khai. Vui lòng liên hệ quản trị viên để được hỗ trợ.
 @else
 Rất tiếc, hồ sơ đăng ký làm chủ sân của bạn cho cơ sở **{{ $profile->business_name }}** đã bị từ chối.
 

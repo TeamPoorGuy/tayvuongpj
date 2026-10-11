@@ -23,7 +23,19 @@ class ProfileService
             $attributes['avatar'] = '/storage/'.$data->avatar->store('avatars', 'public');
         }
 
-        $user->update($attributes);
+        $user->fill($attributes);
+
+        // Đổi email phải xác thực lại địa chỉ mới.
+        $emailChanged = $user->isDirty('email');
+        if ($emailChanged) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
+
+        if ($emailChanged) {
+            $user->sendEmailVerificationNotification();
+        }
 
         return $user->refresh()->load('fieldOwnerProfile');
     }

@@ -22,8 +22,9 @@ class FieldResource extends JsonResource
             'price_per_hour' => (float) $this->price_per_hour,
             'status' => $this->status,
             'is_active' => (bool) $this->is_active,
-            'average_rating' => round((float) $reviews->where('is_visible', true)->avg('rating'), 1),
-            'reviews_count' => $reviews->where('is_visible', true)->count(),
+            'average_rating' => round((float) ($this->visible_reviews_avg_rating ?? $reviews->where('is_visible', true)->avg('rating')), 1),
+            'reviews_count' => (int) ($this->visible_reviews_count ?? $reviews->where('is_visible', true)->count()),
+            'rejection_reason' => $this->rejection_reason,
             'bookings_count' => $this->whenCounted('bookings'),
             'primary_image' => $this->primaryImage?->image_path,
             'images' => $this->whenLoaded('images', fn () => $this->images->map(fn ($image) => [
@@ -36,13 +37,18 @@ class FieldResource extends JsonResource
                 'id' => $this->owner->id,
                 'name' => $this->owner->name,
                 'phone' => $this->owner->phone,
-                'business' => $this->owner->fieldOwnerProfile ? new OwnerProfileResource($this->owner->fieldOwnerProfile) : null,
+                // Public endpoint: never expose CCCD, documents or review status here.
+                'business' => $this->owner->fieldOwnerProfile ? [
+                    'business_name' => $this->owner->fieldOwnerProfile->business_name,
+                    'business_phone' => $this->owner->fieldOwnerProfile->business_phone,
+                ] : null,
             ]),
             'time_slots' => $this->whenLoaded('timeSlots', fn () => $this->timeSlots->map(fn ($slot) => [
                 'id' => $slot->id,
                 'start_time' => substr($slot->start_time, 0, 5),
                 'end_time' => substr($slot->end_time, 0, 5),
                 'is_active' => (bool) $slot->is_active,
+                'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
             ])),
             'reviews' => ReviewResource::collection($this->whenLoaded('reviews')),
             'created_at' => $this->created_at?->toISOString(),

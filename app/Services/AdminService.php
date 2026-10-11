@@ -2,21 +2,28 @@
 
 namespace App\Services;
 
+use App\Enums\BookingStatus;
 use App\Enums\UserRole;
 use App\Enums\VerificationStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
+use App\Mail\BookingStatusChanged;
+use App\Mail\MatchCancelled;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\Booking;
+use App\Models\BookingWaitlist;
 use App\Models\FieldOwnerProfile;
 use App\Models\FieldType;
+use App\Models\MatchRequest;
 use App\Models\Review;
 use App\Models\SportCategory;
 use App\Models\SportsField;
 use App\Models\User;
+use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class AdminService
@@ -31,18 +38,24 @@ class AdminService
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'total_bookings' => Booking::count(),
             'total_revenue' => (float) Booking::whereIn('status', ['confirmed', 'completed'])->sum('total_price'),
-            'most_booked_fields' => SportsField::with(['primaryImage', 'fieldType.sportCategory', 'reviews'])->withCount('bookings')->orderByDesc('bookings_count')->take(5)->get(),
+            'most_booked_fields' => SportsField::with(['primaryImage', 'fieldType.sportCategory'])->withRating()->withCount('bookings')->orderByDesc('bookings_count')->take(5)->get(),
         ];
     }
 
     public function users(array $filters): LengthAwarePaginator
     {
+        // Chủ sân có role=customer; vai trò hiển thị/lọc suy ra từ hồ sơ đã duyệt.
+        $approvedOwner = fn ($query) => $query->where('verification_status', VerificationStatus::Approved);
+
         return User::where('role', '!=', UserRole::Admin->value)
-            ->when($filters['role'] ?? null, fn ($query, $role) => $query->where('role', $role))
+            ->withExists(['fieldOwnerProfile as is_field_owner' => $approvedOwner])
+            ->when($filters['role'] ?? null, fn ($query, $role) => $role === 'field_owner'
+                ? $query->whereHas('fieldOwnerProfile', $approvedOwner)
+                : $query->whereDoesntHave('fieldOwnerProfile', $approvedOwner))
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where(fn ($inner) => $inner
-                ->where('name', 'like', "%{$keyword}%")
-                ->orWhere('email', 'like', "%{$keyword}%")
-                ->orWhere('phone', 'like', "%{$keyword}%")))
+                ->where('name', 'like', "%".addcslashes($keyword, '%_\\')."%")
+                ->orWhere('email', 'like', "%".addcslashes($keyword, '%_\\')."%")
+                ->orWhere('phone', 'like', "%".addcslashes($keyword, '%_\\')."%")))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -54,14 +67,14 @@ class AdminService
             throw new ForbiddenException('Không thể khóa tài khoản quản trị viên.');
         }
 
-        $user->update(['is_active' => ! $user->is_active]);
+        $user->forceFill(['is_active' => ! $user->is_active])->save();
 
         return $user->refresh();
     }
 
     public function ownerProfiles(?string $status = null): LengthAwarePaginator
     {
-        return FieldOwnerProfile::with('user')
+        return FieldOwnerProfile::with(['user', 'documents'])
             ->when($status, fn ($query) => $query->where('verification_status', $status))
             ->latest()
             ->paginate(10)
@@ -70,49 +83,138 @@ class AdminService
 
     public function verifyOwner(FieldOwnerProfile $profile, string $status, ?string $reason, User $admin): FieldOwnerProfile
     {
-        if ($profile->verification_status !== VerificationStatus::Pending) {
-            throw new ConflictException('Hồ sơ này đã được xử lý.');
+        $next = VerificationStatus::from($status);
+        if (! $profile->verification_status->canTransitionTo($next)) {
+            throw new ConflictException('Hồ sơ này đã được xử lý hoặc không thể chuyển sang trạng thái này.');
         }
 
         $profile->update([
-            'verification_status' => $status,
-            'rejection_reason' => $status === VerificationStatus::Rejected->value ? $reason : null,
+            'verification_status' => $next,
+            'rejection_reason' => $next === VerificationStatus::Approved ? null : $reason,
             'verified_at' => now(),
             'verified_by' => $admin->id,
         ]);
 
-        $profile->refresh()->load('user');
+        $profile->refresh()->load(['user', 'documents']);
 
-        try {
-            Mail::to($profile->user->email)->send(new OwnerApplicationVerified($profile));
-        } catch (\Throwable $e) {
-            // Gửi mail thất bại không được chặn việc duyệt hồ sơ; chỉ ghi log để kiểm tra sau.
-            report($e);
-        }
+        // Gửi mail qua queue; lỗi mail không được chặn việc duyệt hồ sơ.
+        SafeMail::queue($profile->user->email, new OwnerApplicationVerified($profile));
 
         return $profile;
     }
 
-    public function fields(?string $status): LengthAwarePaginator
+    private function like(string $keyword): string
     {
-        return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews'])
+        return '%'.addcslashes($keyword, '%_\\').'%';
+    }
+
+    public function fields(?string $status, ?string $keyword = null): LengthAwarePaginator
+    {
+        return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage'])
+            ->withRating()
             ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('name', 'like', $this->like($keyword))
+                ->orWhere('address', 'like', $this->like($keyword))
+                ->orWhereHas('owner', fn ($owner) => $owner->where('name', 'like', $this->like($keyword)))))
             ->latest()
             ->paginate(15)
             ->withQueryString();
     }
 
-    public function verifyField(SportsField $field, string $status): SportsField
+    public function verifyField(SportsField $field, string $status, ?string $reason = null, bool $cancelFutureBookings = false): SportsField
     {
-        $field->update(['status' => $status]);
+        DB::transaction(function () use ($field, $status, $reason, $cancelFutureBookings) {
+            $field->update([
+                'status' => $status,
+                'rejection_reason' => $status === 'rejected' ? $reason : null,
+            ]);
+
+            if ($status === 'rejected') {
+                // Sân đã bị gỡ: hàng đợi của sân này không còn ý nghĩa, đóng để khách không nhận lời mời giữ chỗ vô ích.
+                BookingWaitlist::where('sports_field_id', $field->id)
+                    ->whereIn('status', ['waiting', 'offered'])
+                    ->update(['status' => 'cancelled']);
+
+                // Sân đã bị gỡ: đóng các phòng tìm đối sắp tới gắn với sân này và gửi mail cho chủ phòng + người đã duyệt.
+                $affectedMatches = MatchRequest::with(['host', 'participants.user'])
+                    ->where('sports_field_id', $field->id)
+                    ->whereIn('status', ['open', 'full'])
+                    ->whereDate('play_date', '>=', today())
+                    ->get();
+
+                foreach ($affectedMatches as $match) {
+                    if ($match->play_date->isToday() && Carbon::parse($match->end_time)->isPast()) {
+                        continue;
+                    }
+
+                    $match->update(['status' => 'cancelled']);
+
+                    $matchReason = $reason ? "Sân thi đấu đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân thi đấu đã bị gỡ khỏi hệ thống.';
+
+                    if ($match->host?->email) {
+                        SafeMail::queue($match->host->email, new MatchCancelled($match, $matchReason));
+                    }
+                    foreach ($match->participants->where('status', 'accepted') as $participant) {
+                        if ($participant->user?->email) {
+                            SafeMail::queue($participant->user->email, new MatchCancelled($match, $matchReason));
+                        }
+                    }
+                }
+            }
+
+            if ($status === 'rejected' && $cancelFutureBookings) {
+                $cancelReason = $reason ? "Sân đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân đã bị gỡ khỏi hệ thống.';
+
+                $futureBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                    ->where('sports_field_id', $field->id)
+                    ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                    ->whereDate('booking_date', '>=', today())
+                    ->get();
+
+                foreach ($futureBookings as $booking) {
+                    if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
+                        continue;
+                    }
+
+                    $booking->update([
+                        'status' => BookingStatus::Cancelled->value,
+                        'cancelled_at' => now(),
+                        'cancel_reason' => $cancelReason,
+                    ]);
+
+                    if ($booking->customer?->email) {
+                        SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+                    }
+                }
+            }
+        });
 
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
 
-    public function bookings(?string $status): LengthAwarePaginator
+    public function bookings(?string $status, ?string $keyword = null, ?string $date = null): LengthAwarePaginator
     {
         return Booking::with(Booking::resourceRelations(withCustomer: true))
             ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($date, fn ($query) => $query->whereDate('booking_date', $date))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->whereHas('customer', fn ($c) => $c->where('name', 'like', $this->like($keyword))
+                    ->orWhere('email', 'like', $this->like($keyword))
+                    ->orWhere('phone', 'like', $this->like($keyword)))
+                ->orWhereHas('sportsField', fn ($f) => $f->where('name', 'like', $this->like($keyword)))))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+    }
+
+    public function matches(?string $status, ?string $keyword = null): LengthAwarePaginator
+    {
+        return MatchRequest::with(['host', 'sportCategory', 'sportsField', 'participants.user'])
+            ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('title', 'like', $this->like($keyword))
+                ->orWhereHas('host', fn ($host) => $host->where('name', 'like', $this->like($keyword)))))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -146,6 +248,21 @@ class AdminService
         ])->load('fieldTypes')->loadCount('fieldTypes');
     }
 
+    public function updateCategory(SportCategory $category, array $data): SportCategory
+    {
+        // Giữ nguyên slug để link /fields?category=... không bị gãy.
+        $category->update($data);
+
+        return $category->load('fieldTypes')->loadCount('fieldTypes');
+    }
+
+    public function updateFieldType(FieldType $type, array $data): FieldType
+    {
+        $type->update($data);
+
+        return $type->load('sportCategory');
+    }
+
     public function createFieldType(array $data): FieldType
     {
         return FieldType::create([
@@ -155,5 +272,14 @@ class AdminService
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ])->load('sportCategory');
+    }
+
+    public function userTrustScoreLogs(User $user): LengthAwarePaginator
+    {
+        return $user->trustScoreLogs()
+            ->with('booking.sportsField')
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
     }
 }

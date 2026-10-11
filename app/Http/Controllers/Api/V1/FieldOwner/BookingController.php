@@ -21,6 +21,9 @@ class BookingController extends Controller
             'field_id' => ['nullable', 'integer'],
             'status' => ['nullable', 'string'],
             'date' => ['nullable', 'date'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
 
         return BookingResource::collection($this->service->bookings($request->user(), $filters));
@@ -28,7 +31,7 @@ class BookingController extends Controller
 
     public function updateStatus(UpdateBookingStatusRequest $request, Booking $booking): JsonResponse
     {
-        $booking = $this->service->updateBookingStatus($request->user(), $booking, $request->string('status')->toString());
+        $booking = $this->service->updateBookingStatus($request->user(), $booking, $request->string('status')->toString(), $request->input('reason'));
 
         return response()->json(['message' => 'Đã cập nhật trạng thái đơn.', 'data' => new BookingResource($booking)]);
     }

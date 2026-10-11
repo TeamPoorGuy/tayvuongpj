@@ -13,6 +13,8 @@ readonly class UpsertFieldData
         public float $pricePerHour,
         public ?string $description,
         public array $images,
+        /** Chỉ chứa latitude/longitude khi request có gửi, để cập nhật không xoá nhầm toạ độ cũ. */
+        public array $coordinates = [],
     ) {}
 
     public static function fromRequest(UpsertFieldRequest $request): self
@@ -24,6 +26,10 @@ readonly class UpsertFieldData
             pricePerHour: $request->float('price_per_hour'),
             description: $request->input('description'),
             images: $request->file('images', []),
+            coordinates: $request->hasAny(['latitude', 'longitude']) ? [
+                'latitude' => $request->filled('latitude') ? $request->float('latitude') : null,
+                'longitude' => $request->filled('longitude') ? $request->float('longitude') : null,
+            ] : [],
         );
     }
 }

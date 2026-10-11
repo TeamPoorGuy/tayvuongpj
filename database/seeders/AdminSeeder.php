@@ -10,10 +10,12 @@ class AdminSeeder extends Seeder
 {
     public function run(): void
     {
+        \Illuminate\Database\Eloquent\Model::unguard(); // seeders set role/is_active directly
         User::firstOrCreate(
             ['email' => 'admin@sportfield.com'],
             [
                 'name' => 'Quản trị viên Hệ thống',
+                'email_verified_at' => now(),
                 'password' => Hash::make('password'),
                 'role' => 'admin',
                 'phone' => '0901234567',

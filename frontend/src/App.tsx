@@ -4,12 +4,14 @@ import { DashboardLayout } from './layouts/DashboardLayout'
 import { HomePage } from './pages/HomePage'
 import { FieldsPage } from './pages/FieldsPage'
 import { FieldDetailPage } from './pages/FieldDetailPage'
-import { LoginPage, RegisterPage } from './pages/AuthPages'
+import { MatchesPage } from './pages/MatchesPage'
+import { EmailVerifiedPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPages'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
 import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
-import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
+import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
+import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 
 export default function App() {
   return (
@@ -18,9 +20,13 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="fields" element={<FieldsPage />} />
         <Route path="fields/:slug" element={<FieldDetailPage />} />
+        <Route path="matches" element={<MatchesPage />} />
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
+      <Route path="email-verified" element={<EmailVerifiedPage />} />
 
       <Route element={<ProtectedRoute roles={['customer']} />}>
         <Route element={<DashboardLayout />}>
@@ -33,6 +39,7 @@ export default function App() {
       <Route element={<ProtectedRoute roles={['customer']} requireApprovedOwner />}>
         <Route element={<DashboardLayout />}>
           <Route path="owner" element={<OwnerDashboardPage />} />
+          <Route path="owner/schedule" element={<OwnerSchedulePage />} />
           <Route path="owner/fields" element={<OwnerFieldsPage />} />
           <Route path="owner/bookings" element={<OwnerBookingsPage />} />
           <Route path="owner/reviews" element={<OwnerReviewsPage />} />
@@ -47,6 +54,7 @@ export default function App() {
           <Route path="admin/owners" element={<AdminOwnersPage />} />
           <Route path="admin/fields" element={<AdminFieldsPage />} />
           <Route path="admin/bookings" element={<AdminBookingsPage />} />
+          <Route path="admin/matches" element={<AdminMatchesPage />} />
           <Route path="admin/reviews" element={<AdminReviewsPage />} />
           <Route path="admin/categories" element={<AdminCategoriesPage />} />
         </Route>

@@ -9,6 +9,10 @@ export interface User {
   avatar: string | null
   address: string | null
   is_active: boolean
+  trust_score?: number
+  email_verified?: boolean
+  has_password?: boolean
+  is_field_owner?: boolean
   field_owner_profile?: OwnerProfile | null
 }
 
@@ -21,8 +25,13 @@ export interface OwnerProfile {
   business_phone: string
   business_license: string | null
   description: string | null
-  verification_status: 'pending' | 'approved' | 'rejected'
-  verification_documents: string | null
+  verification_status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  bank_name?: string | null
+  bank_account_number?: string | null
+  bank_account_holder?: string | null
+  terms_version?: string | null
+  terms_accepted_at?: string | null
+  documents?: { id: number; type: string; original_name: string; url: string }[]
   rejection_reason: string | null
   verified_at: string | null
   user?: User
@@ -49,9 +58,12 @@ export interface SportsField {
   name: string
   slug: string
   address: string
+  latitude?: number | string | null
+  longitude?: number | string | null
   description: string | null
   price_per_hour: number
   status: string
+  rejection_reason?: string | null
   is_active: boolean
   average_rating: number
   reviews_count: number
@@ -70,6 +82,9 @@ export interface TimeSlot {
   end_time: string
   is_active?: boolean
   is_booked?: boolean
+  is_past?: boolean
+  is_held?: boolean
+  price_per_hour?: number | null
 }
 
 export interface Review {
@@ -90,6 +105,12 @@ export interface Booking {
   notes: string | null
   cancel_reason: string | null
   can_be_cancelled: boolean
+  cancel_penalty?: boolean
+  cancel_until?: string | null
+  confirmed_at?: string | null
+  no_show?: boolean
+  check_in_code?: string | null
+  checked_in_at?: string | null
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
@@ -116,6 +137,7 @@ export interface Paginated<T> {
 export interface OwnerDashboard {
   total_fields: number
   total_bookings: number
+  pending_bookings: number
   total_revenue: number
   current_month_bookings: number
   current_month_revenue: number
@@ -132,4 +154,76 @@ export interface AdminDashboard {
   total_bookings: number
   total_revenue: number
   most_booked_fields: SportsField[]
+}
+
+export interface BookingWaitlist {
+  id: number
+  user_id: number
+  sports_field_id: number
+  time_slot_id: number
+  booking_date: string
+  status: 'waiting' | 'offered' | 'accepted' | 'expired' | 'cancelled'
+  priority_score: number
+  offered_at?: string | null
+  offer_expires_at?: string | null
+  sports_field?: SportsField
+  time_slot?: TimeSlot
+  created_at: string
+}
+
+export interface SlotSuggestion {
+  type: string
+  field_id: number
+  field_name: string
+  field_slug: string
+  time_slot_id: number
+  start_time: string
+  end_time: string
+  date: string
+  date_label: string
+  price_per_hour: number
+  badge: string
+}
+
+export interface MatchParticipant {
+  id: number
+  match_request_id: number
+  user_id: number
+  status: 'pending' | 'accepted' | 'rejected'
+  message?: string | null
+  user?: Pick<User, 'id' | 'name' | 'avatar' | 'phone' | 'trust_score'>
+  created_at: string
+}
+
+export interface MatchRequest {
+  id: number
+  user_id: number
+  sport_category_id: number
+  sports_field_id?: number | null
+  title: string
+  play_date: string
+  start_time: string
+  end_time: string
+  skill_level: 'beginner' | 'intermediate' | 'advanced' | 'any'
+  players_needed: number
+  joined_count: number
+  description?: string | null
+  contact_phone: string | null
+  status: 'open' | 'full' | 'cancelled' | 'completed'
+  host?: Pick<User, 'id' | 'name' | 'avatar' | 'trust_score'>
+  sport_category?: Category
+  sports_field?: SportsField
+  participants?: MatchParticipant[]
+  created_at: string
+}
+
+export interface TrustScoreLog {
+  id: number
+  user_id: number
+  change: number
+  score_after: number
+  reason: string
+  booking_id: number | null
+  sports_field_name?: string | null
+  created_at: string
 }

@@ -18,6 +18,12 @@ class BookingResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toISOString(),
             'cancel_reason' => $this->cancel_reason,
             'can_be_cancelled' => $this->canBeCancelled(),
+            'cancel_penalty' => $this->canBeCancelled() && $this->isLateToCancel(),
+            'cancel_until' => $this->cancelUntil()?->toISOString(),
+            'confirmed_at' => $this->confirmed_at?->toISOString(),
+            'check_in_code' => $this->check_in_code,
+            'checked_in_at' => $this->checked_in_at?->toISOString(),
+            'no_show' => $this->no_show_at !== null,
             'field' => $this->whenLoaded('sportsField', fn () => new FieldResource($this->sportsField)),
             'customer' => $this->whenLoaded('customer', fn () => new UserResource($this->customer)),
             'time_slot' => $this->whenLoaded('timeSlot', fn () => [

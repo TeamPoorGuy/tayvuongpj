@@ -19,7 +19,9 @@ class BookingController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return BookingResource::collection($this->bookingService->customerBookings($request->user()));
+        $request->validate(['status' => ['nullable', 'in:pending,confirmed,completed,cancelled,rejected']]);
+
+        return BookingResource::collection($this->bookingService->customerBookings($request->user(), $request->input('status')));
     }
 
     public function store(CreateBookingRequest $request): JsonResponse

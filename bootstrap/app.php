@@ -10,16 +10,20 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->alias([
             // Kiểm tra role customer, field_owner hoặc admin.
             'api.role' => \App\Http\Middleware\EnsureUserHasRole::class,
             // Kiểm tra tài khoản có đang bị khóa không.
+            // Chặn thao tác quan trọng khi email chưa xác thực.
+            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
             // kiểm tra chủ sân đã được xác thực chưa.
             'owner.approved' => \App\Http\Middleware\EnsureFieldOwnerIsApproved::class,
@@ -56,13 +60,44 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(['message' => 'Bạn cần đăng nhập để tiếp tục.'], 401);
         });
 
+        // Link xác thực email hết hạn/sai chữ ký → trang thông báo của frontend thay vì 403 thô.
+        $exceptions->render(function (\Illuminate\Routing\Exceptions\InvalidSignatureException $exception, Request $request) {
+            if ($request->routeIs('verification.verify')) {
+                return redirect(rtrim(config('frontend.url'), '/').'/email-verified?status=invalid');
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json(['message' => 'Bạn không có quyền thực hiện thao tác này.', 'code' => 'FORBIDDEN'], 403);
+        });
+
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
 
+            $status = $exception->getStatusCode();
+            $message = $exception->getMessage();
+            $default = match ($status) {
+                403 => 'Bạn không có quyền thực hiện thao tác này.',
+                404 => 'Không tìm thấy dữ liệu yêu cầu.',
+                429 => 'Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.',
+                default => 'Không thể xử lý yêu cầu.',
+            };
+            // Message mặc định của framework (tiếng Anh, 404 còn lộ tên model) thay bằng tiếng Việt;
+            // message tự viết (có dấu) được giữ nguyên.
+            $frameworkDefault = $message === ''
+                || $exception->getPrevious() instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                || (in_array($status, [403, 404, 429], true) && preg_match('/^[\x20-\x7E]+$/', $message));
+
             return response()->json([
-                'message' => $exception->getMessage() ?: 'Không thể xử lý yêu cầu.',
-            ], $exception->getStatusCode());
+                'message' => $frameworkDefault ? $default : $message,
+            ], $status, $exception->getHeaders());
         });
     })->create();

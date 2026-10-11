@@ -1,4 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { api } from "../api/client";
 import type { ApiEnvelope, User } from "../types/api";
@@ -11,12 +13,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryFn: async () => {
             try {
                 return (await api.get<ApiEnvelope<User>>("/auth/me")).data.data;
-            } catch {
-                return null;
+            } catch (error) {
+                // Chỉ 401 nghĩa là chưa đăng nhập; lỗi mạng/5xx thì giữ nguyên người dùng hiện tại.
+                if (isAxiosError(error) && error.response?.status === 401) {
+                    return null;
+                }
+                throw error;
             }
         },
         retry: false,
     });
+
+    // Phiên hết hạn giữa chừng (401/419 ở request bất kỳ): xoá người dùng để route guard đưa về /login.
+    useEffect(() => {
+        const id = api.interceptors.response.use(undefined, (error: unknown) => {
+            const status = isAxiosError(error) ? error.response?.status : undefined;
+            const url = isAxiosError(error) ? (error.config?.url ?? "") : "";
+            if ((status === 401 || status === 419) && !url.startsWith("/auth/")) {
+                queryClient.setQueryData(["auth", "me"], null);
+            }
+            return Promise.reject(error);
+        });
+        return () => api.interceptors.response.eject(id);
+    }, [queryClient]);
 
     const authenticate = async (
         path: string,

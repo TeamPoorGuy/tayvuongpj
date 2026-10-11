@@ -13,7 +13,8 @@ class BookingSeeder extends Seeder
 {
     public function run(): void
     {
-        $customers = User::where('role', 'customer')->get();
+        // Chủ sân cũng có role=customer nên phải loại ra, tránh tự đặt sân của chính mình.
+        $customers = User::where('role', 'customer')->whereDoesntHave('fieldOwnerProfile')->get();
         $fields = SportsField::with('timeSlots')->get();
 
         if ($fields->isEmpty() || $customers->isEmpty()) {
@@ -37,26 +38,33 @@ class BookingSeeder extends Seeder
             ]
         ];
 
-        $dates = [
-            Carbon::yesterday()->subDays(3)->toDateString(),
-            Carbon::yesterday()->subDays(2)->toDateString(),
-            Carbon::yesterday()->toDateString(),
-            Carbon::today()->toDateString(),
+        // Chỉ dùng ngày quá khứ cho đơn đã kết thúc và ngày tương lai cho đơn đang hiệu lực,
+        // để bookings:sync không tự đóng/phạt no-show dữ liệu demo.
+        $pastDates = [
+            Carbon::today()->subDays(4)->toDateString(),
+            Carbon::today()->subDays(3)->toDateString(),
+            Carbon::today()->subDays(2)->toDateString(),
+        ];
+        $futureDates = [
             Carbon::tomorrow()->toDateString(),
+            Carbon::tomorrow()->addDays(1)->toDateString(),
             Carbon::tomorrow()->addDays(2)->toDateString(),
         ];
-
-        $statuses = ['completed', 'confirmed', 'pending', 'cancelled', 'rejected'];
+        $pastStatuses = ['completed', 'completed', 'cancelled', 'rejected'];
+        $futureStatuses = ['confirmed', 'pending', 'cancelled'];
 
         $count = 0;
         foreach ($fields as $fieldIdx => $field) {
             $slots = $field->timeSlots;
             if ($slots->isEmpty()) continue;
 
-            foreach ($dates as $dateIdx => $date) {
+            foreach (array_merge($pastDates, $futureDates) as $dateIdx => $date) {
+                $isPast = $dateIdx < count($pastDates);
                 $slot = $slots[$dateIdx % count($slots)];
                 $customer = $customers[($fieldIdx + $dateIdx) % count($customers)];
-                $status = $statuses[($fieldIdx + $dateIdx) % count($statuses)];
+                $pool = $isPast ? $pastStatuses : $futureStatuses;
+                $status = $pool[($fieldIdx + $dateIdx) % count($pool)];
+                $when = Carbon::parse($date)->setTime(8, 0);
 
                 $booking = Booking::create([
                     'user_id' => $customer->id,
@@ -66,6 +74,14 @@ class BookingSeeder extends Seeder
                     'status' => $status,
                     'total_price' => $field->price_per_hour * 1.5,
                     'notes' => 'Đặt sân đá giải nội bộ công ty.',
+                    'confirmed_at' => in_array($status, ['confirmed', 'completed'], true) ? $when->copy()->subDay() : null,
+                    'checked_in_at' => $status === 'completed' ? $when : null,
+                    'cancelled_at' => in_array($status, ['cancelled', 'rejected'], true) ? $when->copy()->subDay() : null,
+                    'cancel_reason' => match ($status) {
+                        'cancelled' => 'Khách bận việc đột xuất nên huỷ đơn.',
+                        'rejected' => 'Khung giờ này sân đang bảo trì.',
+                        default => null,
+                    },
                 ]);
 
                 // Nếu là đơn completed thì tạo review

@@ -26,11 +26,13 @@ class TimeSlot extends Model
         'sports_field_id',
         'start_time',
         'end_time',
+        'price_per_hour',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'price_per_hour' => 'decimal:2',
     ];
 
     public function sportsField()

@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\VerifyOwnerRequest;
 use App\Http\Resources\Api\OwnerProfileResource;
 use App\Models\FieldOwnerProfile;
+use App\Models\OwnerDocument;
 use App\Services\AdminService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FieldOwnerController extends Controller
 {
@@ -18,6 +21,13 @@ class FieldOwnerController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         return OwnerProfileResource::collection($this->service->ownerProfiles($request->query('status')));
+    }
+
+    public function document(FieldOwnerProfile $profile, OwnerDocument $document): StreamedResponse
+    {
+        abort_unless($document->field_owner_profile_id === $profile->id && Storage::disk('local')->exists($document->path), 404);
+
+        return Storage::disk('local')->response($document->path, $document->original_name);
     }
 
     public function verify(VerifyOwnerRequest $request, FieldOwnerProfile $profile): JsonResponse

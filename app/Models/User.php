@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ResetPasswordVi;
+use App\Notifications\VerifyEmailVi;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\VerificationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
@@ -23,12 +25,12 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
         'phone',
         'avatar',
         'address',
-        'is_active',
     ];
+
+    // role / is_active are privileged: set via forceFill only, never mass-assigned.
 
     /**
      * The attributes that should be hidden for serialization.
@@ -51,7 +53,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'trust_score' => 'integer',
         ];
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyEmailVi);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordVi($token));
     }
 
     // Role helper methods
@@ -95,5 +108,25 @@ class User extends Authenticatable
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function bookingWaitlists()
+    {
+        return $this->hasMany(BookingWaitlist::class);
+    }
+
+    public function matchRequests()
+    {
+        return $this->hasMany(MatchRequest::class);
+    }
+
+    public function matchParticipations()
+    {
+        return $this->hasMany(MatchParticipant::class);
+    }
+
+    public function trustScoreLogs()
+    {
+        return $this->hasMany(TrustScoreLog::class)->latest();
     }
 }
