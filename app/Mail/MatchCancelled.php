@@ -14,7 +14,7 @@ class MatchCancelled extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public MatchRequest $match) {}
+    public function __construct(public MatchRequest $match, public ?string $reason = null) {}
 
     public function envelope(): Envelope
     {

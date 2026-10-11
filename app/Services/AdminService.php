@@ -144,12 +144,14 @@ class AdminService
 
                     $match->update(['status' => 'cancelled']);
 
+                    $matchReason = $reason ? "Sân thi đấu đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân thi đấu đã bị gỡ khỏi hệ thống.';
+
                     if ($match->host?->email) {
-                        SafeMail::queue($match->host->email, new MatchCancelled($match));
+                        SafeMail::queue($match->host->email, new MatchCancelled($match, $matchReason));
                     }
                     foreach ($match->participants->where('status', 'accepted') as $participant) {
                         if ($participant->user?->email) {
-                            SafeMail::queue($participant->user->email, new MatchCancelled($match));
+                            SafeMail::queue($participant->user->email, new MatchCancelled($match, $matchReason));
                         }
                     }
                 }
