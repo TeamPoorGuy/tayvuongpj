@@ -183,7 +183,7 @@ export interface MatchParticipant {
   user_id: number
   status: 'pending' | 'accepted' | 'rejected'
   message?: string | null
-  user?: Pick<User, 'id' | 'name' | 'avatar' | 'phone'>
+  user?: Pick<User, 'id' | 'name' | 'avatar' | 'phone' | 'trust_score'>
   created_at: string
 }
 
