@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageSquareText,
   ShieldCheck,
+  Trophy,
   UsersRound,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -40,6 +41,7 @@ const navigation = {
     { to: '/admin/owners', label: 'Duyệt chủ sân', icon: ShieldCheck },
     { to: '/admin/fields', label: 'Duyệt sân', icon: Building2 },
     { to: '/admin/bookings', label: 'Giao dịch', icon: CalendarDays },
+    { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
     { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquareText },
     { to: '/admin/categories', label: 'Danh mục', icon: FolderTree },
   ],

@@ -8,6 +8,8 @@ import {
   Eye,
   FileText,
   FolderTree,
+  Search,
+  Trophy,
   MessageSquareText,
   ShieldAlert,
   ShieldCheck,
@@ -18,8 +20,10 @@ import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
+import { Link, useSearchParams } from 'react-router'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -29,6 +33,7 @@ import type {
   ApiEnvelope,
   Booking,
   Category,
+  MatchRequest,
   OwnerProfile,
   Paginated,
   Review,
@@ -59,11 +64,13 @@ export function AdminDashboardPage() {
           label="Chủ sân"
           value={data?.total_field_owners ?? 0}
           note={`${data?.pending_owners ?? 0} chờ duyệt`}
+          to="/admin/owners?status=pending"
         />
         <Stat
           label="Sân thể thao"
           value={data?.total_fields ?? 0}
           note={`${data?.pending_fields ?? 0} chờ duyệt`}
+          to="/admin/fields?status=pending"
         />
         <Stat label="Doanh thu" value={`${currency.format(data?.total_revenue ?? 0)}đ`} />
       </div>
@@ -220,7 +227,8 @@ export function AdminUsersPage() {
 export function AdminOwnersPage() {
   const client = useQueryClient()
   const toast = useToast()
-  const [status, setStatus] = useState('')
+  const [params] = useSearchParams()
+  const [status, setStatus] = useState(params.get('status') ?? '')
   const [page, setPage] = useState(1)
   const [rejecting, setRejecting] = useState<OwnerProfile | null>(null)
   const [suspending, setSuspending] = useState<OwnerProfile | null>(null)
@@ -728,19 +736,23 @@ function OwnerDetailModal({
 export function AdminFieldsPage() {
   const client = useQueryClient()
   const toast = useToast()
-  const [status, setStatus] = useState('')
+  const [params] = useSearchParams()
+  const [status, setStatus] = useState(params.get('status') ?? '')
   const [page, setPage] = useState(1)
   const [approvingField, setApprovingField] = useState<SportsField | null>(null)
   const [rejectingField, setRejectingField] = useState<SportsField | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [cancelFutureBookings, setCancelFutureBookings] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const search = useDebouncedValue(keyword.trim())
 
   const fields = useQuery({
-    queryKey: ['admin', 'fields', status, page],
+    queryKey: ['admin', 'fields', status, search, page],
     queryFn: async () =>
       (
-        await api.get<Paginated<SportsField>>(
-          `/admin/fields?page=${page}${status ? `&status=${status}` : ''}`,
-        )
+        await api.get<Paginated<SportsField>>('/admin/fields', {
+          params: { page, status: status || undefined, keyword: search || undefined },
+        })
       ).data,
   })
 
@@ -749,24 +761,30 @@ export function AdminFieldsPage() {
       field,
       status: next,
       rejection_reason,
+      cancel_future_bookings,
     }: {
       field: SportsField
       status: string
       rejection_reason?: string
+      cancel_future_bookings?: boolean
     }) =>
       api.patch(`/admin/fields/${field.id}/verify`, {
         status: next,
         ...(rejection_reason ? { rejection_reason } : {}),
+        ...(cancel_future_bookings !== undefined ? { cancel_future_bookings } : {}),
       }),
     onSuccess: (_, vars) => {
       toast.success(
         vars.status === 'approved'
           ? `Đã duyệt sân "${vars.field.name}".`
-          : `Đã từ chối sân "${vars.field.name}".`,
+          : vars.cancel_future_bookings
+          ? `Đã gỡ sân "${vars.field.name}" và huỷ các đơn đặt trong tương lai.`
+          : `Đã từ chối / gỡ sân "${vars.field.name}".`,
       )
       setApprovingField(null)
       setRejectingField(null)
       setRejectReason('')
+      setCancelFutureBookings(false)
       void client.invalidateQueries({ queryKey: ['admin', 'fields'] })
     },
     onError: (err) => {
@@ -794,6 +812,18 @@ export function AdminFieldsPage() {
           <option value="approved">Đã duyệt</option>
           <option value="rejected">Từ chối</option>
         </select>
+        <label className="search-control">
+          <Search size={16} />
+          <input
+            value={keyword}
+            onChange={(e) => {
+              setKeyword(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Tìm theo tên sân, địa chỉ hoặc chủ sân..."
+            aria-label="Tìm sân"
+          />
+        </label>
       </div>
       <DataTable
         heads={['Sân', 'Chủ sân', 'Phân loại', 'Giá/giờ', 'Trạng thái', 'Hành động']}
@@ -824,6 +854,16 @@ export function AdminFieldsPage() {
                   Từ chối
                 </button>
               </div>
+            ) : field.status === 'approved' ? (
+              <button
+                key="revoke"
+                className="button button--ghost button--danger button--small"
+                onClick={() => setRejectingField(field)}
+                disabled={verify.isPending}
+                title="Gỡ sân khỏi trang tìm sân khi có vi phạm"
+              >
+                Gỡ sân
+              </button>
             ) : (
               'Đã xử lý'
             ),
@@ -853,8 +893,11 @@ export function AdminFieldsPage() {
 
       <Modal
         isOpen={!!rejectingField}
-        onClose={() => setRejectingField(null)}
-        title="Từ chối sân thể thao"
+        onClose={() => {
+          setRejectingField(null)
+          setCancelFutureBookings(false)
+        }}
+        title={rejectingField?.status === 'approved' ? 'Gỡ sân khỏi hệ thống' : 'Từ chối sân thể thao'}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
@@ -863,15 +906,38 @@ export function AdminFieldsPage() {
               field: rejectingField,
               status: 'rejected',
               rejection_reason: rejectReason || 'Thông tin sân chưa đạt yêu cầu.',
+              cancel_future_bookings: rejectingField.status === 'approved' ? cancelFutureBookings : undefined,
             })
           }
         }}
       >
         <p>
-          Bạn có chắc muốn từ chối kiểm duyệt sân <strong>{rejectingField?.name}</strong>?
+          {rejectingField?.status === 'approved' ? 'Bạn có chắc muốn gỡ' : 'Bạn có chắc muốn từ chối kiểm duyệt'} sân{' '}
+          <strong>{rejectingField?.name}</strong>?
         </p>
-        <label style={{ marginTop: 12 }}>
-          <span>Lý do từ chối (bắt buộc)</span>
+        {rejectingField?.status === 'approved' && (
+          <>
+            <p className="form-help">
+              Sân sẽ biến mất khỏi trang tìm sân và không nhận đặt mới.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={cancelFutureBookings}
+                onChange={(e) => setCancelFutureBookings(e.target.checked)}
+                style={{ marginTop: 3 }}
+              />
+              <span style={{ fontSize: '0.875rem' }}>
+                <strong>Tự động huỷ các đơn đặt trong tương lai</strong> và gửi email thông báo cho khách hàng
+                <span style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: '0.8rem', marginTop: 2 }}>
+                  (Nếu không chọn, các đơn đã đặt vẫn giữ nguyên và chủ sân cần tự liên hệ xử lý với khách).
+                </span>
+              </span>
+            </label>
+          </>
+        )}
+        <label style={{ marginTop: 14 }}>
+          <span>Lý do {rejectingField?.status === 'approved' ? 'gỡ sân' : 'từ chối'} (bắt buộc)</span>
           <textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
@@ -884,12 +950,15 @@ export function AdminFieldsPage() {
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => setRejectingField(null)}
+            onClick={() => {
+              setRejectingField(null)
+              setCancelFutureBookings(false)
+            }}
           >
             Đóng
           </button>
           <button type="submit" disabled={verify.isPending} className="button button--danger">
-            {verify.isPending ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+            {verify.isPending ? 'Đang xử lý...' : rejectingField?.status === 'approved' ? 'Xác nhận gỡ sân' : 'Xác nhận từ chối'}
           </button>
         </div>
       </Modal>
@@ -899,14 +968,17 @@ export function AdminFieldsPage() {
 
 export function AdminBookingsPage() {
   const [status, setStatus] = useState('')
+  const [date, setDate] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const search = useDebouncedValue(keyword.trim())
   const [page, setPage] = useState(1)
   const bookings = useQuery({
-    queryKey: ['admin', 'bookings', status, page],
+    queryKey: ['admin', 'bookings', status, date, search, page],
     queryFn: async () =>
       (
-        await api.get<Paginated<Booking>>(
-          `/admin/bookings?page=${page}${status ? `&status=${status}` : ''}`,
-        )
+        await api.get<Paginated<Booking>>('/admin/bookings', {
+          params: { page, status: status || undefined, date: date || undefined, keyword: search || undefined },
+        })
       ).data,
   })
 
@@ -932,6 +1004,27 @@ export function AdminBookingsPage() {
           <option value="cancelled">Đã hủy</option>
           <option value="rejected">Từ chối</option>
         </select>
+        <input
+          type="date"
+          value={date}
+          aria-label="Lọc theo ngày chơi"
+          onChange={(e) => {
+            setDate(e.target.value)
+            setPage(1)
+          }}
+        />
+        <label className="search-control">
+          <Search size={16} />
+          <input
+            value={keyword}
+            onChange={(e) => {
+              setKeyword(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Tìm theo tên/SĐT/email khách hoặc tên sân..."
+            aria-label="Tìm đơn đặt"
+          />
+        </label>
       </div>
       <DataTable
         heads={['Mã & sân', 'Khách hàng', 'Lịch chơi', 'Giá trị', 'Trạng thái']}
@@ -941,7 +1034,10 @@ export function AdminBookingsPage() {
               <small>#BK-{booking.id}</small>
               <strong>{booking.field?.name}</strong>
             </Fragment>,
-            booking.customer?.name ?? '—',
+            <Fragment key="customer">
+              {booking.customer?.name ?? '—'}
+              {booking.customer?.phone && <small>{booking.customer.phone}</small>}
+            </Fragment>,
             <Fragment key="schedule">
               {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
               <small>
@@ -1178,14 +1274,14 @@ export function AdminCategoriesPage() {
   )
 }
 
-function Stat({ label, value, note }: { label: string; value: string | number; note?: string }) {
+function Stat({ label, value, note, to }: { label: string; value: string | number; note?: string; to?: string }) {
   return (
     <article className="stat">
       <span>{label}</span>
       <strong>
         <AnimatedCounter value={value} />
       </strong>
-      {note && <small>{note}</small>}
+      {note && (to ? <Link className="stat__link" to={to}>{note} →</Link> : <small>{note}</small>)}
     </article>
   )
 }
@@ -1215,5 +1311,147 @@ function DataTable({ heads, rows }: { heads: string[]; rows: React.ReactNode[][]
       </div>
       {rows.length === 0 && <Empty text="Không có dữ liệu phù hợp." />}
     </section>
+  )
+}
+
+export function AdminMatchesPage() {
+  const client = useQueryClient()
+  const toast = useToast()
+  const [status, setStatus] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const search = useDebouncedValue(keyword.trim())
+  const [page, setPage] = useState(1)
+  const [cancelling, setCancelling] = useState<MatchRequest | null>(null)
+
+  const matches = useQuery({
+    queryKey: ['admin', 'matches', status, search, page],
+    queryFn: async () =>
+      (
+        await api.get<Paginated<MatchRequest>>('/admin/matches', {
+          params: { page, status: status || undefined, keyword: search || undefined },
+        })
+      ).data,
+  })
+
+  const cancel = useMutation({
+    mutationFn: async (match: MatchRequest) => api.delete(`/admin/matches/${match.id}`),
+    onSuccess: () => {
+      toast.success('Đã huỷ phòng tìm đối. Người đã được chấp nhận sẽ nhận email thông báo.')
+      setCancelling(null)
+      void client.invalidateQueries({ queryKey: ['admin', 'matches'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể huỷ phòng')
+    },
+  })
+
+  const statusLabel: Record<string, string> = {
+    open: 'Đang mở',
+    full: 'Đã đủ người',
+    completed: 'Đã kết thúc',
+    cancelled: 'Đã hủy',
+  }
+
+  return (
+    <>
+      <PageTitle
+        icon={<Trophy />}
+        kicker="Cộng đồng"
+        title="Phòng tìm đối"
+        copy="Theo dõi các phòng ghép đội và gỡ những phòng vi phạm."
+      />
+      <div className="toolbar">
+        <select
+          value={status}
+          aria-label="Lọc theo trạng thái phòng"
+          onChange={(e) => {
+            setStatus(e.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">Mọi trạng thái</option>
+          <option value="open">Đang mở</option>
+          <option value="full">Đã đủ người</option>
+          <option value="completed">Đã kết thúc</option>
+          <option value="cancelled">Đã hủy</option>
+        </select>
+        <label className="search-control">
+          <Search size={16} />
+          <input
+            value={keyword}
+            onChange={(e) => {
+              setKeyword(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Tìm theo tiêu đề hoặc tên chủ phòng..."
+            aria-label="Tìm phòng tìm đối"
+          />
+        </label>
+      </div>
+      <QueryState
+        isPending={matches.isPending}
+        isError={matches.isError}
+        isEmpty={!matches.data?.data.length}
+        error={errorMessage(matches.error)}
+        empty={<Empty text="Không có phòng tìm đối nào phù hợp." />}
+      >
+        <DataTable
+          heads={['Phòng', 'Chủ phòng', 'Lịch chơi', 'Người chơi', 'Trạng thái', 'Hành động']}
+          rows={
+            matches.data?.data.map((match) => [
+              <Fragment key="title">
+                <strong>{match.title}</strong>
+                <small>
+                  {match.sport_category?.name}
+                  {match.sports_field ? ` · ${match.sports_field.name}` : ''}
+                </small>
+              </Fragment>,
+              <Fragment key="host">
+                {match.host?.name ?? '—'}
+                {match.contact_phone && <small>{match.contact_phone}</small>}
+              </Fragment>,
+              <Fragment key="when">
+                {new Date(match.play_date).toLocaleDateString('vi-VN')}
+                <small>
+                  {match.start_time} – {match.end_time}
+                </small>
+              </Fragment>,
+              `${match.joined_count} / ${match.players_needed + 1}`,
+              statusLabel[match.status] ?? match.status,
+              match.status === 'open' || match.status === 'full' ? (
+                <button
+                  key="cancel"
+                  className="button button--ghost button--danger button--small"
+                  onClick={() => setCancelling(match)}
+                >
+                  Gỡ phòng
+                </button>
+              ) : (
+                '—'
+              ),
+            ]) ?? []
+          }
+        />
+      </QueryState>
+      <Pagination
+        page={page}
+        lastPage={matches.data?.meta.last_page ?? 1}
+        total={matches.data?.meta.total}
+        onPageChange={setPage}
+      />
+      <ConfirmModal
+        isOpen={!!cancelling}
+        title="Gỡ phòng tìm đối"
+        message={`Huỷ phòng "${cancelling?.title}" của ${cancelling?.host?.name ?? 'chủ phòng'}? Người đã được chấp nhận sẽ nhận email.`}
+        confirmText="Gỡ phòng"
+        cancelText="Giữ lại"
+        danger
+        busy={cancel.isPending}
+        onClose={() => setCancelling(null)}
+        onConfirm={() => {
+          if (cancelling) cancel.mutate(cancelling)
+        }}
+      />
+    </>
   )
 }

@@ -30,6 +30,7 @@ class FieldOwnerService
         return [
             'total_fields' => $fieldIds->count(),
             'total_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->count(),
+            'pending_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->where('status', 'pending')->count(),
             'total_revenue' => (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->sum('total_price'),
             'current_month_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->count(),
             'current_month_revenue' => (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->sum('total_price'),
@@ -141,6 +142,9 @@ class FieldOwnerService
         }
 
         $attributes = ['status' => $next->value];
+        if ($next === BookingStatus::Confirmed) {
+            $attributes['confirmed_at'] = now();
+        }
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
             $attributes += [
                 'cancelled_at' => now(),

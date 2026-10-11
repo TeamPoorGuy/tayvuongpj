@@ -17,6 +17,7 @@ class Booking extends Model
         'time_slot_id',
         'booking_date',
         'status',
+        'confirmed_at',
         'total_price',
         'notes',
         'cancelled_at',
@@ -31,6 +32,7 @@ class Booking extends Model
         'booking_date' => 'date',
         'status' => BookingStatus::class,
         'total_price' => 'decimal:2',
+        'confirmed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'checked_in_at' => 'datetime',
         'no_show_at' => 'datetime',
@@ -95,10 +97,29 @@ class Booking extends Model
         return Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->end_time);
     }
 
+    /** Hạn chót khách tự huỷ đơn đã duyệt; null nếu đơn không thuộc diện này. */
+    public function cancelUntil(): ?Carbon
+    {
+        if ($this->status !== BookingStatus::Confirmed || $this->confirmed_at === null) {
+            return null;
+        }
+
+        return $this->confirmed_at->copy()->addHours((int) config('booking.confirmed_cancel_window_hours'));
+    }
+
     public function canBeCancelled(): bool
     {
-        $cutoff = now()->addHours((int) config('booking.cancel_cutoff_hours'));
+        return match ($this->status) {
+            BookingStatus::Pending => true,
+            BookingStatus::Confirmed => now()->lt($this->cancelUntil() ?? now()) && $this->startsAt()->isFuture(),
+            default => false,
+        };
+    }
 
-        return $this->status->blocksSlot() && $this->startsAt()->gt($cutoff);
+    /** Huỷ lúc này có bị trừ điểm uy tín không: chỉ đơn đã duyệt mà sát giờ chơi. */
+    public function isLateToCancel(): bool
+    {
+        return $this->status === BookingStatus::Confirmed
+            && $this->startsAt()->lte(now()->addHours((int) config('booking.late_cancel_hours')));
     }
 }

@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router'
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '../api/client'
 import { FieldCard } from '../components/FieldCard'
+import { Pagination } from '../components/Pagination'
 import { useReveal } from '../hooks/useReveal'
 import type { Category, FieldType, Paginated, SportsField } from '../types/api'
 
@@ -61,6 +62,14 @@ export function FieldsPage() {
     else next.delete(name)
     next.delete('page')
     setParams(next, { replace: true })
+  }
+
+  const goToPage = (page: number) => {
+    const next = new URLSearchParams(params)
+    if (page > 1) next.set('page', String(page))
+    else next.delete('page')
+    setParams(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const activeCategory = params.get('category') ?? ''
@@ -257,18 +266,13 @@ export function FieldsPage() {
       )}
 
       {/* Pagination */}
-      {fields.data && fields.data.meta.last_page > 1 && (
-        <div className="pager">
-          {Array.from({ length: fields.data.meta.last_page }).map((_, index) => (
-            <button
-              className={fields.data?.meta.current_page === index + 1 ? 'active' : ''}
-              onClick={() => update('page', String(index + 1))}
-              key={index}
-            >
-              {index + 1}
-            </button>
-          ))}
-        </div>
+      {fields.data && (
+        <Pagination
+          page={fields.data.meta.current_page}
+          lastPage={fields.data.meta.last_page}
+          total={fields.data.meta.total}
+          onPageChange={goToPage}
+        />
       )}
     </div>
   )

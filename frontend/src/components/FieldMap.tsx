@@ -69,7 +69,7 @@ export function FieldMap({ field }: FieldMapProps) {
       document.head.appendChild(link)
     }
 
-    const scriptSrc = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    const scriptSrc = `https://unpkg.com/leaflet@1.9.4/dist/leaflet.js${retryKey ? `?retry=${retryKey}` : ''}`
     let existingScript = document.querySelector(`script[src="${scriptSrc}"]`) as HTMLScriptElement | null
 
     // 4.5 second timeout to catch blocked CDN, offline mode or hung connections

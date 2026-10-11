@@ -17,7 +17,10 @@ class MatchmakingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $matches = $this->service->list($request->only(['category_id', 'skill_level', 'status', 'date']));
+        $matches = $this->service->list(
+            $request->only(['category_id', 'skill_level', 'status', 'date']),
+            $request->boolean('mine') ? $request->user('sanctum') : null,
+        );
 
         return MatchRequestResource::collection($matches)->response();
     }

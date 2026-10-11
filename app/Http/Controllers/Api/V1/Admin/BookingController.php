@@ -14,8 +14,16 @@ class BookingController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $request->validate(['status' => ['nullable', 'in:pending,confirmed,completed,cancelled,rejected']]);
+        $request->validate([
+            'status' => ['nullable', 'in:pending,confirmed,completed,cancelled,rejected'],
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
 
-        return BookingResource::collection($this->service->bookings($request->input('status')));
+        return BookingResource::collection($this->service->bookings(
+            $request->input('status'),
+            $request->input('keyword'),
+            $request->input('date'),
+        ));
     }
 }

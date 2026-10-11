@@ -13,7 +13,8 @@ class MatchRequestResource extends JsonResource
     public function toArray(Request $request): array
     {
         $viewer = $request->user('sanctum');
-        $isHost = $viewer && $viewer->id === $this->user_id;
+        // Admin được xem như chủ phòng để xử lý khiếu nại / vi phạm.
+        $isHost = $viewer && ($viewer->id === $this->user_id || $viewer->isAdmin());
 
         $participants = $this->relationLoaded('participants') ? $this->participants : collect();
         $isAccepted = $viewer && $participants->contains(fn ($p) => $p->user_id === $viewer->id && $p->status === 'accepted');

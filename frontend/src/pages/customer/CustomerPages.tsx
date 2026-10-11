@@ -4,10 +4,8 @@ import {
   CheckCircle2,
   CircleUserRound,
   Clock3,
-  Copy,
   ListOrdered,
   MapPin,
-  QrCode,
   ShieldCheck,
   Sparkles,
   Star,
@@ -15,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -24,6 +23,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
 import type { ApiEnvelope, Booking, BookingWaitlist, Paginated, User } from '../../types/api'
+import { getLocalTodayString } from '../../utils/date'
 
 const currency = new Intl.NumberFormat('vi-VN')
 
@@ -59,10 +59,10 @@ export function CustomerBookingsPage() {
   const toast = useToast()
   const [activeTab, setActiveTab] = useState<'bookings' | 'waitlist'>('bookings')
   const [page, setPage] = useState(1)
+  const [status, setStatus] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
   const [reviewing, setReviewing] = useState<Booking | null>(null)
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
-  const [qrBooking, setQrBooking] = useState<Booking | null>(null)
   const currentReview = reviewing ?? activeReviewing
 
   const openReview = (booking: Booking) => {
@@ -71,8 +71,9 @@ export function CustomerBookingsPage() {
   }
 
   const bookings = useQuery({
-    queryKey: ['customer', 'bookings', page],
-    queryFn: async () => (await api.get<Paginated<Booking>>(`/customer/bookings?page=${page}`)).data,
+    queryKey: ['customer', 'bookings', status, page],
+    queryFn: async () =>
+      (await api.get<Paginated<Booking>>('/customer/bookings', { params: { page, status: status || undefined } })).data,
   })
 
   const waitlists = useQuery({
@@ -154,7 +155,7 @@ export function CustomerBookingsPage() {
         icon={<CalendarDays />}
         kicker="Lịch chơi & Hàng đợi"
         title="Quản lý lịch & Suất giữ chỗ"
-        copy="Theo dõi đơn đặt sân, nhận mã QR check-in và nhận cơ hội đặt sân khi có người huỷ lịch."
+        copy="Theo dõi đơn đặt sân và nhận cơ hội đặt sân khi có người huỷ lịch. Khi đến sân, chủ sân sẽ xác nhận bạn dựa trên mã đơn và thông tin tài khoản."
       />
 
       {/* Tab Switcher */}
@@ -189,6 +190,38 @@ export function CustomerBookingsPage() {
 
       {activeTab === 'bookings' && (
         <>
+          <div className="toolbar">
+            <select
+              value={status}
+              aria-label="Lọc theo trạng thái đơn"
+              onChange={(event) => {
+                setStatus(event.target.value)
+                setPage(1)
+              }}
+            >
+              <option value="">Mọi trạng thái</option>
+              <option value="pending">Chờ chủ sân xác nhận</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="cancelled">Đã hủy</option>
+              <option value="rejected">Bị từ chối</option>
+            </select>
+            <Link to="/fields" className="button button--brand button--small">
+              Đặt sân mới
+            </Link>
+          </div>
+
+          {bookings.isPending && (
+            <div className="query-state query-state--loading" aria-live="polite">
+              Đang tải lịch đặt...
+            </div>
+          )}
+          {bookings.isError && (
+            <div className="notice notice--error" role="alert">
+              Không thể tải lịch đặt. Vui lòng thử lại.
+            </div>
+          )}
+
           <div className="booking-list">
             {bookings.data?.data.map((booking) => (
               <article className="booking-item" key={booking.id}>
@@ -206,12 +239,21 @@ export function CustomerBookingsPage() {
                   <div className="booking-item__top">
                     <div>
                       <small>#BK-{String(booking.id).padStart(5, '0')}</small>
-                      <h3>{booking.field?.name}</h3>
+                      <h3>
+                        {booking.field?.slug ? (
+                          <Link to={`/fields/${booking.field.slug}`} title="Mở trang sân để đặt lại">
+                            {booking.field.name}
+                          </Link>
+                        ) : (
+                          booking.field?.name
+                        )}
+                      </h3>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {booking.no_show && <span className="badge badge--warning">Vắng mặt (-25 điểm)</span>}
                       {booking.checked_in_at && (
-                        <span className="badge badge--success" title={`Đã check-in lúc ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
-                          <CheckCircle2 size={12} /> Đã check-in (+10đ)
+                        <span className="badge badge--success" title={`Chủ sân xác nhận đến sân lúc ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
+                          <CheckCircle2 size={12} /> Đã đến sân (+10đ)
                         </span>
                       )}
                       <StatusBadge status={booking.status} />
@@ -231,19 +273,26 @@ export function CustomerBookingsPage() {
                       {booking.field?.address}
                     </span>
                   </div>
+                  {booking.status === 'pending' && (
+                    <p className="form-help">
+                      Đang chờ chủ sân xác nhận — bạn có thể huỷ bất cứ lúc nào, không bị trừ điểm. Đơn sẽ tự huỷ nếu chủ
+                      sân không phản hồi sau 24 giờ.
+                    </p>
+                  )}
+                  {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
+                    <p className="form-help">
+                      {booking.can_be_cancelled && booking.cancel_until
+                        ? `Chủ sân đã xác nhận. Bạn có thể huỷ đến ${new Date(booking.cancel_until).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${new Date(booking.cancel_until).toLocaleDateString('vi-VN')}${booking.cancel_penalty ? ' (sát giờ chơi nên sẽ bị trừ 15 điểm uy tín)' : ''}.`
+                        : 'Chủ sân đã xác nhận và hết thời gian tự huỷ. Cần huỷ vui lòng liên hệ chủ sân.'}{' '}
+                      Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
+                    </p>
+                  )}
+                  {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
+                    <p className="form-help">Lý do: {booking.cancel_reason}</p>
+                  )}
                   <div className="booking-item__footer">
                     <strong>{currency.format(booking.total_price)}đ</strong>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {(booking.status === 'confirmed' || booking.status === 'completed') && (
-                        <button
-                          type="button"
-                          className="button button--ghost button--small qr-pass-btn"
-                          onClick={() => setQrBooking(booking)}
-                        >
-                          <QrCode size={14} /> Vé / Mã vào sân
-                        </button>
-                      )}
-
                       {booking.can_be_cancelled && (
                         <button
                           className="button button--danger button--small"
@@ -267,8 +316,8 @@ export function CustomerBookingsPage() {
             ))}
           </div>
 
-          {!bookings.isPending && !bookings.data?.data.length && (
-            <Empty text="Bạn chưa có lịch đặt sân nào." />
+          {!bookings.isPending && !bookings.isError && !bookings.data?.data.length && (
+            <Empty text={status ? 'Không có đơn nào ở trạng thái này.' : 'Bạn chưa có lịch đặt sân nào. Bấm "Đặt sân mới" để bắt đầu.'} />
           )}
 
           <Pagination
@@ -383,97 +432,10 @@ export function CustomerBookingsPage() {
           </div>
 
           {!waitlists.isPending && !waitlists.data?.data.length && (
-            <Empty text="Bạn chưa tham gia hàng đợi giữ chỗ nào. Khi xem chi tiết sân có khung giờ đã kín, hãy bấm 'Đăng ký hàng đợi'." />
+            <Empty text="Bạn chưa tham gia hàng đợi giữ chỗ nào. Khi xem chi tiết sân có khung giờ đã kín, hãy bấm vào khung giờ đó để tham gia hàng đợi." />
           )}
         </section>
       )}
-
-      {/* QR Digital Pass Modal */}
-      <Modal
-        isOpen={!!qrBooking}
-        onClose={() => setQrBooking(null)}
-        title="Thẻ vào sân & QR Check-in"
-      >
-        {qrBooking && (
-          <div className="qr-pass-container">
-            <div className="qr-pass-card">
-              <div className="qr-pass-card__header">
-                <div>
-                  <span className="qr-pass-tag">SPORTHUB MATCHDAY PASS</span>
-                  <h3>{qrBooking.field?.name}</h3>
-                </div>
-                <div className="qr-pass-code-pill">
-                  {qrBooking.checked_in_at ? '✓ CHECKED-IN' : 'VALID'}
-                </div>
-              </div>
-
-              <div className="qr-pass-body">
-                <div className="qr-pass-graphic">
-                  {/* Styled QR placeholder graphic */}
-                  <div className="qr-code-box">
-                    <QrCode size={110} strokeWidth={1.5} />
-                  </div>
-                  <div className="qr-pass-code-display">
-                    <code>{qrBooking.check_in_code ?? `CK-${String(qrBooking.id).padStart(8, '0')}`}</code>
-                    <button
-                      type="button"
-                      className="copy-code-btn"
-                      onClick={() => {
-                        const code = qrBooking.check_in_code ?? `CK-${String(qrBooking.id).padStart(8, '0')}`
-                        navigator.clipboard.writeText(code)
-                        toast.success(`Đã sao chép mã check-in: ${code}`)
-                      }}
-                      title="Sao chép mã"
-                    >
-                      <Copy size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="qr-pass-details">
-                  <div className="qr-pass-detail-item">
-                    <span>Khách hàng</span>
-                    <strong>{qrBooking.customer?.name ?? 'Khách đặt sân'}</strong>
-                  </div>
-                  <div className="qr-pass-detail-item">
-                    <span>Ngày đá</span>
-                    <strong>{new Date(qrBooking.booking_date).toLocaleDateString('vi-VN')}</strong>
-                  </div>
-                  <div className="qr-pass-detail-item">
-                    <span>Khung giờ</span>
-                    <strong>
-                      {qrBooking.time_slot?.start_time} – {qrBooking.time_slot?.end_time}
-                    </strong>
-                  </div>
-                  <div className="qr-pass-detail-item">
-                    <span>Địa chỉ</span>
-                    <strong style={{ fontSize: '0.85rem' }}>{qrBooking.field?.address}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div className="qr-pass-card__footer">
-                {qrBooking.checked_in_at ? (
-                  <p className="qr-pass-status success">
-                    <CheckCircle2 size={16} /> Bạn đã check-in thành công tại sân vào lúc{' '}
-                    {new Date(qrBooking.checked_in_at).toLocaleTimeString('vi-VN')}. (+10 điểm uy tín đã cộng)
-                  </p>
-                ) : (
-                  <p className="qr-pass-status pending">
-                    <ShieldCheck size={16} /> Đưa mã này cho chủ sân / nhân viên khi đến sân để check-in và
-                    nhận ngay <strong>+10 điểm uy tín</strong>!
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="modal__actions" style={{ marginTop: 16 }}>
-              <button type="button" className="button button--brand" onClick={() => setQrBooking(null)}>
-                Đóng vé
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal isOpen={!!reviewing} onClose={() => setReviewing(null)} asForm onSubmit={submitReview}>
         <h2>Đánh giá {currentReview?.field?.name}</h2>
@@ -514,9 +476,9 @@ export function CustomerBookingsPage() {
             ? new Date(cancellingBooking.booking_date).toLocaleDateString('vi-VN')
             : ''
         } (${cancellingBooking?.time_slot?.start_time} - ${cancellingBooking?.time_slot?.end_time})? ${
-          cancellingBooking?.booking_date === new Date().toISOString().slice(0, 10)
-            ? 'Lưu ý: Hủy sát giờ có thể trừ 15 điểm uy tín của bạn.'
-            : ''
+          cancellingBooking?.cancel_penalty
+            ? 'Lưu ý: còn dưới 4 giờ trước giờ chơi nên hủy lúc này sẽ bị trừ 15 điểm uy tín.'
+            : 'Hủy lúc này không bị trừ điểm uy tín.'
         }`}
         confirmText="Hủy lịch đặt"
         cancelText="Giữ lại"
@@ -617,11 +579,11 @@ export function CustomerProfilePage() {
         <div className="trust-rules-grid">
           <div className="trust-rule-item">
             <span className="trust-rule-val plus">+10</span>
-            <span>Check-in QR khi đến sân</span>
+            <span>Chủ sân xác nhận bạn đã đến sân</span>
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val minus">-15</span>
-            <span>Hủy lịch sát giờ (&lt;2 tiếng)</span>
+            <span>Hủy đơn đã duyệt khi còn dưới 4 giờ trước giờ chơi</span>
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val danger">-25</span>

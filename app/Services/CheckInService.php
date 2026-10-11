@@ -10,22 +10,28 @@ use Illuminate\Support\Facades\DB;
 
 class CheckInService
 {
-    /**
-     * Chủ sân thực hiện check-in cho khách qua mã QR Code.
-     */
+    /** Check-in theo mã đơn (dùng khi khách đọc mã). */
     public function checkIn(User $owner, string $code): Booking
     {
-        $code = strtoupper(trim($code));
+        $booking = Booking::where('check_in_code', strtoupper(trim($code)))->first();
 
-        return DB::transaction(function () use ($owner, $code) {
+        if (! $booking) {
+            throw new DomainException('Mã check-in không tồn tại hoặc không hợp lệ.');
+        }
+
+        return $this->checkInBooking($owner, $booking);
+    }
+
+    /**
+     * Chủ sân xác nhận khách đã đến sân ngay trên đơn đặt (web không cần quét mã).
+     */
+    public function checkInBooking(User $owner, Booking $booking): Booking
+    {
+        return DB::transaction(function () use ($owner, $booking) {
             $booking = Booking::with(['customer', 'sportsField.owner', 'timeSlot'])
-                ->where('check_in_code', $code)
+                ->whereKey($booking->id)
                 ->lockForUpdate()
-                ->first();
-
-            if (! $booking) {
-                throw new DomainException('Mã check-in không tồn tại hoặc không hợp lệ.');
-            }
+                ->firstOrFail();
 
             // Kiểm tra quyền: phải là chủ của sân hoặc admin
             if ($booking->sportsField->field_owner_id !== $owner->id && ! $owner->isAdmin()) {
@@ -55,6 +61,7 @@ class CheckInService
                 'checked_in_by' => $owner->id,
                 // Nếu đơn đang pending mà khách đến sân check-in, tự động xác nhận
                 'status' => BookingStatus::Confirmed->value,
+                'confirmed_at' => $booking->confirmed_at ?? now(),
             ]);
 
             // Cộng điểm tin cậy cho khách hàng vì đã có mặt đúng hẹn

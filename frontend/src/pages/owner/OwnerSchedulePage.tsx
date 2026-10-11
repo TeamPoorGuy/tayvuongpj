@@ -13,7 +13,7 @@ import {
   List,
   MapPin,
   Phone,
-  QrCode,
+  UserCheck,
   ShieldCheck,
   User,
   XCircle,
@@ -29,6 +29,13 @@ import { getLocalTodayString } from '../../utils/date'
 import type { Booking, Paginated, SportsField } from '../../types/api'
 
 const currency = new Intl.NumberFormat('vi-VN')
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const STATUS_CONFIG: Record<
   string,
@@ -84,7 +91,7 @@ function getWeekDates(centerDateStr: string): string[] {
   for (let i = 0; i < 7; i++) {
     const cur = new Date(monday)
     cur.setDate(monday.getDate() + i)
-    week.push(cur.toISOString().slice(0, 10))
+    week.push(formatLocalDate(cur))
   }
   return week
 }
@@ -185,17 +192,17 @@ export function OwnerSchedulePage() {
 
   // 5. Quick Check-In Mutation
   const checkIn = useMutation({
-    mutationFn: async (code: string) =>
-      (await api.post<{ message: string; data: Booking }>('/field-owner/check-in', { code })).data,
+    mutationFn: async (booking: Booking) =>
+      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/check-in`)).data,
     onSuccess: (res) => {
-      toast.success(res.message || 'Check-in thành công! (+10 điểm uy tín cho khách)')
+      toast.success(res.message || 'Đã xác nhận khách đến sân (+10 điểm uy tín cho khách)')
       setDetailBooking(null)
       void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
     onError: (err) => {
-      toast.error(errorMessage(err), 'Check-in không thành công')
+      toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
     },
   })
 
@@ -203,13 +210,13 @@ export function OwnerSchedulePage() {
   const handlePrev = () => {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() - (viewMode === 'week' ? 7 : 1))
-    setSelectedDate(d.toISOString().slice(0, 10))
+    setSelectedDate(formatLocalDate(d))
   }
 
   const handleNext = () => {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + (viewMode === 'week' ? 7 : 1))
-    setSelectedDate(d.toISOString().slice(0, 10))
+    setSelectedDate(formatLocalDate(d))
   }
 
   const handleToday = () => {
@@ -290,7 +297,7 @@ export function OwnerSchedulePage() {
           <strong>Quy định vận hành & quản lý khung giờ</strong>
           <p>
             Khung giờ có màu vàng (Chờ duyệt) cần được xác nhận để giữ chỗ cho khách. Khi khách tới sân,
-            bấm vào ô booking để <strong>Quét / Xác nhận Check-in (+10 điểm uy tín)</strong>. Bạn có thể
+            bấm vào ô booking để <strong>xác nhận khách đã đến (+10 điểm uy tín)</strong>. Bạn có thể
             điều chỉnh giá giờ hoặc thêm khung giờ hoạt động tại{' '}
             <Link to="/owner/fields">Quản lý sân</Link>.
           </p>
@@ -485,7 +492,7 @@ export function OwnerSchedulePage() {
                               {cfg?.label}
                             </span>
                             {booking.checked_in_at && (
-                              <span className="mini-badge checkin">✓ Check-in</span>
+                              <span className="mini-badge checkin">✓ Đã đến</span>
                             )}
                           </div>
                         </div>
@@ -562,8 +569,8 @@ export function OwnerSchedulePage() {
                                 {booking.customer?.name ?? 'Khách đặt sân'}
                               </strong>
                               {booking.checked_in_at && (
-                                <span className="checked-in-tag" title="Đã quét Check-in QR">
-                                  ✓ Check-in
+                                <span className="checked-in-tag" title="Chủ sân đã xác nhận khách đến">
+                                  ✓ Đã đến
                                 </span>
                               )}
                             </div>
@@ -667,7 +674,7 @@ export function OwnerSchedulePage() {
               <StatusBadge status={detailBooking.status} />
               {detailBooking.checked_in_at ? (
                 <span className="badge badge--success">
-                  <CheckCircle2 size={13} /> Đã Check-in ({new Date(detailBooking.checked_in_at).toLocaleTimeString('vi-VN')})
+                  <CheckCircle2 size={13} /> Đã đến sân ({new Date(detailBooking.checked_in_at).toLocaleTimeString('vi-VN')})
                 </span>
               ) : (
                 <span className="badge badge--soft">Chưa check-in</span>
@@ -721,11 +728,10 @@ export function OwnerSchedulePage() {
 
               <div className="detail-item">
                 <span className="detail-item__label">
-                  <QrCode size={13} /> Mã Check-in QR
+                  <UserCheck size={13} /> Đối chiếu khách
                 </span>
-                <code className="checkin-code-box">
-                  {detailBooking.check_in_code ?? `CK-${String(detailBooking.id).padStart(8, '0')}`}
-                </code>
+                <code className="checkin-code-box">#BK-{String(detailBooking.id).padStart(5, '0')}</code>
+                {detailBooking.customer?.phone && <small>{detailBooking.customer.phone}</small>}
               </div>
             </div>
 
@@ -821,12 +827,10 @@ export function OwnerSchedulePage() {
                           type="button"
                           className="button button--ghost"
                           disabled={checkIn.isPending}
-                          onClick={() =>
-                            checkIn.mutate(detailBooking.check_in_code ?? '')
-                          }
+                          onClick={() => checkIn.mutate(detailBooking)}
                           title="Xác nhận khách đã tới sân và cộng +10 điểm uy tín"
                         >
-                          <QrCode size={15} /> Check-in khách (+10đ)
+                          <UserCheck size={15} /> Khách đã đến (+10đ)
                         </button>
                       )}
                       <button

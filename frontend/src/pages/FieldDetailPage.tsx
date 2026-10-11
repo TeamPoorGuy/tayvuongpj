@@ -17,7 +17,7 @@ import {
   BellRing,
   Zap,
 } from 'lucide-react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { useState, useMemo } from 'react'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -25,7 +25,7 @@ import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
 import { useToast } from '../components/Toast'
 import { FieldMap } from '../components/FieldMap'
-import { getLocalTodayString } from '../utils/date'
+import { addDays, formatDay, getLocalTodayString } from '../utils/date'
 import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
 
 const currency = new Intl.NumberFormat('vi-VN')
@@ -44,6 +44,10 @@ export function FieldDetailPage() {
     dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : todayStr,
   )
   const [slotId, setSlotId] = useState<number | null>(null)
+  // Mở từ trang tìm đối / gợi ý (?start=HH:MM): chọn sẵn khung giờ đó nếu còn trống.
+  const [startHint, setStartHint] = useState(searchParams.get('start'))
+  const location = useLocation()
+  const loginState = { from: location.pathname + location.search }
   const [notes, setNotes] = useState('')
   const [activeImg, setActiveImg] = useState(0)
   const [periodFilter, setPeriodFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all')
@@ -95,14 +99,14 @@ export function FieldDetailPage() {
     mutationFn: async () =>
       api.post('/customer/bookings', {
         sports_field_id: field.data?.id,
-        time_slot_id: slotId,
+        time_slot_id: selectedSlot?.id,
         booking_date: date,
         notes,
       }),
     onSuccess: () => {
-      setSlotId(null)
+      pickSlot(null)
       setNotes('')
-      success('Yêu cầu đặt sân đã được gửi thành công!', 'Đặt sân thành công')
+      success('Yêu cầu đặt sân đã được gửi. Chủ sân sẽ xác nhận và bạn nhận email thông báo.', 'Đặt sân thành công')
       void queryClient.invalidateQueries({ queryKey: ['slots'] })
     },
     onError: (err) => {
@@ -120,9 +124,25 @@ export function FieldDetailPage() {
     return []
   }, [item])
 
-  const selectedSlot = useMemo(() => {
-    return slots.data?.find((s) => s.id === slotId) ?? null
-  }, [slots.data, slotId])
+  const selectedSlot =
+    slots.data?.find((s) => s.id === slotId) ??
+    (startHint
+      ? slots.data?.find((s) => s.start_time === startHint && !s.is_booked && !s.is_past && !s.is_held)
+      : null) ??
+    null
+
+  const pickSlot = (id: number | null) => {
+    setStartHint(null)
+    setSlotId(id)
+  }
+
+  const changeDate = (next: string) => {
+    setDate(next)
+    pickSlot(null)
+    setSelectedBookedSlot(null)
+  }
+
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(todayStr, i)), [todayStr])
 
   // Calculate duration in hours between HH:mm and HH:mm and respect slot-specific price
   const calculatedPrice = useMemo(() => {
@@ -162,11 +182,7 @@ export function FieldDetailPage() {
   )
   const isDateFullyBooked = !slots.isPending && allSlots.length > 0 && availableCount === 0
 
-  const tomorrowDateStr = useMemo(() => {
-    const d = new Date(date)
-    d.setDate(d.getDate() + 1)
-    return d.toISOString().slice(0, 10)
-  }, [date])
+  const tomorrowDateStr = addDays(date, 1)
 
   const scrollToBooking = () => {
     const el = document.getElementById('booking-card-section')
@@ -275,7 +291,7 @@ export function FieldDetailPage() {
                 <Check /> Xác nhận bởi chủ sân
               </span>
               <span>
-                <Info /> Hủy miễn phí trước giờ chơi ít nhất 2 giờ
+                <Info /> Hủy miễn phí trước giờ chơi 4 giờ · không hủy được khi còn dưới 2 giờ
               </span>
             </div>
           </section>
@@ -347,12 +363,26 @@ export function FieldDetailPage() {
               type="date"
               min={todayStr}
               value={date}
-              onChange={(event) => {
-                setDate(event.target.value)
-                setSlotId(null)
-              }}
+              onChange={(event) => event.target.value && changeDate(event.target.value)}
             />
           </label>
+          <div className="day-strip" role="group" aria-label="Chọn nhanh ngày">
+            {weekDays.map((day) => {
+              const [label, rest] = formatDay(day).split(' · ')
+              return (
+                <button
+                  type="button"
+                  key={day}
+                  className={day === date ? 'active' : ''}
+                  aria-pressed={day === date}
+                  onClick={() => changeDate(day)}
+                >
+                  <strong>{label}</strong>
+                  <small>{rest.slice(0, 5)}</small>
+                </button>
+              )
+            })}
+          </div>
 
           {/* Time slot period filter */}
           <div className="slot-picker-wrap">
@@ -414,28 +444,24 @@ export function FieldDetailPage() {
               <div className="fully-booked-notice">
                 <div className="fully-booked-head">
                   <Info size={15} />
-                  <strong>Ngày {new Date(date).toLocaleDateString('vi-VN')} đã kín tất cả khung giờ!</strong>
+                  <strong>{formatDay(date)} đã kín tất cả khung giờ!</strong>
                 </div>
                 <p>
-                  Bạn có thể bấm vào các khung giờ đã đặt bên dưới để tham gia <strong>Hàng đợi (Waitlist)</strong>, hoặc chuyển sang ngày mai để xem khung giờ trống.
+                  Bạn có thể bấm vào các khung giờ đã đặt bên dưới để tham gia <strong>Hàng đợi (Waitlist)</strong>, hoặc chuyển sang ngày kế tiếp để xem khung giờ trống.
                 </p>
                 <button
                   type="button"
                   className="button button--brand button--small"
-                  onClick={() => {
-                    setDate(tomorrowDateStr)
-                    setSlotId(null)
-                    setSelectedBookedSlot(null)
-                  }}
+                  onClick={() => changeDate(tomorrowDateStr)}
                 >
-                  <CalendarDays size={13} /> Chuyển sang ngày mai ({new Date(tomorrowDateStr).toLocaleDateString('vi-VN')})
+                  <CalendarDays size={13} /> Xem ngày kế tiếp ({formatDay(tomorrowDateStr)})
                 </button>
               </div>
             )}
 
             <div className="slot-grid">
               {filteredSlots.map((slot) => {
-                const isSelected = slotId === slot.id
+                const isSelected = selectedSlot?.id === slot.id
                 const isBookedSelected = selectedBookedSlot?.id === slot.id
                 const isAvailable = !slot.is_booked && !slot.is_past && !slot.is_held
                 return (
@@ -450,11 +476,11 @@ export function FieldDetailPage() {
                     }`}
                     onClick={() => {
                       if (slot.is_booked) {
-                        setSlotId(null)
+                        pickSlot(null)
                         setSelectedBookedSlot(slot)
                       } else if (!slot.is_past && !slot.is_held) {
                         setSelectedBookedSlot(null)
-                        setSlotId(slot.id)
+                        pickSlot(slot.id)
                       }
                     }}
                     key={slot.id}
@@ -518,7 +544,7 @@ export function FieldDetailPage() {
                     <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Tham gia Hàng đợi (Waitlist)'}
                   </button>
                 ) : (
-                  <Link to="/login" className="button button--brand button--small">
+                  <Link to="/login" state={loginState} className="button button--brand button--small">
                     Đăng nhập để vào Hàng đợi
                   </Link>
                 )}
@@ -540,11 +566,11 @@ export function FieldDetailPage() {
                             className="button button--ghost button--small"
                             onClick={() => {
                               if (sug.field_slug === slug) {
-                                setDate(sug.date)
+                                changeDate(sug.date)
                                 setSlotId(sug.time_slot_id)
-                                setSelectedBookedSlot(null)
                               } else {
-                                window.location.href = `/fields/${sug.field_slug}`
+                                // Sang sân khác thì mang theo ngày + giờ gợi ý để khỏi chọn lại.
+                                window.location.href = `/fields/${sug.field_slug}?date=${sug.date}&start=${sug.start_time}`
                               }
                             }}
                           >
@@ -592,19 +618,26 @@ export function FieldDetailPage() {
           </label>
 
           {!user ? (
-            <Link className="button button--dark button--block" to="/login">
+            <Link className="button button--dark button--block" to="/login" state={loginState}>
               Đăng nhập để đặt sân
             </Link>
           ) : user.role !== 'customer' ? (
             <div className="notice notice--soft">Chỉ tài khoản khách hàng có thể đặt sân.</div>
           ) : (
             <button
-              disabled={!slotId || booking.isPending}
+              disabled={!selectedSlot || booking.isPending}
               onClick={() => booking.mutate()}
               className="button button--brand button--block button--lg"
             >
-              <CalendarDays size={18} /> {booking.isPending ? 'Đang gửi...' : 'Gửi yêu cầu đặt sân'}
+              <CalendarDays size={18} />{' '}
+              {booking.isPending ? 'Đang gửi...' : selectedSlot ? 'Gửi yêu cầu đặt sân' : 'Chọn khung giờ để đặt'}
             </button>
+          )}
+
+          {booking.isSuccess && !selectedSlot && (
+            <div className="notice notice--success" role="status">
+              Đã gửi yêu cầu, đang chờ chủ sân xác nhận. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
+            </div>
           )}
 
           <div className="booking-guarantee">
@@ -625,9 +658,11 @@ export function FieldDetailPage() {
         <button
           type="button"
           className="button button--brand"
-          onClick={scrollToBooking}
+          disabled={booking.isPending}
+          onClick={() => (selectedSlot && user?.role === 'customer' ? booking.mutate() : scrollToBooking())}
         >
-          <CalendarDays size={16} /> {slotId ? 'Xác nhận đặt' : 'Chọn giờ & đặt sân'}
+          <CalendarDays size={16} />{' '}
+          {booking.isPending ? 'Đang gửi...' : selectedSlot && user?.role === 'customer' ? 'Gửi yêu cầu đặt' : 'Chọn giờ & đặt sân'}
         </button>
       </div>
     </div>

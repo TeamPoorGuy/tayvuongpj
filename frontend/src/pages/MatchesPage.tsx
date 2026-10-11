@@ -7,6 +7,7 @@ import {
   MapPin,
   Phone,
   Plus,
+  Search,
   ShieldCheck,
   Trophy,
   UserCheck,
@@ -14,7 +15,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -22,7 +23,17 @@ import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/auth-context'
-import type { Category, MatchParticipant, MatchRequest, Paginated, SportsField } from '../types/api'
+import type { ApiEnvelope, Category, MatchParticipant, MatchRequest, Paginated, SportsField, TimeSlot } from '../types/api'
+import { formatDay, getLocalTodayString } from '../utils/date'
+
+const currency = new Intl.NumberFormat('vi-VN')
+
+const matchStatusLabels: Record<string, string> = {
+  open: 'Đang mở',
+  full: 'Đã đủ',
+  completed: 'Đã kết thúc',
+  cancelled: 'Đã hủy',
+}
 
 const skillLevelLabels: Record<string, string> = {
   beginner: 'Mới chơi / Giao lưu vui',
@@ -42,10 +53,13 @@ export function MatchesPage() {
   const [skillLevel, setSkillLevel] = useState<string>('')
   const [matchStatus, setMatchStatus] = useState<string>('')
   const [date, setDate] = useState<string>('')
+  const [mine, setMine] = useState(false)
   const [page, setPage] = useState<number>(1)
+  const todayStr = getLocalTodayString()
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createKey, setCreateKey] = useState(0) // đổi key để form tạo phòng về trạng thái trống sau khi tạo xong
   const [joiningMatch, setJoiningMatch] = useState<MatchRequest | null>(null)
   const [joinMessage, setJoinMessage] = useState('')
   const [managingMatch, setManagingMatch] = useState<MatchRequest | null>(null)
@@ -56,14 +70,9 @@ export function MatchesPage() {
     queryFn: async () => (await api.get<{ data: Category[] }>('/categories')).data.data,
   })
 
-  const fieldsQuery = useQuery({
-    queryKey: ['fields-dropdown'],
-    queryFn: async () => (await api.get<Paginated<SportsField>>('/fields?per_page=100')).data.data,
-  })
-
   // Matches query
   const matchesQuery = useQuery({
-    queryKey: ['matches', categoryId, skillLevel, matchStatus, date, page],
+    queryKey: ['matches', categoryId, skillLevel, matchStatus, date, mine && user?.id, page],
     queryFn: async () => {
       const params = new URLSearchParams()
       params.set('page', String(page))
@@ -71,6 +80,7 @@ export function MatchesPage() {
       if (skillLevel) params.set('skill_level', skillLevel)
       if (matchStatus) params.set('status', matchStatus)
       if (date) params.set('date', date)
+      if (mine && user) params.set('mine', '1')
       return (await api.get<Paginated<MatchRequest>>(`/matches?${params.toString()}`)).data
     },
   })
@@ -82,6 +92,7 @@ export function MatchesPage() {
     onSuccess: (res) => {
       toast.success(res.message || 'Tạo phòng tìm đối thành công!')
       setShowCreateModal(false)
+      setCreateKey((key) => key + 1)
       void client.invalidateQueries({ queryKey: ['matches'] })
     },
     onError: (err) => {
@@ -156,28 +167,10 @@ export function MatchesPage() {
     },
   })
 
-  const handleCreateSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const form = new FormData(e.currentTarget)
-    const payload = {
-      sport_category_id: Number(form.get('sport_category_id')),
-      sports_field_id: form.get('sports_field_id') ? Number(form.get('sports_field_id')) : null,
-      title: String(form.get('title')),
-      play_date: String(form.get('play_date')),
-      start_time: String(form.get('start_time')),
-      end_time: String(form.get('end_time')),
-      skill_level: String(form.get('skill_level')),
-      players_needed: Number(form.get('players_needed')),
-      contact_phone: String(form.get('contact_phone')),
-      description: String(form.get('description') ?? ''),
-    }
-    createMatch.mutate(payload)
-  }
-
   const handleJoinClick = (match: MatchRequest) => {
     if (!user) {
       toast.error('Vui lòng đăng nhập để tham gia tìm đối/ghép đội.')
-      navigate('/login')
+      navigate('/login', { state: { from: '/matches' } })
       return
     }
     setJoiningMatch(match)
@@ -186,7 +179,7 @@ export function MatchesPage() {
   const handleOpenCreateModal = () => {
     if (!user) {
       toast.error('Vui lòng đăng nhập để tạo phòng tìm đối.')
-      navigate('/login')
+      navigate('/login', { state: { from: '/matches' } })
       return
     }
     setShowCreateModal(true)
@@ -267,6 +260,8 @@ export function MatchesPage() {
               <option value="">Trạng thái: Tất cả</option>
               <option value="open">Đang tìm người</option>
               <option value="full">Đã đủ người</option>
+              {mine && <option value="completed">Đã kết thúc</option>}
+              {mine && <option value="cancelled">Đã hủy</option>}
             </select>
           </div>
 
@@ -274,7 +269,8 @@ export function MatchesPage() {
             <input
               type="date"
               value={date}
-              min={new Date().toISOString().slice(0, 10)}
+              min={mine ? undefined : todayStr}
+              aria-label="Ngày thi đấu"
               onChange={(e) => {
                 setDate(e.target.value)
                 setPage(1)
@@ -282,7 +278,22 @@ export function MatchesPage() {
             />
           </div>
 
-          {(categoryId || skillLevel || matchStatus || date) && (
+          {user && (
+            <button
+              type="button"
+              className={`button button--small ${mine ? 'button--dark' : 'button--ghost'}`}
+              aria-pressed={mine}
+              title="Phòng bạn tạo hoặc đã xin tham gia, kể cả đã kết thúc"
+              onClick={() => {
+                setMine(!mine)
+                setPage(1)
+              }}
+            >
+              <UserCheck size={14} /> Kèo của tôi
+            </button>
+          )}
+
+          {(categoryId || skillLevel || matchStatus || date || mine) && (
             <button
               type="button"
               className="button button--ghost button--small"
@@ -291,6 +302,7 @@ export function MatchesPage() {
                 setSkillLevel('')
                 setMatchStatus('')
                 setDate('')
+                setMine(false)
                 setPage(1)
               }}
             >
@@ -325,7 +337,7 @@ export function MatchesPage() {
                     ) : match.status === 'full' ? (
                       <span className="badge badge--warning">🔒 Đã đủ</span>
                     ) : match.status === 'completed' ? (
-                      <span className="badge badge--soft">Đã đá</span>
+                      <span className="badge badge--soft">Đã kết thúc</span>
                     ) : (
                       <span className="badge badge--soft">Đã hủy</span>
                     )}
@@ -337,7 +349,7 @@ export function MatchesPage() {
                 <div className="match-card__meta">
                   <span>
                     <CalendarDays size={15} />
-                    {new Date(match.play_date).toLocaleDateString('vi-VN')}
+                    {formatDay(match.play_date)}
                   </span>
                   <span>
                     <Clock3 size={15} />
@@ -347,6 +359,7 @@ export function MatchesPage() {
                     <span>
                       <MapPin size={15} />
                       {match.sports_field.name}
+                      {match.sports_field.address ? ` · ${match.sports_field.address}` : ''}
                     </span>
                   )}
                 </div>
@@ -358,9 +371,10 @@ export function MatchesPage() {
                 {match.sports_field?.slug && match.status !== 'cancelled' && match.status !== 'completed' && (
                   <Link
                     className="button button--ghost button--small"
-                    to={`/fields/${match.sports_field.slug}?date=${match.play_date}`}
+                    to={`/fields/${match.sports_field.slug}?date=${match.play_date}&start=${match.start_time}`}
+                    title={`Mở sân với ngày ${formatDay(match.play_date)}, khung ${match.start_time} – ${match.end_time}`}
                   >
-                    Đặt sân này
+                    Xem sân & đặt khung giờ này
                   </Link>
                 )}
 
@@ -435,7 +449,7 @@ export function MatchesPage() {
                           ✕ Đã bị từ chối
                         </span>
                       )}
-                      {myParticipant.status !== 'rejected' && match.status !== 'completed' && (
+                      {myParticipant.status !== 'rejected' && (match.status === 'open' || match.status === 'full') && (
                         <button
                           type="button"
                           className="button button--ghost button--small"
@@ -458,7 +472,7 @@ export function MatchesPage() {
                     </button>
                   ) : (
                     <button type="button" className="button button--ghost button--small" disabled>
-                      Phòng đã đủ thành viên
+                      {match.status === 'open' || match.status === 'full' ? 'Phòng đã đủ thành viên' : 'Phòng đã đóng'}
                     </button>
                   )}
                 </div>
@@ -466,6 +480,12 @@ export function MatchesPage() {
             )
           })}
         </div>
+
+        {matchesQuery.isPending && (
+          <div className="query-state query-state--loading" aria-live="polite">
+            Đang tải danh sách kèo...
+          </div>
+        )}
 
         {matchesQuery.isError && (
           <div className="notice notice--error" role="alert">
@@ -476,8 +496,12 @@ export function MatchesPage() {
         {!matchesQuery.isPending && !matchesQuery.isError && matches.length === 0 && (
           <div className="empty-panel">
             <Trophy size={48} />
-            <h2>Chưa có bài tìm đối nào phù hợp</h2>
-            <p>Hãy là người đầu tiên tạo phòng giao lưu để kết nối bạn bè cùng sở thích!</p>
+            <h2>{mine ? 'Bạn chưa tạo hoặc tham gia kèo nào' : 'Chưa có bài tìm đối nào phù hợp'}</h2>
+            <p>
+              {mine
+                ? 'Tạo phòng mới hoặc bỏ lọc "Kèo của tôi" để xem các kèo đang mở.'
+                : 'Hãy là người đầu tiên tạo phòng giao lưu để kết nối bạn bè cùng sở thích!'}
+            </p>
             <button
               type="button"
               className="button button--brand"
@@ -497,126 +521,15 @@ export function MatchesPage() {
         />
       </div>
 
-      {/* Modal: Create Match */}
-      <Modal
+      <CreateMatchModal
+        key={createKey}
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Tạo phòng ghép đội / Tìm đối thể thao"
-        asForm
-        onSubmit={handleCreateSubmit}
-      >
-        <div className="form-grid">
-          <label>
-            <span>Môn thể thao *</span>
-            <select name="sport_category_id" required defaultValue={categoriesQuery.data?.[0]?.id}>
-              {categoriesQuery.data?.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Trình độ mong muốn *</span>
-            <select name="skill_level" required defaultValue="intermediate">
-              <option value="beginner">Mới chơi / Vui vẻ giao lưu</option>
-              <option value="intermediate">Trung bình / Vừa sức</option>
-              <option value="advanced">Khá / Bán chuyên</option>
-              <option value="any">Tự do / Mọi trình độ</option>
-            </select>
-          </label>
-        </div>
-
-        <label style={{ marginTop: 10 }}>
-          <span>Tiêu đề bài đăng *</span>
-          <input
-            name="title"
-            required
-            placeholder="VD: Kèo 5v5 giao lưu vui vẻ tối thứ Năm tại sân Chu Văn An"
-          />
-        </label>
-
-        <label style={{ marginTop: 10 }}>
-          <span>Địa điểm / Sân (Tùy chọn)</span>
-          <select name="sports_field_id" defaultValue="">
-            <option value="">Chọn sân đã có trên hệ thống hoặc ghi chú sau</option>
-            {fieldsQuery.data?.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name} ({f.address})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="form-grid" style={{ marginTop: 10 }}>
-          <label>
-            <span>Ngày thi đấu *</span>
-            <input
-              name="play_date"
-              type="date"
-              required
-              min={new Date().toISOString().slice(0, 10)}
-            />
-          </label>
-
-          <label>
-            <span>Số người cần tìm thêm *</span>
-            <input
-              name="players_needed"
-              type="number"
-              min={1}
-              max={30}
-              defaultValue={2}
-              required
-            />
-          </label>
-        </div>
-
-        <div className="form-grid" style={{ marginTop: 10 }}>
-          <label>
-            <span>Giờ bắt đầu *</span>
-            <input name="start_time" type="time" required defaultValue="18:00" />
-          </label>
-
-          <label>
-            <span>Giờ kết thúc *</span>
-            <input name="end_time" type="time" required defaultValue="19:30" />
-          </label>
-        </div>
-
-        <label style={{ marginTop: 10 }}>
-          <span>Số điện thoại liên hệ *</span>
-          <input
-            name="contact_phone"
-            required
-            defaultValue={user?.phone ?? ''}
-            placeholder="09xxxxxxxx"
-          />
-        </label>
-
-        <label style={{ marginTop: 10 }}>
-          <span>Mô tả thêm / Yêu cầu chi tiết</span>
-          <textarea
-            name="description"
-            rows={3}
-            placeholder="VD: Thiếu 2 bạn đá cánh, có áo bib, chia tiền sân đều 50k/người..."
-          />
-        </label>
-
-        <div className="modal__actions" style={{ marginTop: 20 }}>
-          <button
-            type="button"
-            className="button button--ghost"
-            onClick={() => setShowCreateModal(false)}
-          >
-            Hủy
-          </button>
-          <button type="submit" disabled={createMatch.isPending} className="button button--brand">
-            {createMatch.isPending ? 'Đang tạo...' : 'Đăng phòng tìm đối'}
-          </button>
-        </div>
-      </Modal>
+        categories={categoriesQuery.data ?? []}
+        defaultPhone={user?.phone ?? ''}
+        busy={createMatch.isPending}
+        onCreate={(payload) => createMatch.mutate(payload)}
+      />
 
       {/* Modal: Join Match */}
       <Modal
@@ -635,7 +548,7 @@ export function MatchesPage() {
           Bạn đang gửi yêu cầu tham gia trận đấu của <strong>{joiningMatch?.host?.name}</strong>{' '}
           ngày{' '}
           {joiningMatch?.play_date
-            ? new Date(joiningMatch.play_date).toLocaleDateString('vi-VN')
+            ? formatDay(joiningMatch.play_date)
             : ''}{' '}
           ({joiningMatch?.start_time} – {joiningMatch?.end_time}).
         </p>
@@ -675,7 +588,7 @@ export function MatchesPage() {
             <span>
               Tiến độ: <strong>{managingMatch?.joined_count} / {(managingMatch?.players_needed ?? 0) + 1} người</strong>
             </span>
-            <span>Trạng thái: <strong>{managingMatch?.status === 'open' ? 'Đang mở' : 'Đã đủ'}</strong></span>
+            <span>Trạng thái: <strong>{matchStatusLabels[managingMatch?.status ?? 'open']}</strong></span>
           </div>
 
           <h4 style={{ margin: '16px 0 8px' }}>Danh sách thành viên đăng ký</h4>
@@ -703,7 +616,7 @@ export function MatchesPage() {
                 </div>
 
                 <div className="participant-actions">
-                  {participant.status === 'pending' && (
+                  {participant.status === 'pending' && (managingMatch?.status === 'open' || managingMatch?.status === 'full') && (
                     <>
                       <button
                         type="button"
@@ -761,6 +674,7 @@ export function MatchesPage() {
             <button
               type="button"
               className="button button--ghost button--danger"
+              style={{ visibility: managingMatch?.status === 'open' || managingMatch?.status === 'full' ? 'visible' : 'hidden' }}
               disabled={cancelMatch.isPending}
               onClick={() => {
                 if (managingMatch && confirm('Bạn có chắc muốn huỷ bài tìm đối này?')) {
@@ -781,5 +695,302 @@ export function MatchesPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+function CreateMatchModal({
+  isOpen,
+  onClose,
+  categories,
+  defaultPhone,
+  busy,
+  onCreate,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  categories: Category[]
+  defaultPhone: string
+  busy: boolean
+  onCreate: (payload: Record<string, unknown>) => void
+}) {
+  const todayStr = getLocalTodayString()
+  const [pickedCategoryId, setPickedCategoryId] = useState<number | null>(null)
+  const [field, setField] = useState<SportsField | null>(null)
+  const [keyword, setKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
+  const [date, setDate] = useState(todayStr)
+  // Có sân: giờ chơi lấy từ khung giờ của sân. Chưa chốt sân: nhập tự do.
+  const [slot, setSlot] = useState<TimeSlot | null>(null)
+  const [freeStart, setFreeStart] = useState('18:00')
+  const [freeEnd, setFreeEnd] = useState('19:30')
+
+  const category = categories.find((c) => c.id === pickedCategoryId) ?? categories[0]
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedKeyword(keyword.trim()), 300)
+    return () => clearTimeout(handler)
+  }, [keyword])
+
+  // Tìm sân phía server nên vẫn nhanh khi hệ thống có hàng trăm sân.
+  const fieldSearch = useQuery({
+    queryKey: ['match-field-search', category?.slug, debouncedKeyword],
+    enabled: isOpen && !field && !!category,
+    queryFn: async () =>
+      (
+        await api.get<Paginated<SportsField>>('/fields', {
+          params: { per_page: 6, category: category?.slug, keyword: debouncedKeyword || undefined },
+        })
+      ).data,
+  })
+
+  const slots = useQuery({
+    queryKey: ['slots', field?.id, date],
+    enabled: isOpen && !!field && !!date,
+    queryFn: async () =>
+      (
+        await api.get<ApiEnvelope<{ date: string; slots: TimeSlot[] }>>(
+          `/fields/${field?.id}/available-slots?date=${date}`,
+        )
+      ).data.data.slots,
+  })
+
+  const startTime = field ? slot?.start_time : freeStart
+  const endTime = field ? slot?.end_time : freeEnd
+  const timeError = !field && freeEnd <= freeStart ? 'Giờ kết thúc phải sau giờ bắt đầu.' : ''
+
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!category || !startTime || !endTime || timeError) return
+    const form = new FormData(e.currentTarget)
+    onCreate({
+      sport_category_id: category.id,
+      sports_field_id: field?.id ?? null,
+      title: String(form.get('title')),
+      play_date: date,
+      start_time: startTime,
+      end_time: endTime,
+      skill_level: String(form.get('skill_level')),
+      players_needed: Number(form.get('players_needed')),
+      contact_phone: String(form.get('contact_phone')),
+      description: String(form.get('description') ?? ''),
+    })
+  }
+
+  const results = fieldSearch.data?.data ?? []
+  const totalFields = fieldSearch.data?.meta.total ?? 0
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Tạo phòng ghép đội / Tìm đối thể thao" wide asForm onSubmit={submit}>
+      <div className="form-grid">
+        <label>
+          <span>Môn thể thao *</span>
+          <select
+            required
+            value={category?.id ?? ''}
+            onChange={(e) => {
+              setPickedCategoryId(Number(e.target.value))
+              // Sân thuộc môn khác thì bỏ chọn để môn và sân luôn khớp nhau.
+              setField(null)
+              setSlot(null)
+            }}
+          >
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Trình độ mong muốn *</span>
+          <select name="skill_level" required defaultValue="intermediate">
+            <option value="beginner">Mới chơi / Vui vẻ giao lưu</option>
+            <option value="intermediate">Trung bình / Vừa sức</option>
+            <option value="advanced">Khá / Bán chuyên</option>
+            <option value="any">Tự do / Mọi trình độ</option>
+          </select>
+        </label>
+      </div>
+
+      <label>
+        <span>Tiêu đề bài đăng *</span>
+        <input name="title" required maxLength={150} placeholder="VD: Kèo 5v5 giao lưu vui vẻ tối thứ Năm" />
+      </label>
+
+      <div className="field-picker">
+        <span className="field-label">Sân thi đấu (tùy chọn)</span>
+        {field ? (
+          <div className="field-picker__selected">
+            <div>
+              <strong>{field.name}</strong>
+              <small>
+                <MapPin size={12} /> {field.address} · {currency.format(field.price_per_hour)}đ/giờ
+              </small>
+            </div>
+            <button
+              type="button"
+              className="button button--ghost button--small"
+              onClick={() => {
+                setField(null)
+                setSlot(null)
+              }}
+            >
+              Đổi sân
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="search-control">
+              <Search size={16} />
+              <input
+                type="search"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder={`Tìm sân ${category?.name.toLowerCase() ?? ''} theo tên, quận hoặc địa chỉ...`}
+                aria-label="Tìm sân"
+              />
+            </div>
+            <div className="field-picker__results">
+              {results.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className="field-picker__item"
+                  onClick={() => {
+                    setField(item)
+                    setSlot(null)
+                  }}
+                >
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.address} · {currency.format(item.price_per_hour)}đ/giờ
+                  </small>
+                </button>
+              ))}
+              {fieldSearch.isPending && <p className="form-help">Đang tìm sân...</p>}
+              {!fieldSearch.isPending && results.length === 0 && (
+                <p className="form-help">
+                  Không có sân {category?.name.toLowerCase()} nào khớp{debouncedKeyword ? ` "${debouncedKeyword}"` : ''}. Bạn vẫn
+                  có thể tạo phòng và ghi địa điểm trong phần mô tả.
+                </p>
+              )}
+              {totalFields > results.length && (
+                <p className="form-help">
+                  Đang hiện {results.length}/{totalFields} sân — gõ thêm tên hoặc địa chỉ để thu hẹp.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="form-grid">
+        <label>
+          <span>Ngày thi đấu *</span>
+          <input
+            type="date"
+            required
+            min={todayStr}
+            value={date}
+            onChange={(e) => {
+              setDate(e.target.value)
+              setSlot(null)
+            }}
+          />
+        </label>
+
+        <label>
+          <span>Số người cần tìm thêm *</span>
+          <input name="players_needed" type="number" min={1} max={30} defaultValue={2} required />
+        </label>
+      </div>
+
+      {field ? (
+        <div className="field-picker">
+          <span className="field-label">Khung giờ của sân ngày {formatDay(date)} *</span>
+          {slots.isPending && <p className="form-help">Đang tải khung giờ...</p>}
+          {slots.data?.length === 0 && (
+            <p className="form-help">Sân này chưa mở khung giờ nào. Hãy chọn sân khác.</p>
+          )}
+          <div className="slot-grid slot-grid--wide">
+            {slots.data?.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                disabled={item.is_past}
+                className={`slot-chip ${slot?.id === item.id ? 'selected' : ''} ${item.is_past ? 'slot-chip--past' : ''}`}
+                onClick={() => setSlot(item)}
+              >
+                <span>
+                  {item.start_time} – {item.end_time}
+                </span>
+                <small>
+                  {item.is_past ? 'Đã qua giờ' : item.is_booked ? 'Đã có người đặt' : item.is_held ? 'Đang giữ chỗ' : 'Còn trống'}
+                </small>
+              </button>
+            ))}
+          </div>
+          {slot?.is_booked && (
+            <p className="form-help">
+              Khung giờ này đã có người đặt. Chỉ tạo phòng nếu chính bạn là người đã đặt sân.
+            </p>
+          )}
+          {slot && !slot.is_booked && (
+            <p className="form-help">
+              Tạo phòng chưa giữ sân — nhớ đặt khung {slot.start_time} – {slot.end_time} ở trang sân sau khi đăng.
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="form-grid">
+            <label>
+              <span>Giờ bắt đầu *</span>
+              <input type="time" step={1800} required value={freeStart} onChange={(e) => setFreeStart(e.target.value)} />
+            </label>
+
+            <label>
+              <span>Giờ kết thúc *</span>
+              <input type="time" step={1800} required value={freeEnd} onChange={(e) => setFreeEnd(e.target.value)} />
+            </label>
+          </div>
+          {timeError && <div className="notice notice--error">{timeError}</div>}
+        </>
+      )}
+
+      <label>
+        <span>Số điện thoại liên hệ *</span>
+        <input
+          name="contact_phone"
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]{10,11}"
+          title="Số điện thoại gồm 10–11 chữ số"
+          required
+          defaultValue={defaultPhone}
+          placeholder="09xxxxxxxx"
+        />
+      </label>
+
+      <label>
+        <span>Mô tả thêm / Yêu cầu chi tiết</span>
+        <textarea
+          name="description"
+          rows={3}
+          maxLength={1000}
+          placeholder="VD: Thiếu 2 bạn đá cánh, có áo bib, chia tiền sân đều 50k/người..."
+        />
+      </label>
+
+      <div className="modal__actions">
+        <button type="button" className="button button--ghost" onClick={onClose}>
+          Hủy
+        </button>
+        <button type="submit" disabled={busy || !startTime || !!timeError} className="button button--brand">
+          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ để đăng' : 'Đăng phòng tìm đối'}
+        </button>
+      </div>
+    </Modal>
   )
 }

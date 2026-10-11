@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Enums\BookingStatus;
 use App\Enums\UserRole;
 use App\Enums\VerificationStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
+use App\Mail\BookingStatusChanged;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\Booking;
 use App\Models\FieldOwnerProfile;
 use App\Models\FieldType;
+use App\Models\MatchRequest;
 use App\Models\Review;
 use App\Models\SportCategory;
 use App\Models\SportsField;
@@ -90,30 +93,84 @@ class AdminService
         return $profile;
     }
 
-    public function fields(?string $status): LengthAwarePaginator
+    private function like(string $keyword): string
+    {
+        return '%'.addcslashes($keyword, '%_\\').'%';
+    }
+
+    public function fields(?string $status, ?string $keyword = null): LengthAwarePaginator
     {
         return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage'])
             ->withRating()
             ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('name', 'like', $this->like($keyword))
+                ->orWhere('address', 'like', $this->like($keyword))
+                ->orWhereHas('owner', fn ($owner) => $owner->where('name', 'like', $this->like($keyword)))))
             ->latest()
             ->paginate(15)
             ->withQueryString();
     }
 
-    public function verifyField(SportsField $field, string $status, ?string $reason = null): SportsField
+    public function verifyField(SportsField $field, string $status, ?string $reason = null, bool $cancelFutureBookings = false): SportsField
     {
         $field->update([
             'status' => $status,
             'rejection_reason' => $status === 'rejected' ? $reason : null,
         ]);
 
+        if ($status === 'rejected' && $cancelFutureBookings) {
+            $cancelReason = $reason ? "Sân đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân đã bị gỡ khỏi hệ thống.';
+
+            $futureBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                ->where('sports_field_id', $field->id)
+                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->where(fn ($q) => $q->where('booking_date', '>', today())
+                    ->orWhere(fn ($todayQ) => $todayQ->whereDate('booking_date', today())))
+                ->get();
+
+            foreach ($futureBookings as $booking) {
+                if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
+                    continue;
+                }
+
+                $booking->update([
+                    'status' => BookingStatus::Cancelled->value,
+                    'cancelled_at' => now(),
+                    'cancel_reason' => $cancelReason,
+                ]);
+
+                if ($booking->customer?->email) {
+                    SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+                }
+            }
+        }
+
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
 
-    public function bookings(?string $status): LengthAwarePaginator
+    public function bookings(?string $status, ?string $keyword = null, ?string $date = null): LengthAwarePaginator
     {
         return Booking::with(Booking::resourceRelations(withCustomer: true))
             ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($date, fn ($query) => $query->whereDate('booking_date', $date))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->whereHas('customer', fn ($c) => $c->where('name', 'like', $this->like($keyword))
+                    ->orWhere('email', 'like', $this->like($keyword))
+                    ->orWhere('phone', 'like', $this->like($keyword)))
+                ->orWhereHas('sportsField', fn ($f) => $f->where('name', 'like', $this->like($keyword)))))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+    }
+
+    public function matches(?string $status, ?string $keyword = null): LengthAwarePaginator
+    {
+        return MatchRequest::with(['host', 'sportCategory', 'sportsField', 'participants.user'])
+            ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('title', 'like', $this->like($keyword))
+                ->orWhereHas('host', fn ($host) => $host->where('name', 'like', $this->like($keyword)))))
             ->latest()
             ->paginate(15)
             ->withQueryString();

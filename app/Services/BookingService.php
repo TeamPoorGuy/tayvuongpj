@@ -21,10 +21,11 @@ use Illuminate\Support\Facades\Gate;
 
 class BookingService
 {
-    public function customerBookings(User $user): LengthAwarePaginator
+    public function customerBookings(User $user, ?string $status = null): LengthAwarePaginator
     {
         return Booking::query()
             ->where('user_id', $user->id)
+            ->when($status, fn ($query) => $query->where('status', $status))
             ->with(Booking::resourceRelations())
             ->latest()
             ->paginate(10);
@@ -100,11 +101,14 @@ class BookingService
         Gate::forUser($user)->authorize('cancel', $booking);
 
         if (! $booking->canBeCancelled()) {
-            throw new ConflictException('Đơn đặt sân này không còn đủ điều kiện để hủy.');
+            throw new ConflictException(
+                $booking->status === BookingStatus::Confirmed
+                    ? 'Đơn đã được chủ sân xác nhận quá '.config('booking.confirmed_cancel_window_hours').' giờ nên không thể tự hủy. Vui lòng liên hệ chủ sân.'
+                    : 'Đơn đặt sân này không còn đủ điều kiện để hủy.'
+            );
         }
 
-        $isLate = $booking->startsAt()->diffInHours(now(), false) > -4;
-        if ($isLate) {
+        if ($booking->isLateToCancel()) {
             TrustScoreService::penalizeLateCancellation($user);
         }
 
@@ -124,7 +128,8 @@ class BookingService
     }
 
     /**
-     * Chạy định kỳ: đơn chờ xác nhận quá giờ bắt đầu → từ chối; đơn đã xác nhận quá giờ kết thúc → hoàn thành.
+     * Chạy định kỳ: đơn chờ xác nhận quá giờ bắt đầu hoặc quá lâu chủ sân không phản hồi → từ chối;
+     * đơn đã xác nhận quá giờ kết thúc → hoàn thành.
      *
      * @return array{rejected:int, completed:int}
      */
@@ -132,16 +137,22 @@ class BookingService
     {
         $count = ['rejected' => 0, 'completed' => 0];
 
+        $expireBefore = now()->subHours((int) config('booking.pending_expire_hours'));
+
         Booking::with(['timeSlot', 'customer', 'sportsField'])
             ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-            ->whereDate('booking_date', '<=', today())
+            ->where(fn ($query) => $query->whereDate('booking_date', '<=', today())
+                ->orWhere(fn ($query) => $query->where('status', BookingStatus::Pending->value)->where('created_at', '<=', $expireBefore)))
             ->lazyById()
-            ->each(function (Booking $booking) use (&$count) {
-                if ($booking->status === BookingStatus::Pending && $booking->startsAt()->isPast()) {
+            ->each(function (Booking $booking) use (&$count, $expireBefore) {
+                $unanswered = $booking->created_at->lte($expireBefore);
+                if ($booking->status === BookingStatus::Pending && ($unanswered || $booking->startsAt()->isPast())) {
                     $booking->update([
                         'status' => BookingStatus::Rejected->value,
                         'cancelled_at' => now(),
-                        'cancel_reason' => 'Quá hạn xác nhận.',
+                        'cancel_reason' => $booking->startsAt()->isPast()
+                            ? 'Quá giờ chơi mà chủ sân chưa xác nhận.'
+                            : 'Chủ sân không phản hồi trong '.config('booking.pending_expire_hours').' giờ nên đơn tự huỷ.',
                     ]);
                     SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
                     app(WaitlistService::class)->handleSlotFreed(

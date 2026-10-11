@@ -238,7 +238,7 @@ class LayeredApiTest extends TestCase
         $this->assertSame('completed', $booking->fresh()->status->value);
     }
 
-    public function test_a_past_dated_booking_cannot_be_cancelled(): void
+    public function test_an_overdue_pending_request_can_still_be_cancelled_without_penalty(): void
     {
         [$field, $slot] = $this->createApprovedFieldWithSlot('san-past');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
@@ -254,10 +254,10 @@ class LayeredApiTest extends TestCase
 
         Sanctum::actingAs($customer);
 
-        $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel", [])
-            ->assertStatus(409);
+        $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel", [])->assertOk();
 
-        $this->assertSame('pending', $booking->fresh()->status->value);
+        $this->assertSame('cancelled', $booking->fresh()->status->value);
+        $this->assertSame(100, $customer->fresh()->trust_score);
     }
 
     public function test_register_always_creates_a_customer_without_an_owner_profile(): void
@@ -575,23 +575,46 @@ class LayeredApiTest extends TestCase
         $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))->assertForbidden();
     }
 
-    public function test_customer_can_cancel_only_before_the_cutoff(): void
+    public function test_confirmed_booking_can_only_be_cancelled_within_two_hours_of_confirmation(): void
     {
         $this->travelTo(now()->setTime(12, 0));
         [$field, $slot] = $this->createApprovedFieldWithSlot('san-huy', '18:00:00', '19:30:00');
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
-        $make = fn (string $date) => Booking::create([
+        $make = fn () => Booking::create([
             'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
-            'booking_date' => $date, 'status' => 'pending', 'total_price' => 1,
+            'booking_date' => today()->toDateString(), 'status' => 'confirmed', 'confirmed_at' => now(), 'total_price' => 1,
         ]);
         Sanctum::actingAs($customer);
 
-        $today = $make(today()->toDateString()); // bắt đầu 18:00, còn 6 giờ → huỷ được
-        $this->patchJson("/api/v1/customer/bookings/{$today->id}/cancel")->assertOk();
+        $within = $make(); // vừa duyệt, còn 6 giờ tới giờ chơi → huỷ được, không bị trừ điểm
+        $this->patchJson("/api/v1/customer/bookings/{$within->id}/cancel")->assertOk();
+        $this->assertSame(100, $customer->fresh()->trust_score);
 
-        $this->travelTo(now()->setTime(17, 0)); // còn 1 giờ < 2 giờ cutoff
-        $late = $make(today()->toDateString());
-        $this->patchJson("/api/v1/customer/bookings/{$late->id}/cancel")->assertStatus(409);
+        $expired = $make();
+        $this->travelTo(now()->addHours(2)->addMinute()); // quá 2 giờ kể từ lúc duyệt
+        $this->patchJson("/api/v1/customer/bookings/{$expired->id}/cancel")->assertStatus(409);
+        $this->assertSame('confirmed', $expired->fresh()->status->value);
+    }
+
+    public function test_pending_requests_are_auto_cancelled_when_owner_does_not_respond(): void
+    {
+        [$field, $slot] = $this->createApprovedFieldWithSlot('san-treo', '18:00:00', '19:30:00');
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $old = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(5)->toDateString(), 'status' => 'pending', 'total_price' => 1,
+        ]);
+        $old->forceFill(['created_at' => now()->subHours(25)])->save();
+        $fresh = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(6)->toDateString(), 'status' => 'pending', 'total_price' => 1,
+        ]);
+
+        app(\App\Services\BookingService::class)->syncStatuses();
+
+        $this->assertSame('rejected', $old->fresh()->status->value);
+        $this->assertStringContainsString('không phản hồi', $old->fresh()->cancel_reason);
+        $this->assertSame('pending', $fresh->fresh()->status->value);
     }
 
     public function test_owner_completes_only_after_slot_ends_and_cancel_needs_reason(): void

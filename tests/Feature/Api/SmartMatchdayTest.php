@@ -540,4 +540,152 @@ class SmartMatchdayTest extends TestCase
         $this->deleteJson("/api/v1/customer/matches/{$id}")->assertOk();
         \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\MatchCancelled::class, fn ($m) => $m->hasTo($player->email));
     }
+
+    public function test_match_at_a_field_must_use_one_of_its_slots_and_its_sport(): void
+    {
+        [, $field, , $category] = $this->createFieldWithSlot('san-match-slot'); // khung 17:30–19:00
+        $other = SportCategory::create(['name' => 'Cầu lông', 'slug' => 'cau-long-match']);
+        $host = User::factory()->create(['role' => 'customer', 'is_active' => true, 'email_verified_at' => now()]);
+        $payload = [
+            'sport_category_id' => $category->id, 'sports_field_id' => $field->id, 'title' => 'Kèo tại sân',
+            'play_date' => now()->addDay()->toDateString(), 'start_time' => '17:30', 'end_time' => '19:00',
+            'skill_level' => 'any', 'players_needed' => 1, 'contact_phone' => '0912345678',
+        ];
+
+        Sanctum::actingAs($host);
+        $this->postJson('/api/v1/customer/matches', ['start_time' => '18:00', 'end_time' => '19:30'] + $payload)
+            ->assertStatus(422)->assertJsonValidationErrors('start_time');
+        $this->postJson('/api/v1/customer/matches', ['sport_category_id' => $other->id] + $payload)
+            ->assertStatus(422)->assertJsonValidationErrors('sports_field_id');
+        $this->postJson('/api/v1/customer/matches', $payload)->assertCreated();
+    }
+
+    public function test_public_match_list_hides_ended_matches_and_mine_lists_my_rooms(): void
+    {
+        $host = User::factory()->create(['role' => 'customer', 'is_active' => true, 'email_verified_at' => now()]);
+        $category = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-mine']);
+        $base = [
+            'user_id' => $host->id, 'sport_category_id' => $category->id, 'skill_level' => 'any',
+            'players_needed' => 1, 'contact_phone' => '0912345678', 'status' => 'open',
+        ];
+        $this->travelTo(now()->setTime(20, 0));
+        \App\Models\MatchRequest::create(['title' => 'Đã hết giờ', 'play_date' => today(), 'start_time' => '17:00', 'end_time' => '18:30'] + $base);
+        \App\Models\MatchRequest::create(['title' => 'Ngày mai', 'play_date' => today()->addDay(), 'start_time' => '17:00', 'end_time' => '18:30'] + $base);
+
+        $this->getJson('/api/v1/matches')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Ngày mai');
+
+        Sanctum::actingAs($host);
+        $this->getJson('/api/v1/matches?mine=1')->assertOk()->assertJsonCount(2, 'data');
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
+        $this->getJson('/api/v1/matches?mine=1')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_cancel_penalty_flag_follows_the_late_cancel_window(): void
+    {
+        [, $field, $slot] = $this->createFieldWithSlot('san-penalty'); // 17:30–19:00
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true, 'email_verified_at' => now(), 'trust_score' => 100]);
+        $booking = Booking::create([
+            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDay(), 'status' => 'confirmed', 'confirmed_at' => now(), 'total_price' => 300000,
+        ]);
+        Sanctum::actingAs($customer);
+
+        $day = today()->addDay();
+        $this->travelTo($day->copy()->setTime(12, 0)); // còn 5,5 giờ: huỷ miễn phí
+        $booking->update(['confirmed_at' => now()]);
+        $this->getJson('/api/v1/customer/bookings')->assertJsonPath('data.0.cancel_penalty', false);
+
+        $this->travelTo($day->copy()->setTime(14, 30)); // còn 3 giờ: huỷ được nhưng bị trừ điểm
+        $booking->update(['confirmed_at' => now()]);
+        $this->getJson('/api/v1/customer/bookings?status=confirmed')
+            ->assertJsonPath('data.0.can_be_cancelled', true)->assertJsonPath('data.0.cancel_penalty', true);
+        $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel")->assertOk();
+        $this->assertSame(85, $customer->fresh()->trust_score);
+    }
+
+    public function test_admin_lists_and_cancels_match_rooms_and_searches_bookings(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $host = User::factory()->create(['role' => 'customer', 'is_active' => true, 'name' => 'Nguyễn Chủ Phòng']);
+        $category = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-admin']);
+        $match = MatchRequest::create([
+            'user_id' => $host->id, 'sport_category_id' => $category->id, 'title' => 'Kèo vi phạm', 'play_date' => today()->addDay(),
+            'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any', 'players_needed' => 1,
+            'contact_phone' => '0912345678', 'status' => 'open',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->getJson('/api/v1/admin/matches')->assertUnauthorized();
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/v1/admin/matches?keyword=Chủ Phòng')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.contact_phone', '0912345678');
+        $this->getJson('/api/v1/admin/matches?keyword=khong-co')->assertOk()->assertJsonCount(0, 'data');
+        $this->deleteJson("/api/v1/admin/matches/{$match->id}")->assertOk();
+        $this->assertSame('cancelled', $match->fresh()->status);
+
+        $this->getJson('/api/v1/admin/bookings?keyword=Không+ai+tên+vậy&date=2026-01-01')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/admin/fields?keyword=zzz')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_admin_can_revoke_field_with_optional_future_bookings_cancellation(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $owner = User::factory()->create(['role' => 'field_owner', 'is_active' => true]);
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        $cat = SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-revoke']);
+        $type = FieldType::create(['sport_category_id' => $cat->id, 'name' => 'Sân 7', 'slug' => 'type-bd-revoke']);
+        $field = SportsField::create([
+            'field_owner_id' => $owner->id,
+            'field_type_id' => $type->id,
+            'name' => 'Sân Sắp Bị Gỡ',
+            'slug' => 'san-sap-bi-go',
+            'address' => 'Hà Nội',
+            'price_per_hour' => 150000,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+        $slot = TimeSlot::create([
+            'sports_field_id' => $field->id,
+            'start_time' => '18:00',
+            'end_time' => '19:30',
+            'is_active' => true,
+        ]);
+
+        $futureBooking = Booking::create([
+            'user_id' => $customer->id,
+            'sports_field_id' => $field->id,
+            'time_slot_id' => $slot->id,
+            'booking_date' => today()->addDays(2),
+            'status' => 'confirmed',
+            'total_price' => 150000,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        // Trường hợp 1: Gỡ sân nhưng không huỷ đơn tương lai
+        $this->patchJson("/api/v1/admin/fields/{$field->id}/verify", [
+            'status' => 'rejected',
+            'rejection_reason' => 'Tạm đình chỉ bảo trì',
+            'cancel_future_bookings' => false,
+        ])->assertOk();
+
+        $this->assertSame('rejected', $field->fresh()->status);
+        $this->assertSame('confirmed', $futureBooking->fresh()->status->value);
+
+        // Phục hồi lại approved để test trường hợp 2
+        $field->update(['status' => 'approved']);
+
+        // Trường hợp 2: Gỡ sân và huỷ luôn các đơn tương lai
+        $this->patchJson("/api/v1/admin/fields/{$field->id}/verify", [
+            'status' => 'rejected',
+            'rejection_reason' => 'Vi phạm nghiêm trọng',
+            'cancel_future_bookings' => true,
+        ])->assertOk();
+
+        $this->assertSame('rejected', $field->fresh()->status);
+        $this->assertSame('cancelled', $futureBooking->fresh()->status->value);
+        $this->assertStringContainsString('Vi phạm nghiêm trọng', (string) $futureBooking->fresh()->cancel_reason);
+    }
 }

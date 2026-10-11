@@ -8,12 +8,12 @@ import {
   Image as ImageIcon,
   MessageSquareText,
   Plus,
-  QrCode,
+  UserCheck,
   Trash2,
   Upload,
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
@@ -54,8 +54,17 @@ export function OwnerDashboardPage() {
       />
       <div className="stats-grid">
         <Stat label="Tổng số sân" value={data?.total_fields ?? 0} />
-        <Stat label="Tổng lượt đặt" value={data?.total_bookings ?? 0} />
-        <Stat label="Doanh thu" value={`${currency.format(data?.total_revenue ?? 0)}đ`} />
+        <Stat
+          label="Đơn chờ xác nhận"
+          value={data?.pending_bookings ?? 0}
+          note={data?.pending_bookings ? 'Xử lý ngay' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
+          to={data?.pending_bookings ? '/owner/bookings?status=pending' : undefined}
+        />
+        <Stat
+          label="Doanh thu tháng này"
+          value={`${currency.format(data?.current_month_revenue ?? 0)}đ`}
+          note={`Tổng: ${currency.format(data?.total_revenue ?? 0)}đ`}
+        />
         <Stat label="Đơn tháng này" value={data?.current_month_bookings ?? 0} />
       </div>
       <section className="data-panel">
@@ -350,6 +359,13 @@ function FieldModal({
   )
 }
 
+/** 'HH:MM' + số phút, chặn ở 23:59. */
+function shiftTime(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = Math.min(23 * 60 + 59, h * 60 + m + minutes)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 function SlotManagerModal({
   field,
   onClose,
@@ -360,8 +376,10 @@ function SlotManagerModal({
   onRefresh: () => void
 }) {
   const toast = useToast()
-  const [startTime, setStartTime] = useState('06:00')
-  const [endTime, setEndTime] = useState('07:30')
+  // Mặc định nối tiếp khung giờ cuối cùng để thêm liên tục không phải gõ lại giờ.
+  const lastEnd = (field.time_slots ?? []).map((s) => s.end_time).sort().at(-1)
+  const [startTime, setStartTime] = useState(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00')
+  const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 90))
   const [slotPrice, setSlotPrice] = useState('')
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null)
 
@@ -371,6 +389,10 @@ function SlotManagerModal({
     onSuccess: () => {
       toast.success('Đã thêm khung giờ thành công.')
       setSlotPrice('')
+      const [sh, sm] = startTime.split(':').map(Number)
+      const [eh, em] = endTime.split(':').map(Number)
+      setStartTime(endTime)
+      setEndTime(shiftTime(endTime, eh * 60 + em - (sh * 60 + sm)))
       onRefresh()
     },
     onError: (err) => {
@@ -701,20 +723,20 @@ function ImageGalleryModal({
 export function OwnerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
-  const [status, setStatus] = useState('')
+  const [params] = useSearchParams()
+  const [status, setStatus] = useState(params.get('status') ?? '')
+  const [date, setDate] = useState('')
   const [page, setPage] = useState(1)
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [showCheckInModal, setShowCheckInModal] = useState(false)
-  const [checkInCode, setCheckInCode] = useState('')
 
   const bookings = useQuery({
-    queryKey: ['owner', 'bookings', status, page],
+    queryKey: ['owner', 'bookings', status, date, page],
     queryFn: async () =>
       (
-        await api.get<Paginated<Booking>>(
-          `/field-owner/bookings?page=${page}${status ? `&status=${status}` : ''}`,
-        )
+        await api.get<Paginated<Booking>>('/field-owner/bookings', {
+          params: { page, status: status || undefined, date: date || undefined },
+        })
       ).data,
   })
 
@@ -751,17 +773,15 @@ export function OwnerBookingsPage() {
   })
 
   const checkIn = useMutation({
-    mutationFn: async (code: string) =>
-      (await api.post<{ message: string; data: Booking }>('/field-owner/check-in', { code })).data,
+    mutationFn: async (booking: Booking) =>
+      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/check-in`)).data,
     onSuccess: (res) => {
-      toast.success(res.message || 'Check-in thành công! Đã cộng +10 điểm uy tín cho khách hàng.')
-      setShowCheckInModal(false)
-      setCheckInCode('')
+      toast.success(res.message || 'Đã xác nhận khách đến sân (+10 điểm uy tín cho khách).')
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
     onError: (err) => {
-      toast.error(errorMessage(err), 'Check-in không thành công')
+      toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
     },
   })
 
@@ -775,20 +795,13 @@ export function OwnerBookingsPage() {
       <PageTitle
         icon={<CalendarDays />}
         kicker="Vận hành"
-        title="Đơn đặt sân & Check-in QR"
-        copy="Xác nhận yêu cầu, quét mã QR check-in tích điểm uy tín và hoàn tất lượt chơi."
+        title="Đơn đặt sân"
+        copy="Xác nhận yêu cầu, đối chiếu khách theo tên/SĐT/mã đơn khi họ đến sân và hoàn tất lượt chơi."
         action={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link to="/owner/schedule" className="button button--ghost">
               <CalendarDays size={16} /> Xem lịch trực quan
             </Link>
-            <button
-              type="button"
-              className="button button--brand"
-              onClick={() => setShowCheckInModal(true)}
-            >
-              <QrCode size={16} /> Quét / Check-in QR
-            </button>
           </div>
         }
       />
@@ -801,6 +814,29 @@ export function OwnerBookingsPage() {
           <option value="cancelled">Đã hủy</option>
           <option value="rejected">Từ chối</option>
         </select>
+        <input
+          type="date"
+          value={date}
+          aria-label="Lọc theo ngày chơi"
+          title="Lọc theo ngày chơi"
+          onChange={(event) => {
+            setDate(event.target.value)
+            setPage(1)
+          }}
+        />
+        {(status || date) && (
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            onClick={() => {
+              setStatus('')
+              setDate('')
+              setPage(1)
+            }}
+          >
+            Xóa lọc
+          </button>
+        )}
       </div>
       <section className="data-panel">
         <QueryState
@@ -837,11 +873,11 @@ export function OwnerBookingsPage() {
                     {!booking.checked_in_at && (
                       <button
                         className="button button--ghost button--small"
-                        onClick={() => checkIn.mutate(booking.check_in_code ?? '')}
+                        onClick={() => checkIn.mutate(booking)}
                         disabled={checkIn.isPending}
                         title="Xác nhận khách đã tới sân (tích +10 điểm uy tín)"
                       >
-                        <QrCode size={13} /> Check-in
+                        <UserCheck size={13} /> Khách đã đến
                       </button>
                     )}
                     <button
@@ -910,48 +946,6 @@ export function OwnerBookingsPage() {
         </div>
       </Modal>
 
-      {/* Owner QR Check-in Modal */}
-      <Modal
-        isOpen={showCheckInModal}
-        onClose={() => setShowCheckInModal(false)}
-        title="Xác thực Check-in Khách Hàng"
-        asForm
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (checkInCode.trim()) {
-            checkIn.mutate(checkInCode.trim())
-          }
-        }}
-      >
-        <p>
-          Nhập mã Check-in được hiển thị trên thẻ vào sân của khách hàng (hoặc mã quét từ QR).
-          Hệ thống sẽ chuyển trạng thái đơn sang đã check-in và tự động <strong>cộng +10 điểm uy tín</strong> cho khách.
-        </p>
-        <label style={{ marginTop: 14 }}>
-          <span>Mã Check-in (VD: CK-A1B2C3D4)</span>
-          <input
-            type="text"
-            value={checkInCode}
-            onChange={(e) => setCheckInCode(e.target.value.toUpperCase())}
-            placeholder="CK-XXXXXXXX"
-            style={{ fontFamily: 'monospace', fontSize: '1.1rem', letterSpacing: '0.08em' }}
-            required
-            autoFocus
-          />
-        </label>
-        <div className="modal__actions" style={{ marginTop: 20 }}>
-          <button
-            type="button"
-            className="button button--ghost"
-            onClick={() => setShowCheckInModal(false)}
-          >
-            Hủy
-          </button>
-          <button type="submit" disabled={checkIn.isPending} className="button button--brand">
-            {checkIn.isPending ? 'Đang xác thực...' : 'Xác nhận Check-in'}
-          </button>
-        </div>
-      </Modal>
     </>
   )
 }
@@ -1084,13 +1078,14 @@ export function OwnerProfilePage() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value, note, to }: { label: string; value: string | number; note?: string; to?: string }) {
   return (
     <article className="stat">
       <span>{label}</span>
       <strong>
         <AnimatedCounter value={value} />
       </strong>
+      {note && (to ? <Link className="stat__link" to={to}>{note} →</Link> : <small>{note}</small>)}
     </article>
   )
 }
@@ -1128,7 +1123,15 @@ function BookingTable({
                   <small>#BK-{booking.id}</small>
                   <strong>{booking.field?.name}</strong>
                 </td>
-                <td>{booking.customer?.name ?? '—'}</td>
+                <td>
+                  {booking.customer?.name ?? '—'}
+                  {booking.customer?.phone && (
+                    <small>
+                      <a href={`tel:${booking.customer.phone}`}>{booking.customer.phone}</a>
+                    </small>
+                  )}
+                  {booking.notes && <small title={booking.notes}>Ghi chú: {booking.notes}</small>}
+                </td>
                 <td>
                   {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
                   <small>
@@ -1141,7 +1144,7 @@ function BookingTable({
                     <StatusBadge status={booking.status} />
                     {booking.checked_in_at ? (
                       <span className="badge badge--success" style={{ fontSize: '0.72rem', padding: '2px 6px' }} title={`Check-in: ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
-                        ✓ Đã Check-in
+                        ✓ Đã đến sân
                       </span>
                     ) : booking.status === 'confirmed' ? (
                       <span className="badge badge--soft" style={{ fontSize: '0.72rem', padding: '2px 6px' }}>
@@ -1174,7 +1177,7 @@ function BookingTable({
                 <StatusBadge status={booking.status} />
                 {booking.checked_in_at && (
                   <span className="badge badge--success" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                    ✓ Đã Check-in
+                    ✓ Đã đến sân
                   </span>
                 )}
               </div>
@@ -1184,6 +1187,7 @@ function BookingTable({
               <div className="mobile-booking-card__field">
                 <span>Khách hàng</span>
                 <strong>{booking.customer?.name ?? '—'}</strong>
+                {booking.customer?.phone && <a href={`tel:${booking.customer.phone}`}>{booking.customer.phone}</a>}
               </div>
               <div className="mobile-booking-card__field">
                 <span>Tổng tiền</span>
@@ -1197,6 +1201,8 @@ function BookingTable({
                 {new Date(booking.booking_date).toLocaleDateString('vi-VN')} ({booking.time_slot?.start_time} – {booking.time_slot?.end_time})
               </span>
             </div>
+
+            {booking.notes && <p className="form-help">Ghi chú: {booking.notes}</p>}
 
             {actions && (
               <div className="mobile-booking-card__actions">

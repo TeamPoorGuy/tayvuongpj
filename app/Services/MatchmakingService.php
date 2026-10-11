@@ -7,22 +7,32 @@ use App\Exceptions\DomainException;
 use App\Mail\MatchCancelled;
 use App\Models\MatchParticipant;
 use App\Models\MatchRequest;
+use App\Models\SportsField;
+use App\Models\TimeSlot;
 use App\Models\User;
 use App\Support\SafeMail;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MatchmakingService
 {
     /**
      * Danh sách bài đăng tìm đối / ghép đội.
      */
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $mine = null): LengthAwarePaginator
     {
         return MatchRequest::with(['host', 'sportCategory', 'sportsField', 'participants.user'])
             ->when($filters['category_id'] ?? null, fn ($q, $cat) => $q->where('sport_category_id', $cat))
             ->when($filters['skill_level'] ?? null, fn ($q, $lvl) => $q->where('skill_level', $lvl))
-            ->when($filters['status'] ?? null, fn ($q, $st) => $q->where('status', $st), fn ($q) => $q->whereIn('status', ['open', 'full']))
+            ->when($filters['status'] ?? null, fn ($q, $st) => $q->where('status', $st), fn ($q) => $q->when(! $mine, fn ($q) => $q->whereIn('status', ['open', 'full'])))
+            // "Kèo của tôi": phòng mình tạo hoặc đã xin tham gia, kể cả đã kết thúc.
+            ->when($mine, fn ($q) => $q->where(fn ($q) => $q->where('user_id', $mine->id)
+                ->orWhereHas('participants', fn ($p) => $p->where('user_id', $mine->id))))
+            // Danh sách công khai: ẩn ngay trận đã hết giờ, không chờ lệnh matches:close-past chạy.
+            ->when(! $mine, fn ($q) => $q->where(fn ($q) => $q->whereDate('play_date', '>', today())
+                ->orWhere(fn ($q) => $q->whereDate('play_date', today())->where('end_time', '>=', now()->format('H:i')))))
             ->when($filters['date'] ?? null, fn ($q, $date) => $q->whereDate('play_date', $date))
             ->orderBy('play_date', 'asc')
             ->orderBy('start_time', 'asc')
@@ -38,6 +48,27 @@ class MatchmakingService
         $open = MatchRequest::where('user_id', $user->id)->whereIn('status', ['open', 'full'])->count();
         if ($open >= 5) {
             throw new ConflictException('Bạn chỉ có thể mở tối đa 5 phòng tìm đối cùng lúc.');
+        }
+
+        if (Carbon::parse($data['play_date'].' '.$data['start_time'])->isPast()) {
+            throw ValidationException::withMessages(['start_time' => 'Giờ bắt đầu đã qua. Vui lòng chọn giờ khác.']);
+        }
+
+        // Có chọn sân thì môn và giờ chơi phải khớp đúng sân đó, để người tham gia đặt được đúng khung giờ.
+        if ($data['sports_field_id'] ?? null) {
+            $field = SportsField::with('fieldType')->findOrFail($data['sports_field_id']);
+
+            if ($field->fieldType?->sport_category_id !== (int) $data['sport_category_id']) {
+                throw ValidationException::withMessages(['sports_field_id' => 'Sân này không thuộc môn thể thao đã chọn.']);
+            }
+
+            $matchesSlot = TimeSlot::where('sports_field_id', $field->id)->where('is_active', true)->get()
+                ->contains(fn (TimeSlot $slot) => substr($slot->start_time, 0, 5) === $data['start_time']
+                    && substr($slot->end_time, 0, 5) === $data['end_time']);
+
+            if (! $matchesSlot) {
+                throw ValidationException::withMessages(['start_time' => 'Giờ chơi phải trùng một khung giờ của sân đã chọn.']);
+            }
         }
 
         return MatchRequest::create([

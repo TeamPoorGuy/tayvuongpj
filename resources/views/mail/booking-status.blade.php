@@ -5,7 +5,7 @@
 @if ($status === 'confirmed')
 Đơn đặt sân **{{ $booking->sportsField->name }}** của bạn đã được chủ sân **xác nhận**.
 @elseif ($status === 'rejected')
-Rất tiếc, chủ sân đã **từ chối** đơn đặt sân **{{ $booking->sportsField->name }}** của bạn.
+Rất tiếc, đơn đặt sân **{{ $booking->sportsField->name }}** của bạn **không được chấp nhận**.
 @else
 Đơn đặt sân **{{ $booking->sportsField->name }}** của bạn đã bị **huỷ**.
 @endif

@@ -103,6 +103,10 @@ export interface Booking {
   notes: string | null
   cancel_reason: string | null
   can_be_cancelled: boolean
+  cancel_penalty?: boolean
+  cancel_until?: string | null
+  confirmed_at?: string | null
+  no_show?: boolean
   check_in_code?: string | null
   checked_in_at?: string | null
   field?: SportsField
@@ -131,6 +135,7 @@ export interface Paginated<T> {
 export interface OwnerDashboard {
   total_fields: number
   total_bookings: number
+  pending_bookings: number
   total_revenue: number
   current_month_bookings: number
   current_month_revenue: number

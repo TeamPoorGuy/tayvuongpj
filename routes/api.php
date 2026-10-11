@@ -73,6 +73,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     ->middleware('owner.approved')
     ->group(function () {
         Route::post('/check-in', [FieldOwner\CheckInController::class, 'checkIn'])->middleware('throttle:writes');
+        Route::patch('/bookings/{booking}/check-in', [FieldOwner\CheckInController::class, 'checkInBooking'])->middleware('throttle:writes');
         Route::get(
             '/profile',
             [FieldOwner\ProfileController::class, 'show']
@@ -142,6 +143,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/fields', [Admin\FieldController::class, 'index']);
             Route::patch('/fields/{field}/verify', [Admin\FieldController::class, 'verify']);
             Route::get('/bookings', [Admin\BookingController::class, 'index']);
+            Route::get('/matches', [Admin\MatchController::class, 'index']);
+            Route::delete('/matches/{id}', [Admin\MatchController::class, 'cancel']);
             Route::get('/reviews', [Admin\ReviewController::class, 'index']);
             Route::patch('/reviews/{review}/toggle', [Admin\ReviewController::class, 'toggle']);
             Route::get('/categories', [Admin\CategoryController::class, 'index']);
