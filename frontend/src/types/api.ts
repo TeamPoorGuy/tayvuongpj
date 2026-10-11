@@ -81,6 +81,7 @@ export interface TimeSlot {
   is_active?: boolean
   is_booked?: boolean
   is_past?: boolean
+  is_held?: boolean
   price_per_hour?: number | null
 }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Http\Requests\Api\Field\FieldIndexRequest;
 use App\Models\Booking;
+use App\Models\BookingWaitlist;
 use App\Models\FieldType;
 use App\Models\SportCategory;
 use App\Models\SportsField;
@@ -83,11 +84,20 @@ class CatalogService
             ->whereIn('status', BookingStatus::blockingCases())
             ->pluck('time_slot_id');
 
+        // Slot đang được giữ chỗ 15 phút cho người trong hàng đợi.
+        $heldSlotIds = BookingWaitlist::query()
+            ->where('sports_field_id', $field->id)
+            ->whereDate('booking_date', $date)
+            ->where('status', 'offered')
+            ->where('offer_expires_at', '>', now())
+            ->pluck('time_slot_id');
+
         return $field->timeSlots()->where('is_active', true)->get()->map(fn ($slot) => [
             'id' => $slot->id,
             'start_time' => substr($slot->start_time, 0, 5),
             'end_time' => substr($slot->end_time, 0, 5),
             'is_booked' => $bookedSlotIds->contains($slot->id),
+            'is_held' => ! $bookedSlotIds->contains($slot->id) && $heldSlotIds->contains($slot->id),
             'is_past' => Carbon::parse($date.' '.$slot->start_time)->isPast(),
             'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
         ])->all();

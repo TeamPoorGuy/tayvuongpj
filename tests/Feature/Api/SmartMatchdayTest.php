@@ -352,4 +352,87 @@ class SmartMatchdayTest extends TestCase
         $match->participants()->update(['status' => 'accepted']);
         $this->getJson("/api/v1/matches/{$match->id}")->assertJsonPath('data.contact_phone', '0933333333');
     }
+    private function heldSlotFixture(): array
+    {
+        $owner = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        \App\Models\FieldOwnerProfile::create(['user_id' => $owner->id, 'business_name' => 'S', 'business_address' => 'HN', 'business_phone' => '0900000000', 'verification_status' => 'approved']);
+        $cat = \App\Models\SportCategory::create(['name' => 'Bóng đá', 'slug' => 'bd-held']);
+        $type = \App\Models\FieldType::create(['sport_category_id' => $cat->id, 'name' => 'Sân 5', 'slug' => 'san-5-held']);
+        $field = \App\Models\SportsField::create(['field_owner_id' => $owner->id, 'field_type_id' => $type->id, 'name' => 'Sân held', 'slug' => 'san-held', 'address' => 'HN', 'price_per_hour' => 100000, 'status' => 'approved', 'is_active' => true]);
+        $slot = \App\Models\TimeSlot::create(['sports_field_id' => $field->id, 'start_time' => '18:00:00', 'end_time' => '19:30:00', 'is_active' => true]);
+
+        return [$field, $slot, $owner];
+    }
+
+    public function test_a_slot_offered_to_the_waitlist_cannot_be_booked_by_someone_else(): void
+    {
+        [$field, $slot] = $this->heldSlotFixture();
+        $date = now()->addDay()->toDateString();
+        $first = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $queued = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $sniper = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+
+        $held = \App\Models\Booking::create(['user_id' => $first->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date, 'status' => 'confirmed', 'total_price' => 1]);
+        \App\Models\BookingWaitlist::create(['user_id' => $queued->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date, 'status' => 'waiting', 'priority_score' => 100]);
+
+        // Slot được nhả → người trong hàng đợi nhận lời mời 15 phút.
+        $held->update(['status' => 'cancelled']);
+        app(\App\Services\WaitlistService::class)->handleSlotFreed($field->id, $slot->id, $date);
+
+        $payload = ['sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date];
+
+        $slots = $this->getJson("/api/v1/fields/{$field->id}/available-slots?date={$date}")->json('data.slots');
+        $this->assertTrue($slots[0]['is_held']);
+
+        Sanctum::actingAs($sniper);
+        $this->postJson('/api/v1/customer/bookings', $payload)->assertStatus(409);
+
+        Sanctum::actingAs($queued);
+        $this->postJson('/api/v1/customer/bookings', $payload)->assertCreated();
+        $this->assertDatabaseHas('booking_waitlists', ['user_id' => $queued->id, 'status' => 'accepted']);
+
+        // Booking của người được mời đang giữ slot → slot kín, nên kiểm tra hết hạn ở test riêng bên dưới.
+    }
+
+    public function test_waitlist_blocks_owner_own_field_and_caps_active_entries(): void
+    {
+        [$field, $slot, $owner] = $this->heldSlotFixture();
+        $date = now()->addDay()->toDateString();
+        \App\Models\Booking::create(['user_id' => User::factory()->create()->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date, 'status' => 'confirmed', 'total_price' => 1]);
+
+        Sanctum::actingAs($owner);
+        $this->postJson('/api/v1/customer/waitlist', ['sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date])
+            ->assertStatus(422);
+    }
+
+    public function test_cleanup_expires_waitlist_entries_of_slots_that_already_started(): void
+    {
+        [$field, $slot] = $this->heldSlotFixture();
+        $user = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $entry = \App\Models\BookingWaitlist::create(['user_id' => $user->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => today()->toDateString(), 'status' => 'waiting', 'priority_score' => 100]);
+
+        $this->travelTo(now()->setTime(20, 0));
+        app(\App\Services\WaitlistService::class)->expireOffers();
+
+        $this->assertSame('expired', $entry->fresh()->status);
+    }
+
+    public function test_expired_offer_no_longer_blocks_other_customers(): void
+    {
+        [$field, $slot] = $this->heldSlotFixture();
+        $date = now()->addDays(2)->toDateString();
+        $queued = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $other = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        \App\Models\BookingWaitlist::create([
+            'user_id' => $queued->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date,
+            'status' => 'offered', 'priority_score' => 100, 'offered_at' => now(), 'offer_expires_at' => now()->addMinutes(15),
+        ]);
+        $payload = ['sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date];
+
+        Sanctum::actingAs($other);
+        $this->postJson('/api/v1/customer/bookings', $payload)->assertStatus(409);
+
+        $this->travel(16)->minutes();
+        $this->postJson('/api/v1/customer/bookings', $payload)->assertCreated();
+    }
 }

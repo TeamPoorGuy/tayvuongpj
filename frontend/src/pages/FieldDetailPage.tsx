@@ -152,7 +152,7 @@ export function FieldDetailPage() {
 
   const allSlots = useMemo(() => slots.data ?? [], [slots.data])
   const availableCount = useMemo(
-    () => allSlots.filter((s) => !s.is_booked && !s.is_past).length,
+    () => allSlots.filter((s) => !s.is_booked && !s.is_past && !s.is_held).length,
     [allSlots],
   )
   const isDateFullyBooked = !slots.isPending && allSlots.length > 0 && availableCount === 0
@@ -432,12 +432,12 @@ export function FieldDetailPage() {
               {filteredSlots.map((slot) => {
                 const isSelected = slotId === slot.id
                 const isBookedSelected = selectedBookedSlot?.id === slot.id
-                const isAvailable = !slot.is_booked && !slot.is_past
+                const isAvailable = !slot.is_booked && !slot.is_past && !slot.is_held
                 return (
                   <button
                     type="button"
-                    disabled={slot.is_past}
-                    aria-disabled={slot.is_booked || slot.is_past}
+                    disabled={slot.is_past || slot.is_held}
+                    aria-disabled={slot.is_booked || slot.is_past || slot.is_held}
                     className={`slot-chip ${isSelected ? 'selected' : ''} ${
                       slot.is_booked ? 'slot-chip--booked' : ''
                     } ${isBookedSelected ? 'slot-chip--booked-active' : ''} ${
@@ -447,7 +447,7 @@ export function FieldDetailPage() {
                       if (slot.is_booked) {
                         setSlotId(null)
                         setSelectedBookedSlot(slot)
-                      } else if (!slot.is_past) {
+                      } else if (!slot.is_past && !slot.is_held) {
                         setSelectedBookedSlot(null)
                         setSlotId(slot.id)
                       }
@@ -456,7 +456,9 @@ export function FieldDetailPage() {
                     title={
                       slot.is_past
                         ? 'Khung giờ này đã trôi qua'
-                        : slot.is_booked
+                        : slot.is_held
+                          ? 'Đang giữ chỗ 15 phút cho người trong hàng đợi'
+                          : slot.is_booked
                           ? 'Khung giờ đã kín — Bấm để vào hàng đợi Waitlist hoặc xem gợi ý'
                           : 'Khung giờ còn trống — Bấm để chọn đặt'
                     }
@@ -471,6 +473,7 @@ export function FieldDetailPage() {
                     )}
                     {slot.is_booked && <small className="slot-badge--booked">Đã đặt (Waitlist)</small>}
                     {slot.is_past && <small className="slot-badge--past">Đã qua giờ</small>}
+                    {slot.is_held && !slot.is_past && <small className="slot-badge--booked">Đang giữ chỗ</small>}
                     {isAvailable && <small className="slot-badge--avail">Còn trống</small>}
                   </button>
                 )

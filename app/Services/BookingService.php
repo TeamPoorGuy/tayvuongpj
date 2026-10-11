@@ -7,6 +7,7 @@ use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
 use App\Models\Booking;
+use App\Models\BookingWaitlist;
 use App\Models\SportsField;
 use App\Models\TimeSlot;
 use App\Models\User;
@@ -62,6 +63,21 @@ class BookingService
             if ($isBooked) {
                 throw new ConflictException('Khung giờ này đã có người đặt. Vui lòng chọn giờ khác.');
             }
+
+            // Slot đang được giữ 15 phút cho người đứng đầu hàng đợi: không cho người khác chen ngang.
+            $offer = BookingWaitlist::query()
+                ->where('sports_field_id', $field->id)
+                ->where('time_slot_id', $slot->id)
+                ->whereDate('booking_date', $data->bookingDate)
+                ->where('status', 'offered')
+                ->where('offer_expires_at', '>', now())
+                ->lockForUpdate()
+                ->first();
+
+            if ($offer && $offer->user_id !== $user->id) {
+                throw new ConflictException('Khung giờ đang được giữ cho người trong hàng đợi đến '.$offer->offer_expires_at->format('H:i').'. Vui lòng thử lại sau.');
+            }
+            $offer?->update(['status' => 'accepted']);
 
             return Booking::create([
                 'user_id' => $user->id,
