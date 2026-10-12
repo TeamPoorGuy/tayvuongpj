@@ -30,6 +30,7 @@ class User extends Authenticatable
         'avatar',
         'address',
         'is_active',
+        'trust_score',
     ];
 
     /**
@@ -53,6 +54,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'trust_score' => 'integer',
         ];
     }
 
@@ -71,6 +73,16 @@ class User extends Authenticatable
     public function isApprovedOwner(): bool
     {
         return $this->fieldOwnerProfile?->verification_status === FieldOwnerProfile::STATUS_APPROVED;
+    }
+
+    public function trustScoreLabel(): string
+    {
+        return match (true) {
+            $this->trust_score >= 120 => 'Rất uy tín',
+            $this->trust_score >= 90 => 'Bình thường',
+            $this->trust_score >= 60 => 'Cảnh báo',
+            default => 'Rất thấp (Hạn chế)',
+        };
     }
 
     // Relationships
@@ -92,5 +104,25 @@ class User extends Authenticatable
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function waitlists()
+    {
+        return $this->hasMany(BookingWaitlist::class);
+    }
+
+    public function matchRequests()
+    {
+        return $this->hasMany(MatchRequest::class);
+    }
+
+    public function matchParticipations()
+    {
+        return $this->hasMany(MatchParticipant::class);
+    }
+
+    public function trustScoreLogs()
+    {
+        return $this->hasMany(TrustScoreLog::class)->latest();
     }
 }

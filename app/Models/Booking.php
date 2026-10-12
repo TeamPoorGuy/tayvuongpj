@@ -27,17 +27,39 @@ class Booking extends Model
         'time_slot_id',
         'booking_date',
         'status',
+        'confirmed_at',
         'total_price',
         'notes',
         'cancelled_at',
         'cancel_reason',
+        'check_in_code',
+        'checked_in_at',
+        'checked_in_by',
+        'no_show_at',
     ];
 
     protected $casts = [
         'booking_date' => 'date',
         'total_price' => 'decimal:2',
+        'confirmed_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'checked_in_at' => 'datetime',
+        'no_show_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Booking $booking) {
+            if (empty($booking->check_in_code)) {
+                $booking->check_in_code = static::generateCheckInCode();
+            }
+        });
+    }
+
+    public static function generateCheckInCode(): string
+    {
+        return 'CK-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+    }
 
     public function customer()
     {
@@ -59,6 +81,11 @@ class Booking extends Model
         return $this->hasOne(Review::class);
     }
 
+    public function checkedInBy()
+    {
+        return $this->belongsTo(User::class, 'checked_in_by');
+    }
+
     /**
      * Các quan hệ thường dùng khi hiển thị booking trên Blade.
      *
@@ -74,10 +101,53 @@ class Booking extends Model
         return $relations;
     }
 
+    public function startsAt(): \Carbon\Carbon
+    {
+        return \Carbon\Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->start_time);
+    }
+
+    public function endsAt(): \Carbon\Carbon
+    {
+        return \Carbon\Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->end_time);
+    }
+
+    /** Hạn chót khách tự huỷ đơn đã duyệt; null nếu đơn không thuộc diện này. */
+    public function cancelUntil(): ?\Carbon\Carbon
+    {
+        if ($this->status !== self::STATUS_CONFIRMED || $this->confirmed_at === null) {
+            return null;
+        }
+
+        $hours = (int) config('booking.confirmed_cancel_window_hours', 2);
+        return $this->confirmed_at->copy()->addHours($hours);
+    }
+
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, self::BLOCKING_STATUSES, true)
-            && $this->booking_date->isFuture();
+        return match ($this->status) {
+            self::STATUS_PENDING => $this->startsAt()->isFuture(),
+            self::STATUS_CONFIRMED => (
+                ($this->cancelUntil() === null || now()->lt($this->cancelUntil()))
+                && $this->startsAt()->isFuture()
+            ),
+            default => false,
+        };
+    }
+
+    /** Huỷ lúc này có bị trừ điểm uy tín không: chỉ đơn đã duyệt mà sát giờ chơi. */
+    public function isLateToCancel(): bool
+    {
+        $lateHours = (int) config('booking.late_cancel_hours', 4);
+        return $this->status === self::STATUS_CONFIRMED
+            && $this->startsAt()->lte(now()->addHours($lateHours));
+    }
+
+    public function canCheckIn(): bool
+    {
+        return $this->status === self::STATUS_CONFIRMED
+            && $this->checked_in_at === null
+            && now()->gte($this->startsAt()->subMinutes(60))
+            && now()->lte($this->endsAt());
     }
 
     public function canTransitionTo(string $nextStatus): bool

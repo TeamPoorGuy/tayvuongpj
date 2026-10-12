@@ -28,6 +28,7 @@ class SportsField extends Model
         'description',
         'price_per_hour',
         'status',
+        'rejection_reason',
         'is_active',
     ];
 
@@ -73,6 +74,16 @@ class SportsField extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function waitlists()
+    {
+        return $this->hasMany(BookingWaitlist::class);
+    }
+
+    public function matchRequests()
+    {
+        return $this->hasMany(MatchRequest::class);
+    }
+
     public function averageRating()
     {
         return $this->reviews()->where('is_visible', true)->avg('rating') ?: 0;
@@ -81,6 +92,8 @@ class SportsField extends Model
     // Scopes
     public function scopeApproved($query)
     {
-        return $query->where('status', self::STATUS_APPROVED)->where('is_active', true);
+        return $query->where('status', self::STATUS_APPROVED)
+            ->where('is_active', true)
+            ->whereHas('owner', fn ($q) => $q->where('is_active', true));
     }
 }

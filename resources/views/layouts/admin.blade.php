@@ -38,6 +38,9 @@
             <a href="{{ route('admin.bookings.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition text-slate-300 hover:text-white">
                 📋 Quản lý Đơn đặt toàn hệ thống
             </a>
+            <a href="{{ route('admin.matches.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition text-slate-300 hover:text-white">
+                🤝 Quản lý Phòng ghép đội
+            </a>
             <a href="{{ route('admin.reviews.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition text-slate-300 hover:text-white">
                 💬 Quản lý Đánh giá & Khiếu nại
             </a>

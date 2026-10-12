@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\FieldType;
 use App\Models\SportCategory;
 use App\Models\SportsField;
+use App\Models\TimeSlot;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -84,21 +85,54 @@ class FieldController extends Controller
             ->whereIn('status', Booking::BLOCKING_STATUSES)
             ->pluck('time_slot_id');
 
+        $user = $request->user();
+        $userWaitlistedSlotIds = $user ? \App\Models\BookingWaitlist::query()
+            ->where('user_id', $user->id)
+            ->where('sports_field_id', $field->id)
+            ->whereDate('booking_date', $data['date'])
+            ->whereIn('status', [\App\Models\BookingWaitlist::STATUS_WAITING, \App\Models\BookingWaitlist::STATUS_OFFERED])
+            ->pluck('time_slot_id') : collect();
+
         $slots = $field->timeSlots()
             ->where('is_active', true)
             ->get()
-            ->map(fn ($slot) => [
-                'id' => $slot->id,
-                'start_time' => substr($slot->start_time, 0, 5),
-                'end_time' => substr($slot->end_time, 0, 5),
-                'is_booked' => $bookedSlotIds->contains($slot->id),
-            ])
+            ->map(function ($slot) use ($data, $bookedSlotIds, $field, $userWaitlistedSlotIds) {
+                $isPast = \Carbon\Carbon::parse($data['date'].' '.$slot->start_time)->isPast();
+                $isBooked = $bookedSlotIds->contains($slot->id) || $isPast;
+                $price = $slot->price_per_hour ?? $field->price_per_hour;
+
+                return [
+                    'id' => $slot->id,
+                    'start_time' => substr($slot->start_time, 0, 5),
+                    'end_time' => substr($slot->end_time, 0, 5),
+                    'price' => (float) $price,
+                    'is_booked' => $isBooked,
+                    'is_past' => $isPast,
+                    'is_waitlisted' => $userWaitlistedSlotIds->contains($slot->id),
+                ];
+            })
             ->all();
 
         return response()->json([
             'success' => true,
             'date' => $data['date'],
             'slots' => $slots,
+        ]);
+    }
+
+    public function getSuggestions(Request $request, SportsField $field, \App\Services\SmartSuggestionService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            'date' => ['required', 'date', 'after_or_equal:today'],
+        ]);
+
+        $slot = TimeSlot::findOrFail($data['time_slot_id']);
+        $suggestions = $service->getSuggestions($field, $slot, $data['date']);
+
+        return response()->json([
+            'success' => true,
+            'suggestions' => $suggestions,
         ]);
     }
 }
