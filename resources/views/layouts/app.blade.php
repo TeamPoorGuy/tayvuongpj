@@ -34,15 +34,15 @@
                 <!-- Auth Navigation -->
                 <div class="flex items-center gap-3">
                     @auth
-                        <div class="relative group">
-                            <button class="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-800 transition">
+                        <div class="relative" id="user-menu-container">
+                            <button type="button" id="user-menu-button" aria-expanded="false" aria-haspopup="true" class="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-emerald-500/50 cursor-pointer">
                                 <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
                                     {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
                                 </div>
                                 <span class="text-sm font-semibold hidden sm:inline">{{ Auth::user()->name }}</span>
-                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                <svg id="user-menu-arrow" class="w-4 h-4 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
-                            <div class="absolute right-0 mt-1 w-56 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 py-2 hidden group-hover:block z-50">
+                            <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-56 bg-slate-800 rounded-xl shadow-2xl border border-slate-700 py-2 hidden z-50">
                                 <div class="px-4 py-2 border-b border-slate-700">
                                     <p class="text-xs text-slate-400">Đăng nhập với tư cách</p>
                                     <p class="text-sm font-semibold text-emerald-400">
@@ -130,6 +130,47 @@
         </div>
     </footer>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const userBtn = document.getElementById('user-menu-button');
+            const userDropdown = document.getElementById('user-menu-dropdown');
+            const userArrow = document.getElementById('user-menu-arrow');
+
+            if (userBtn && userDropdown && !userBtn.dataset.dropdownInit) {
+                userBtn.dataset.dropdownInit = 'true';
+
+                userBtn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    const isHidden = userDropdown.classList.contains('hidden');
+                    if (isHidden) {
+                        userDropdown.classList.remove('hidden');
+                        userBtn.setAttribute('aria-expanded', 'true');
+                        if (userArrow) userArrow.classList.add('rotate-180');
+                    } else {
+                        userDropdown.classList.add('hidden');
+                        userBtn.setAttribute('aria-expanded', 'false');
+                        if (userArrow) userArrow.classList.remove('rotate-180');
+                    }
+                });
+
+                document.addEventListener('click', function (e) {
+                    if (!userDropdown.contains(e.target) && !userBtn.contains(e.target)) {
+                        userDropdown.classList.add('hidden');
+                        userBtn.setAttribute('aria-expanded', 'false');
+                        if (userArrow) userArrow.classList.remove('rotate-180');
+                    }
+                });
+
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && !userDropdown.classList.contains('hidden')) {
+                        userDropdown.classList.add('hidden');
+                        userBtn.setAttribute('aria-expanded', 'false');
+                        if (userArrow) userArrow.classList.remove('rotate-180');
+                    }
+                });
+            }
+        });
+    </script>
     @yield('scripts')
 </body>
 </html>
