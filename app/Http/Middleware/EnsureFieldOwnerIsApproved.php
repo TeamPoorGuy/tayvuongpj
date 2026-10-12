@@ -3,28 +3,21 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureFieldOwnerIsApproved
 {
+    /**
+     * Chỉ cho chủ sân đã được admin duyệt vào khu vực quản lý.
+     * Tài khoản chưa được duyệt sẽ quay về trang theo dõi hồ sơ đăng ký.
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
-
-        if (! $user) {
-            return new JsonResponse([
-                'message' => 'Chưa đăng nhập',
-                'code' => 'UNAUTHORIZED',
-            ], 401);
-        }
-
-        if (! $user->isApprovedOwner()) {
-            return new JsonResponse([
-                'message' => 'Chủ sân chưa được xác thực',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if (! $request->user()?->isApprovedOwner()) {
+            return redirect()
+                ->route('customer.owner-application.edit')
+                ->with('error', 'Hồ sơ chủ sân của bạn chưa được quản trị viên phê duyệt.');
         }
 
         return $next($request);

@@ -40,7 +40,7 @@ class SportsFieldSeeder extends Seeder
                 'images' => [
                     'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=800&q=80',
                     'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=80',
-                ]
+                ],
             ],
             [
                 'owner_id' => $owner1->id,
@@ -51,8 +51,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 550000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner1->id,
@@ -63,8 +63,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 120000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner1->id,
@@ -75,8 +75,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 250000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner2->id,
@@ -87,8 +87,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 200000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner2->id,
@@ -99,8 +99,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 180000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner3->id,
@@ -111,8 +111,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 110000,
                 'status' => 'pending',
                 'images' => [
-                    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
             [
                 'owner_id' => $owner1->id,
@@ -123,8 +123,8 @@ class SportsFieldSeeder extends Seeder
                 'price' => 1200000,
                 'status' => 'approved',
                 'images' => [
-                    'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80'
-                ]
+                    'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80',
+                ],
             ],
         ];
 

@@ -45,7 +45,7 @@ class TimeSlot extends Model
 
     public function getFormattedSlotAttribute(): string
     {
-        return substr($this->start_time, 0, 5) . ' - ' . substr($this->end_time, 0, 5);
+        return substr($this->start_time, 0, 5).' - '.substr($this->end_time, 0, 5);
     }
 
     public function durationInHours(): float

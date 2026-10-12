@@ -17,7 +17,7 @@ class OwnerApplicationVerified extends Mailable
 
     public function envelope(): Envelope
     {
-        $approved = $this->profile->verification_status->value === 'approved';
+        $approved = $this->profile->verification_status === FieldOwnerProfile::STATUS_APPROVED;
 
         return new Envelope(
             subject: $approved ? 'Hồ sơ chủ sân của bạn đã được duyệt' : 'Hồ sơ chủ sân của bạn đã bị từ chối',

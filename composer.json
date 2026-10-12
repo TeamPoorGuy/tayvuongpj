@@ -2,13 +2,12 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "sporthub/platform",
     "type": "project",
-    "description": "SportHub sports-field booking REST API and React application.",
-    "keywords": ["laravel", "react", "sports", "booking"],
+    "description": "SportHub sports-field booking application using Laravel MVC and Blade.",
+    "keywords": ["laravel", "mvc", "blade", "sports", "booking"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.17",
-        "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
@@ -39,12 +38,11 @@
             "@php artisan key:generate",
             "@php artisan migrate --force",
             "npm install --ignore-scripts",
-            "npm --prefix frontend install",
             "npm run build"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npm run dev"
+            "@php artisan dev"
         ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",

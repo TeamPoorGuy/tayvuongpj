@@ -1,12 +1,12 @@
 @component('mail::message')
 # Xin chào {{ $profile->owner_name ?? $profile->user->name }},
 
-@if ($profile->verification_status->value === 'approved')
+@if ($profile->verification_status === \App\Models\FieldOwnerProfile::STATUS_APPROVED)
 Chúc mừng! Hồ sơ đăng ký làm chủ sân của bạn cho cơ sở **{{ $profile->business_name }}** đã được duyệt.
 
 Bạn có thể đăng nhập và bắt đầu quản lý sân ngay bây giờ.
 
-@component('mail::button', ['url' => config('frontend.url').'/owner'])
+@component('mail::button', ['url' => route('field-owner.dashboard')])
 Vào trang quản lý chủ sân
 @endcomponent
 @else
@@ -16,7 +16,7 @@ Rất tiếc, hồ sơ đăng ký làm chủ sân của bạn cho cơ sở **{{ 
 
 Bạn có thể chỉnh sửa và gửi lại hồ sơ.
 
-@component('mail::button', ['url' => config('frontend.url').'/become-owner'])
+@component('mail::button', ['url' => route('customer.owner-application.edit')])
 Nộp lại hồ sơ
 @endcomponent
 @endif
