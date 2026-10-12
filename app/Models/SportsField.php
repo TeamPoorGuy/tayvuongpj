@@ -9,6 +9,14 @@ class SportsField extends Model
 {
     use HasFactory;
 
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_INACTIVE = 'inactive';
+
     protected $fillable = [
         'field_owner_id',
         'field_type_id',
@@ -73,6 +81,6 @@ class SportsField extends Model
     // Scopes
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved')->where('is_active', true);
+        return $query->where('status', self::STATUS_APPROVED)->where('is_active', true);
     }
 }

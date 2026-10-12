@@ -5,6 +5,7 @@ use Pdo\Mysql;
 
 $connection = env('DB_CONNECTION', 'mysql');
 
+// Không để một biến môi trường hệ điều hành không hợp lệ làm Laravel lỗi boot.
 if (! in_array($connection, ['sqlite', 'mysql', 'mariadb', 'pgsql', 'sqlsrv'], true)) {
     $connection = 'mysql';
 }

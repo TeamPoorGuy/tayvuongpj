@@ -2,17 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Enums\VerificationStatus;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, Notifiable;
+
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_CUSTOMER = 'customer';
 
     /**
      * The attributes that are mass assignable.
@@ -57,23 +59,18 @@ class User extends Authenticatable
     // Role helper methods
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
-    }
-
-    public function isFieldOwner(): bool
-    {
-        return $this->role === 'field_owner';
+        return $this->role === self::ROLE_ADMIN;
     }
 
     public function isCustomer(): bool
     {
-        return $this->role === 'customer';
+        return $this->role === self::ROLE_CUSTOMER;
     }
 
     // Chủ sân được duyệt: vai trò suy ra từ trạng thái hồ sơ, không phải cột role.
     public function isApprovedOwner(): bool
     {
-        return $this->fieldOwnerProfile?->verification_status === VerificationStatus::Approved;
+        return $this->fieldOwnerProfile?->verification_status === FieldOwnerProfile::STATUS_APPROVED;
     }
 
     // Relationships

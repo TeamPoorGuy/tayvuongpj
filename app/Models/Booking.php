@@ -2,13 +2,24 @@
 
 namespace App\Models;
 
-use App\Enums\BookingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
     use HasFactory;
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_CONFIRMED = 'confirmed';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const BLOCKING_STATUSES = [self::STATUS_PENDING, self::STATUS_CONFIRMED];
 
     protected $fillable = [
         'user_id',
@@ -24,7 +35,6 @@ class Booking extends Model
 
     protected $casts = [
         'booking_date' => 'date',
-        'status' => BookingStatus::class,
         'total_price' => 'decimal:2',
         'cancelled_at' => 'datetime',
     ];
@@ -50,11 +60,11 @@ class Booking extends Model
     }
 
     /**
-     * Relations BookingResource needs to render without omitting a field.
+     * Các quan hệ thường dùng khi hiển thị booking trên Blade.
      *
      * @return list<string>
      */
-    public static function resourceRelations(bool $withCustomer = false): array
+    public static function displayRelations(bool $withCustomer = false): array
     {
         $relations = ['sportsField.primaryImage', 'sportsField.reviews', 'timeSlot', 'review'];
         if ($withCustomer) {
@@ -66,6 +76,18 @@ class Booking extends Model
 
     public function canBeCancelled(): bool
     {
-        return $this->status->blocksSlot() && $this->booking_date->isFuture();
+        return in_array($this->status, self::BLOCKING_STATUSES, true)
+            && $this->booking_date->isFuture();
+    }
+
+    public function canTransitionTo(string $nextStatus): bool
+    {
+        $allowed = match ($this->status) {
+            self::STATUS_PENDING => [self::STATUS_CONFIRMED, self::STATUS_REJECTED],
+            self::STATUS_CONFIRMED => [self::STATUS_COMPLETED, self::STATUS_CANCELLED],
+            default => [],
+        };
+
+        return in_array($nextStatus, $allowed, true);
     }
 }

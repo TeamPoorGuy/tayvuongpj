@@ -2,13 +2,18 @@
 
 namespace App\Models;
 
-use App\Enums\VerificationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class FieldOwnerProfile extends Model
 {
     use HasFactory;
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
         'user_id',
@@ -29,7 +34,6 @@ class FieldOwnerProfile extends Model
     protected function casts(): array
     {
         return [
-            'verification_status' => VerificationStatus::class,
             'verified_at' => 'datetime',
         ];
     }

@@ -30,10 +30,12 @@ Hệ thống trung gian kết nối khách hàng có nhu cầu thể thao với 
 
 ## 🛠️ Công Nghệ Sử Dụng
 
-- **Backend**: Laravel 13.x, PHP 8.2+ / 8.3+
+- **Kiến trúc**: Laravel MVC (Routing → Middleware → Controller → Eloquent Model → Blade View)
+- **Backend**: Laravel 13.x, PHP 8.3+
 - **Database**: MySQL / SQLite (Eloquent ORM, Migrations, Seeders)
 - **Frontend**: Blade Template, Tailwind CSS v4, JavaScript (ES6+, Fetch API AJAX)
-- **Phân quyền**: Role-based Middleware (`admin`, `field_owner`, `customer`)
+- **Xác thực & phân quyền**: Laravel session/CSRF; tài khoản đăng ký là `customer`, quyền chủ sân phát sinh khi hồ sơ được admin duyệt; không dùng JWT/token
+- **Tổ chức nghiệp vụ**: MVC thuần — Controller validate/điều phối, Eloquent Model quản lý dữ liệu và quy tắc gắn với dữ liệu, Blade hiển thị giao diện
 
 ---
 
@@ -63,9 +65,10 @@ erDiagram
 ## ⚙️ Hướng Dẫn Cài Đặt Dự Án (Installation Guide)
 
 ### 1. Yêu cầu hệ thống
-- PHP >= 8.2 (đã bật các extension: `pdo`, `mbstring`, `openssl`, `sqlite3` hoặc `mysqli`)
+- PHP >= 8.3 (đã bật các extension: `pdo`, `mbstring`, `openssl`, `mysqli`)
 - Composer >= 2.x
-- Node.js & NPM (tùy chọn nếu build assets)
+- Node.js & NPM để chạy Vite/Tailwind
+- MySQL (có thể dùng MySQL trong Laragon)
 
 ### 2. Cài đặt các bước
 
@@ -77,34 +80,45 @@ cd tayvuongpj
 # 2. Cài đặt thư viện PHP
 composer install
 
-# 3. Tạo file môi trường .env
+# 3. Cài đặt thư viện CSS/JavaScript
+npm install
+
+# 4. Tạo file môi trường .env
 cp .env.example .env
 
-# 4. Tạo Application Key
+# 5. Tạo Application Key
 php artisan key:generate
 
-# 5. Tạo file database SQLite (hoặc cấu hình MySQL trong file .env)
-touch database/database.sqlite
+# 6. Tạo database sporthub trong MySQL Laragon và kiểm tra thông tin DB_* trong .env
 
-# 6. Chạy Migration và Seed dữ liệu mẫu
-php artisan migrate:fresh --seed
+# 7. Chạy Migration và Seed dữ liệu mẫu
+php artisan migrate --seed
 
-# 7. Tạo Symbolic Link cho Storage (để xem ảnh upload)
+# 8. Tạo Symbolic Link cho Storage (để xem ảnh upload)
 php artisan storage:link
 ```
 
----
+> Không dùng `php artisan migrate:fresh --seed` nếu database có dữ liệu cần giữ, vì lệnh đó xóa toàn bộ bảng.
 
-## 🗃️ Export / Import Database SQL
+### 3. Chạy dự án
 
-Dự án đã chuẩn bị sẵn file Dump SQL chứa toàn bộ lệnh `CREATE TABLE` (DDL) và `INSERT INTO` (Dữ liệu mẫu đầy đủ):
+Cách đơn giản nhất:
 
-- **Đường dẫn file SQL Dump**: `database/tayvuong_sports_field_dump.sql`
-
-### Import vào MySQL / phpMyAdmin / DBeaver:
 ```bash
-mysql -u [username] -p [database_name] < database/tayvuong_sports_field_dump.sql
+composer run dev
 ```
+
+Sau đó mở `http://127.0.0.1:8000`. Hoặc dùng hai terminal:
+
+```bash
+# Terminal 1
+php artisan serve
+
+# Terminal 2
+npm run dev
+```
+
+Laravel trả trực tiếp trang Blade. Vite chỉ phục vụ CSS/JavaScript cho Blade, không phải frontend React riêng.
 
 ---
 
@@ -157,6 +171,12 @@ Dự án tích hợp sẵn bộ kiểm thử tính năng (Feature Tests) với P
 
 ```bash
 php artisan test
+```
+
+Kiểm tra build giao diện:
+
+```bash
+npm run build
 ```
 
 ---

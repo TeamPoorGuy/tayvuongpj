@@ -34,7 +34,7 @@ class BookingSeeder extends Seeder
             ],
             3 => [
                 'Mặt sân bình thường, có vài chỗ cỏ hơi mòn nhưng vẫn đá ổn.',
-            ]
+            ],
         ];
 
         $dates = [
@@ -51,7 +51,9 @@ class BookingSeeder extends Seeder
         $count = 0;
         foreach ($fields as $fieldIdx => $field) {
             $slots = $field->timeSlots;
-            if ($slots->isEmpty()) continue;
+            if ($slots->isEmpty()) {
+                continue;
+            }
 
             foreach ($dates as $dateIdx => $date) {
                 $slot = $slots[$dateIdx % count($slots)];
