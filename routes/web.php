@@ -5,7 +5,10 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Customer;
 use App\Http\Controllers\FieldOwner;
+use App\Models\MatchRequest;
 use Illuminate\Support\Facades\Route;
+
+Route::model('match', MatchRequest::class);
 
 // Trang công khai: MVC controller lấy dữ liệu từ Eloquent model rồi trả Blade view.
 Route::get('/', [Customer\HomeController::class, 'index'])->name('home');
@@ -13,6 +16,11 @@ Route::get('/fields', [Customer\FieldController::class, 'index'])->name('custome
 Route::get('/fields/{slug}', [Customer\FieldController::class, 'show'])->name('customer.fields.show');
 Route::get('/ajax/fields/{field}/check-slots', [Customer\FieldController::class, 'checkAvailableSlots'])
     ->name('ajax.fields.check-slots');
+Route::get('/ajax/fields/{field}/suggestions', [Customer\FieldController::class, 'getSuggestions'])
+    ->name('ajax.fields.suggestions');
+
+Route::get('/matches', [Customer\MatchController::class, 'index'])->name('customer.matches.index');
+Route::get('/matches/{match}', [Customer\MatchController::class, 'show'])->name('customer.matches.show');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
@@ -29,6 +37,18 @@ Route::middleware(['auth', 'active', 'role:customer'])->prefix('customer')->name
     Route::post('/bookings', [Customer\BookingController::class, 'store'])->name('bookings.store');
     Route::post('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->name('bookings.cancel');
     Route::post('/reviews', [Customer\ReviewController::class, 'store'])->name('reviews.store');
+
+    Route::get('/waitlists', [Customer\WaitlistController::class, 'index'])->name('waitlists.index');
+    Route::post('/waitlists', [Customer\WaitlistController::class, 'store'])->name('waitlists.store');
+    Route::post('/waitlists/{waitlist}/accept', [Customer\WaitlistController::class, 'accept'])->name('waitlists.accept');
+    Route::post('/waitlists/{waitlist}/cancel', [Customer\WaitlistController::class, 'cancel'])->name('waitlists.cancel');
+
+    Route::get('/matches-create', [Customer\MatchController::class, 'create'])->name('matches.create');
+    Route::post('/matches', [Customer\MatchController::class, 'store'])->name('matches.store');
+    Route::post('/matches/{match}/join', [Customer\MatchController::class, 'join'])->name('matches.join');
+    Route::post('/matches/{match}/leave', [Customer\MatchController::class, 'leave'])->name('matches.leave');
+    Route::post('/matches/{match}/participants/{participant}', [Customer\MatchController::class, 'updateParticipant'])->name('matches.participants.update');
+    Route::post('/matches/{match}/cancel', [Customer\MatchController::class, 'cancel'])->name('matches.cancel');
 
     Route::get('/profile', [Customer\ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [Customer\ProfileController::class, 'update'])->name('profile.update');
@@ -53,6 +73,7 @@ Route::middleware(['auth', 'active', 'owner.approved'])->prefix('field-owner')->
 
     Route::get('/bookings', [FieldOwner\BookingController::class, 'index'])->name('bookings.index');
     Route::put('/bookings/{booking}', [FieldOwner\BookingController::class, 'updateStatus'])->name('bookings.update');
+    Route::post('/bookings/check-in', [FieldOwner\BookingController::class, 'checkIn'])->name('bookings.check-in');
     Route::get('/reviews', [FieldOwner\ReviewController::class, 'index'])->name('reviews.index');
 
     Route::get('/profile', [FieldOwner\ProfileController::class, 'edit'])->name('profile.edit');
@@ -78,4 +99,7 @@ Route::middleware(['auth', 'active', 'role:admin'])->prefix('admin')->name('admi
     Route::get('/bookings', [Admin\BookingController::class, 'index'])->name('bookings.index');
     Route::get('/reviews', [Admin\ReviewController::class, 'index'])->name('reviews.index');
     Route::post('/reviews/{review}/toggle', [Admin\ReviewController::class, 'toggle'])->name('reviews.toggle');
+
+    Route::get('/matches', [Admin\MatchController::class, 'index'])->name('matches.index');
+    Route::post('/matches/{match}/cancel', [Admin\MatchController::class, 'cancel'])->name('matches.cancel');
 });

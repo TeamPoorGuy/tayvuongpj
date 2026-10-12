@@ -36,9 +36,13 @@ class FieldController extends Controller
                 SportsField::STATUS_APPROVED,
                 SportsField::STATUS_REJECTED,
             ])],
+            'rejection_reason' => ['required_if:status,rejected', 'nullable', 'string', 'max:500'],
         ]);
 
-        $field->update(['status' => $data['status']]);
+        $field->update([
+            'status' => $data['status'],
+            'rejection_reason' => $data['status'] === SportsField::STATUS_REJECTED ? ($data['rejection_reason'] ?? null) : null,
+        ]);
 
         return back()->with('success', 'Đã xử lý trạng thái sân.');
     }

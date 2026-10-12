@@ -50,10 +50,20 @@
                                 </td>
                                 <td class="px-6 py-4">
                                     <x-booking-status-badge :status="$b->status" />
+                                    @if($b->status === 'confirmed' && $b->check_in_code)
+                                        <div class="mt-1.5">
+                                            <span class="px-2 py-0.5 bg-slate-900 text-white rounded font-mono text-[10px] font-bold">
+                                                Mã: {{ $b->check_in_code }}
+                                            </span>
+                                            @if($b->checked_in_at)
+                                                <span class="text-[10px] text-emerald-600 block mt-0.5 font-bold">✓ Đã check-in</span>
+                                            @endif
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-4 text-right space-x-2">
                                     @if($b->canBeCancelled())
-                                        <form action="{{ route('customer.bookings.cancel', $b->id) }}" method="POST" class="inline" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn đặt sân này?')">
+                                        <form action="{{ route('customer.bookings.cancel', $b->id) }}" method="POST" class="inline" onsubmit="return confirm('{{ $b->isLateToCancel() ? "Cảnh báo: Bạn đang hủy đơn sát giờ chơi (< 4h). Bạn sẽ bị trừ 15 điểm uy tín. Bạn có chắc muốn tiếp tục?" : "Bạn có chắc chắn muốn hủy đơn đặt sân này?" }}')">
                                             @csrf
                                             <button type="submit" class="text-xs font-bold text-rose-600 hover:text-rose-800 px-3 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 transition">
                                                 Hủy Đơn

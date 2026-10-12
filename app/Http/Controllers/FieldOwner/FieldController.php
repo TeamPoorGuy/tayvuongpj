@@ -47,6 +47,8 @@ class FieldController extends Controller
                 'address' => $data['address'],
                 'description' => $data['description'] ?? null,
                 'price_per_hour' => $data['price_per_hour'],
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
                 'status' => SportsField::STATUS_PENDING,
                 'is_active' => true,
             ]);
@@ -98,6 +100,8 @@ class FieldController extends Controller
             'field_type_id' => $data['field_type_id'],
             'address' => $data['address'],
             'price_per_hour' => $data['price_per_hour'],
+            'latitude' => $data['latitude'] ?? null,
+            'longitude' => $data['longitude'] ?? null,
             'description' => $data['description'] ?? null,
         ]);
 
@@ -122,6 +126,8 @@ class FieldController extends Controller
             'field_type_id' => ['required', 'integer', 'exists:field_types,id'],
             'address' => ['required', 'string', 'max:255'],
             'price_per_hour' => ['required', 'numeric', 'gt:0'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'description' => ['nullable', 'string'],
             'images' => ['sometimes', 'array', 'max:8'],
             'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:4096'],

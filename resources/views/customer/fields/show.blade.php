@@ -2,6 +2,13 @@
 
 @section('title', $field->name . ' - SportHub')
 
+@section('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+    .leaflet-container { font-family: inherit; }
+</style>
+@endsection
+
 @section('content')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
@@ -28,8 +35,19 @@
         </div>
     </div>
 
+    @if(session('success'))
+        <div class="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold rounded-xl">
+            ✅ {{ session('success') }}
+        </div>
+    @endif
+    @if(session('error'))
+        <div class="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm font-semibold rounded-xl">
+            ⚠️ {{ session('error') }}
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Images & Description -->
+        <!-- Images & Description & Map -->
         <div class="lg:col-span-2 space-y-6">
             <!-- Gallery -->
             <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
@@ -49,6 +67,20 @@
             <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <h3 class="font-bold text-lg text-slate-900 mb-3">Mô tả sân thể thao</h3>
                 <p class="text-sm text-slate-600 leading-relaxed">{{ $field->description ?? 'Chưa có thông tin mô tả chi tiết.' }}</p>
+            </div>
+
+            <!-- Location Map with Leaflet -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        📍 Vị trí & Bản đồ chỉ đường
+                    </h3>
+                    <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($field->name . ' ' . $field->address) }}" target="_blank" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+                        Mở Google Maps ↗
+                    </a>
+                </div>
+                <div id="field-map" class="w-full h-64 rounded-xl border border-slate-200 z-0"></div>
+                <p class="text-xs text-slate-500 mt-2">Địa chỉ: {{ $field->address }}</p>
             </div>
 
             <!-- Customer Reviews -->
@@ -71,10 +103,10 @@
             </div>
         </div>
 
-        <!-- Booking Form Widget (AJAX Realtime Slot Checker) -->
+        <!-- Booking Form Widget (AJAX Realtime Slot Checker + Waitlist + Smart Suggestions) -->
         <div>
-            <div class="bg-white p-6 rounded-2xl border border-emerald-500/30 shadow-xl sticky top-24">
-                <h3 class="font-black text-xl text-slate-900 mb-4 flex items-center gap-2">
+            <div class="bg-white p-6 rounded-2xl border border-emerald-500/30 shadow-xl sticky top-24 space-y-4">
+                <h3 class="font-black text-xl text-slate-900 flex items-center gap-2">
                     📅 Lịch Trống & Đặt Sân
                 </h3>
 
@@ -114,6 +146,36 @@
                                 Chọn Khung Giờ Để Tiếp Tục
                             </button>
                         </form>
+
+                        <!-- Waitlist & Smart Suggestions Panel (appears when clicking a booked slot) -->
+                        <div id="busy-slot-panel" class="hidden p-4 rounded-xl border border-amber-200 bg-amber-50/70 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                    <span>⚠️</span> Khung giờ này đã kín chỗ
+                                </span>
+                                <button type="button" onclick="document.getElementById('busy-slot-panel').classList.add('hidden')" class="text-amber-500 hover:text-amber-800 text-xs font-bold">✕ Đóng</button>
+                            </div>
+
+                            <!-- Waitlist registration form -->
+                            <form action="{{ route('customer.waitlists.store') }}" method="POST" id="waitlist-form">
+                                @csrf
+                                <input type="hidden" name="sports_field_id" value="{{ $field->id }}">
+                                <input type="hidden" name="time_slot_id" id="waitlist_slot_id">
+                                <input type="hidden" name="booking_date" id="waitlist_booking_date">
+                                <button type="submit" class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition shadow-sm">
+                                    ⏳ Đăng Ký Hàng Đợi (Nhận slot khi có người hủy)
+                                </button>
+                            </form>
+
+                            <!-- Smart Suggestions Box -->
+                            <div id="suggestions-box" class="pt-2 border-t border-amber-200 space-y-2">
+                                <p class="text-[11px] font-bold text-slate-700">💡 Gợi ý khung giờ thay thế gần nhất:</p>
+                                <div id="suggestions-list" class="space-y-1.5 text-xs">
+                                    <span class="text-[11px] text-slate-400 italic">Đang tìm khung giờ phù hợp...</span>
+                                </div>
+                            </div>
+                        </div>
+
                     @else
                         <div class="p-4 bg-amber-50 text-amber-800 rounded-xl text-xs font-semibold">
                             Tài khoản của bạn là {{ Auth::user()->role }}. Chỉ tài khoản Khách hàng mới có thể thực hiện đặt sân.
@@ -132,19 +194,45 @@
 @endsection
 
 @section('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
+    // 1. Initialize Leaflet Map
+    document.addEventListener('DOMContentLoaded', function () {
+        const defaultLat = {{ $field->latitude ?? 10.7769 }};
+        const defaultLng = {{ $field->longitude ?? 106.7009 }};
+        const mapContainer = document.getElementById('field-map');
+
+        if (mapContainer && typeof L !== 'undefined') {
+            const map = L.map('field-map').setView([defaultLat, defaultLng], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+
+            L.marker([defaultLat, defaultLng])
+                .addTo(map)
+                .bindPopup("<b>{{ $field->name }}</b><br>{{ $field->address }}")
+                .openPopup();
+        }
+    });
+
+    // 2. Realtime AJAX Slot Checker & Smart Suggestions
     function checkSlots() {
         const dateInput = document.getElementById('booking_date');
         const container = document.getElementById('slots-container');
         const hiddenSlotInput = document.getElementById('selected_time_slot_id');
         const btnSubmit = document.getElementById('btn-submit-booking');
+        const busyPanel = document.getElementById('busy-slot-panel');
 
         if (!dateInput || !dateInput.value) return;
 
-        hiddenSlotInput.value = '';
-        btnSubmit.disabled = true;
-        btnSubmit.className = "w-full py-3.5 bg-slate-300 text-slate-500 font-extrabold rounded-xl transition cursor-not-allowed";
-        btnSubmit.innerText = "Chọn Khung Giờ Để Tiếp Tục";
+        if (busyPanel) busyPanel.classList.add('hidden');
+        if (hiddenSlotInput) hiddenSlotInput.value = '';
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.className = "w-full py-3.5 bg-slate-300 text-slate-500 font-extrabold rounded-xl transition cursor-not-allowed";
+            btnSubmit.innerText = "Chọn Khung Giờ Để Tiếp Tục";
+        }
 
         container.innerHTML = '<span class="col-span-2 text-center text-xs text-slate-400 py-4">🔄 Đang kiểm tra lịch trống...</span>';
 
@@ -163,13 +251,17 @@
                         button.type = 'button';
                         
                         if (slot.is_booked) {
-                            button.className = 'py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed line-through';
-                            button.innerText = `${slot.start_time} - ${slot.end_time} (Đã đặt)`;
-                            button.disabled = true;
+                            button.className = 'py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 text-xs font-semibold cursor-pointer hover:border-amber-400 hover:bg-amber-50 transition slot-booked-btn';
+                            button.innerText = `${slot.start_time} - ${slot.end_time} (${slot.is_waitlisted ? 'Đang chờ' : 'Đã kín'})`;
+                            button.title = "Khung giờ này đã kín. Bấm để xem gợi ý hoặc tham gia hàng đợi.";
+                            button.onclick = function() {
+                                showBusySlotOptions(slot.id, dateInput.value, `${slot.start_time} - ${slot.end_time}`);
+                            };
                         } else {
                             button.className = 'py-2.5 px-3 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-500 hover:text-white text-emerald-800 text-xs font-bold transition slot-btn';
                             button.innerText = `${slot.start_time} - ${slot.end_time}`;
                             button.onclick = function() {
+                                if (busyPanel) busyPanel.classList.add('hidden');
                                 document.querySelectorAll('.slot-btn').forEach(b => b.className = 'py-2.5 px-3 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-500 hover:text-white text-emerald-800 text-xs font-bold transition slot-btn');
                                 this.className = 'py-2.5 px-3 rounded-xl border-2 border-emerald-600 bg-emerald-600 text-white text-xs font-black shadow-md slot-btn';
                                 hiddenSlotInput.value = slot.id;
@@ -184,6 +276,49 @@
             })
             .catch(err => {
                 container.innerHTML = '<span class="col-span-2 text-center text-xs text-rose-500">Lỗi khi tải lịch trống.</span>';
+            });
+    }
+
+    function showBusySlotOptions(slotId, date, slotLabel) {
+        const busyPanel = document.getElementById('busy-slot-panel');
+        const waitlistSlotInput = document.getElementById('waitlist_slot_id');
+        const waitlistDateInput = document.getElementById('waitlist_booking_date');
+        const suggestionsList = document.getElementById('suggestions-list');
+
+        if (!busyPanel) return;
+
+        busyPanel.classList.remove('hidden');
+        waitlistSlotInput.value = slotId;
+        waitlistDateInput.value = date;
+
+        suggestionsList.innerHTML = '<span class="text-[11px] text-slate-400 italic">Đang tìm gợi ý thông minh...</span>';
+
+        fetch(`/ajax/fields/{{ $field->id }}/suggestions?time_slot_id=${slotId}&date=${date}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.suggestions.length > 0) {
+                    suggestionsList.innerHTML = '';
+                    data.suggestions.forEach(item => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between text-xs';
+                        itemDiv.innerHTML = `
+                            <div>
+                                <span class="font-bold text-slate-900">${item.field_name}</span>
+                                <span class="text-slate-500 block text-[11px]">${item.date_label} · ${item.start_time} - ${item.end_time}</span>
+                                <span class="text-[10px] text-emerald-700 font-bold">${item.badge}</span>
+                            </div>
+                            <a href="/fields/${item.field_slug}" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-md text-[11px] transition">
+                                Đặt sân này
+                            </a>
+                        `;
+                        suggestionsList.appendChild(itemDiv);
+                    });
+                } else {
+                    suggestionsList.innerHTML = '<span class="text-[11px] text-slate-400 italic">Không có gợi ý khả dụng khác. Bạn hãy đăng ký hàng đợi để chờ giải phóng slot.</span>';
+                }
+            })
+            .catch(() => {
+                suggestionsList.innerHTML = '<span class="text-[11px] text-slate-400 italic">Chưa thể tải gợi ý lúc này.</span>';
             });
     }
 

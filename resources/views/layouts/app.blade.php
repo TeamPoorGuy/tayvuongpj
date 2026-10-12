@@ -7,6 +7,7 @@
     <title>@yield('title', 'Đặt Sân Thể Thao Trực Tuyến - SportHub')</title>
     
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @yield('styles')
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
 
@@ -29,6 +30,9 @@
                 <nav class="hidden md:flex items-center space-x-6 text-sm font-medium">
                     <a href="{{ route('home') }}" class="hover:text-emerald-400 transition-colors py-2">Trang chủ</a>
                     <a href="{{ route('customer.fields.index') }}" class="hover:text-emerald-400 transition-colors py-2">Tìm sân thể thao</a>
+                    <a href="{{ route('customer.matches.index') }}" class="hover:text-emerald-400 transition-colors py-2 flex items-center gap-1.5">
+                        <span>🤝</span> Ghép đội & Tìm đối
+                    </a>
                 </nav>
 
                 <!-- Auth Navigation -->
@@ -53,6 +57,7 @@
                                     <a href="{{ route('admin.dashboard') }}" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Trang Quản Trị Admin</a>
                                 @else
                                     <a href="{{ route('customer.bookings.index') }}" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Lịch sử đặt sân</a>
+                                    <a href="{{ route('customer.waitlists.index') }}" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">⏳ Hàng đợi (Waitlist)</a>
                                     <a href="{{ route('customer.profile.edit') }}" class="block px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Thông tin cá nhân</a>
                                     @if(Auth::user()->isApprovedOwner())
                                         <a href="{{ route('field-owner.dashboard') }}" class="block px-4 py-2 text-sm text-emerald-300 hover:bg-slate-700">Quản lý sân</a>
