@@ -37,12 +37,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return () => api.interceptors.response.eject(id);
     }, [queryClient]);
 
+    const dropUserData = () =>
+        queryClient.removeQueries({
+            predicate: (query) => query.queryKey[0] !== "auth",
+        });
+
     const authenticate = async (
         path: string,
         payload: Record<string, unknown>,
     ) => {
         const nextUser = (await api.post<ApiEnvelope<User>>(path, payload)).data
             .data;
+        // Bỏ dữ liệu của phiên trước (kể cả khi phiên cũ hết hạn mà chưa đăng xuất).
+        dropUserData();
         queryClient.setQueryData(["auth", "me"], nextUser);
         return nextUser;
     };
@@ -51,14 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             // Yêu cầu backend hủy session.
             await api.post("/auth/logout");
+        } catch {
+            // Phiên đã hết hạn/CSRF lệch: server coi như đã đăng xuất, giao diện vẫn phải thoát.
         } finally {
             /*
-             * finally luôn chạy, kể cả khi API logout bị lỗi.
-             *
-             * Nhờ vậy frontend vẫn xóa thông tin người dùng
-             * và không bị kẹt ở trạng thái đang đăng nhập.
+             * Phải đặt user = null TRƯỚC khi dọn cache: queryClient.clear() chỉ gỡ query
+             * khỏi cache mà không báo cho observer, nên header vẫn hiện người dùng cũ
+             * cho tới khi tải lại trang.
              */
-            queryClient.clear();
+            queryClient.setQueryData(["auth", "me"], null);
+            dropUserData();
         }
     };
 

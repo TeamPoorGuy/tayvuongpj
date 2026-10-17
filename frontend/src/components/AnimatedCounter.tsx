@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { animate, motion, useInView, useMotionValue, useTransform } from 'framer-motion'
+import { formatMoney } from '../utils/format'
 
 interface AnimatedCounterProps {
   value: number | string
   duration?: number
 }
 
-const currencyFormatter = new Intl.NumberFormat('vi-VN')
-
 export function AnimatedCounter({ value, duration = 1.1 }: AnimatedCounterProps) {
+
+
   const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true, margin: '0px 0px -20px 0px' })
 
@@ -29,8 +30,9 @@ export function AnimatedCounter({ value, duration = 1.1 }: AnimatedCounterProps)
   const count = useMotionValue(0)
   const rounded = useTransform(count, (latest) => {
     const val = Math.round(latest)
-    return `${currencyFormatter.format(val)}${hasCurrencySuffix ? 'đ' : ''}`
+    return formatMoney(val, hasCurrencySuffix)
   })
+
 
   useEffect(() => {
     if (isInView && targetNumber > 0) {

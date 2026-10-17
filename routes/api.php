@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\FieldSuggestionController;
 use App\Http\Controllers\Api\V1\MatchmakingController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Api\V1\FieldOwner;
 use Illuminate\Support\Facades\Route;
@@ -39,13 +40,17 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
     Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);
+    Route::get('/settings/public', [SettingController::class, 'publicSettings']);
     Route::get('/matches', [MatchmakingController::class, 'index']);
     Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
+
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
+            Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
+            Route::post('/bookings/{booking}/payment', [Customer\BookingController::class, 'reportPayment'])->middleware(['verified', 'throttle:writes']);
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
@@ -121,6 +126,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             '/bookings',
             [FieldOwner\BookingController::class, 'index']
         );
+
+        Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
+        Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',

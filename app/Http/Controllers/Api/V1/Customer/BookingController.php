@@ -8,6 +8,7 @@ use App\Http\Requests\Api\Booking\CancelBookingRequest;
 use App\Http\Requests\Api\Booking\CreateBookingRequest;
 use App\Http\Resources\Api\BookingResource;
 use App\Models\Booking;
+use App\Services\BookingPaymentService;
 use App\Services\BookingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,25 @@ class BookingController extends Controller
         $booking = $this->bookingService->create($request->user(), CreateBookingData::fromRequest($request));
 
         return response()->json(['message' => 'Yêu cầu đặt sân đã được gửi.', 'data' => new BookingResource($booking)], 201);
+    }
+
+    public function show(Request $request, Booking $booking): JsonResponse
+    {
+        abort_unless($booking->user_id === $request->user()->id, 404);
+
+        return response()->json(['data' => new BookingResource(
+            $booking->load([...Booking::resourceRelations(), 'sportsField.owner.fieldOwnerProfile'])
+        )]);
+    }
+
+    public function reportPayment(Request $request, Booking $booking, BookingPaymentService $payments): JsonResponse
+    {
+        $option = $request->validate(['option' => ['required', 'in:deposit,full']])['option'];
+
+        return response()->json([
+            'message' => 'Đã ghi nhận. Chủ sân sẽ đối chiếu và xác nhận đã nhận tiền.',
+            'data' => new BookingResource($payments->report($request->user(), $booking, $option)),
+        ]);
     }
 
     public function cancel(CancelBookingRequest $request, Booking $booking): JsonResponse

@@ -38,7 +38,7 @@ class SubmitApplicationRequest extends FormRequest
                 && ! $profile?->documents()->where('type', $type)->exists();
 
             $rules["documents.$type"] = [
-                Rule::requiredIf($required), 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120',
+                Rule::requiredIf($required), 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120',
             ];
         }
 

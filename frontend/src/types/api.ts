@@ -111,11 +111,26 @@ export interface Booking {
   no_show?: boolean
   check_in_code?: string | null
   checked_in_at?: string | null
+  payment?: BookingPayment
+  bank?: { bank_name: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
   review?: Review | null
   created_at: string
+}
+
+/** Thanh toán chuyển khoản: null = chưa duyệt, awaiting = chờ khách chuyển, reported = khách báo đã chuyển, paid = đã nhận tiền. */
+export interface BookingPayment {
+  status: 'awaiting' | 'reported' | 'paid' | null
+  option: 'deposit' | 'full' | null
+  amount: number | null
+  code: string | null
+  due_at: string | null
+  reported_at: string | null
+  paid_at: string | null
+  deposit_amount: number
+  deposit_percent: number
 }
 
 export interface HomeData {
@@ -227,3 +242,31 @@ export interface TrustScoreLog {
   sports_field_name?: string | null
   created_at: string
 }
+
+export interface PublicSettings {
+  commission_percent: number
+  statement_due_days: number
+  deposit_percent: number
+  payment_window_hours: number
+  free_cancel_hours: number
+  max_pending_bookings: number
+  max_advance_days: number
+  platform_bank_name: string
+  platform_bank_account: string
+  platform_bank_holder: string
+  support_email: string
+  support_hotline: string
+  owner_terms_version: string
+}
+
+export interface AdminLog {
+  id: number
+  admin_id: number | null
+  action: string
+  subject_type: string | null
+  subject_id: string | null
+  meta?: Record<string, unknown> | null
+  created_at: string
+  admin?: Pick<User, 'id' | 'name' | 'email'>
+}
+

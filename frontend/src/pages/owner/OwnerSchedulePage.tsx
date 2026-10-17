@@ -16,7 +16,6 @@ import {
   UserCheck,
   ShieldCheck,
   User,
-  XCircle,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
@@ -24,11 +23,12 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { Modal } from '../../components/Modal'
 import { StatusBadge } from '../../components/StatusBadge'
+import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
 import { useToast } from '../../components/Toast'
 import { getLocalTodayString } from '../../utils/date'
 import type { Booking, Paginated, SportsField } from '../../types/api'
+import { formatDate, formatMoney } from '../../utils/format'
 
-const currency = new Intl.NumberFormat('vi-VN')
 
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear()
@@ -37,45 +37,16 @@ function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// Màu lịch dựng từ bảng màu thương hiệu (khớp chip trạng thái ở các bảng khác).
 const STATUS_CONFIG: Record<
   string,
   { label: string; bg: string; border: string; color: string; dot: string }
 > = {
-  pending: {
-    label: 'Chờ duyệt',
-    bg: '#fef3c7',
-    border: '#fde68a',
-    color: '#92400e',
-    dot: '#f59e0b',
-  },
-  confirmed: {
-    label: 'Đã xác nhận',
-    bg: '#dcfce7',
-    border: '#86efac',
-    color: '#166534',
-    dot: '#22c55e',
-  },
-  completed: {
-    label: 'Hoàn thành',
-    bg: '#e0f2fe',
-    border: '#7dd3fc',
-    color: '#075985',
-    dot: '#0284c7',
-  },
-  cancelled: {
-    label: 'Đã hủy',
-    bg: '#f1f5f9',
-    border: '#cbd5e1',
-    color: '#475569',
-    dot: '#94a3b8',
-  },
-  rejected: {
-    label: 'Từ chối',
-    bg: '#fee2e2',
-    border: '#fca5a5',
-    color: '#991b1b',
-    dot: '#ef4444',
-  },
+  pending: { label: 'Chờ duyệt', bg: '#fdf1d3', border: '#f0cf7a', color: '#6b4700', dot: '#e29a0c' },
+  confirmed: { label: 'Đã xác nhận', bg: '#e4f1e6', border: '#9fcfb0', color: '#0b3025', dot: '#1f875e' },
+  completed: { label: 'Hoàn thành', bg: '#eef1e9', border: '#c4cdbf', color: '#0b3025', dot: '#0b3025' },
+  cancelled: { label: 'Đã hủy', bg: '#f4f5f2', border: '#dde3d8', color: '#66756c', dot: '#9aa59e' },
+  rejected: { label: 'Từ chối', bg: '#fdecef', border: '#f0aab5', color: '#8f1d31', dot: '#c92a43' },
 }
 
 function getWeekDates(centerDateStr: string): string[] {
@@ -335,7 +306,7 @@ export function OwnerSchedulePage() {
                 </>
               ) : (
                 <>
-                  Tuần {new Date(startDate).toLocaleDateString('vi-VN')} – {new Date(endDate).toLocaleDateString('vi-VN')}
+                  Tuần {formatDate(startDate)} – {formatDate(endDate)}
                 </>
               )}
             </strong>
@@ -462,7 +433,7 @@ export function OwnerSchedulePage() {
               <div key={f.id} className="mobile-field-card">
                 <div className="mobile-field-card__head">
                   <h3>{f.name}</h3>
-                  <small>{currency.format(f.price_per_hour)}đ/h</small>
+                  <small>{formatMoney(f.price_per_hour)}/h</small>
                 </div>
 
                 <div className="mobile-field-slots">
@@ -488,7 +459,7 @@ export function OwnerSchedulePage() {
                           </div>
                           <div className="mobile-booking-cust">
                             <span>{booking.customer?.name ?? 'Khách'}</span>
-                            <small>{currency.format(booking.total_price)}đ</small>
+                            <small>{formatMoney(booking.total_price)}</small>
                           </div>
                           <div className="mobile-booking-status">
                             <span className="mini-badge" style={{ background: cfg?.dot }}>
@@ -535,7 +506,7 @@ export function OwnerSchedulePage() {
               {displayFields.map((f) => (
                 <div key={f.id} className="grid-header-cell field-col-head">
                   <strong>{f.name}</strong>
-                  <small>{currency.format(f.price_per_hour)}đ/h</small>
+                  <small>{formatMoney(f.price_per_hour)}/h</small>
                 </div>
               ))}
 
@@ -579,13 +550,13 @@ export function OwnerSchedulePage() {
                             </div>
                             <div className="booking-block__meta">
                               <span>#BK-{booking.id}</span>
-                              <strong>{currency.format(booking.total_price)}đ</strong>
+                              <strong>{formatMoney(booking.total_price)}</strong>
                             </div>
                           </div>
                         ) : (
                           <div className="empty-slot-block">
                             <span>Khả dụng</span>
-                            <small>{currency.format(f.price_per_hour)}đ</small>
+                            <small>{formatMoney(f.price_per_hour)}</small>
                           </div>
                         )}
                       </div>
@@ -643,7 +614,7 @@ export function OwnerSchedulePage() {
                             <strong className="week-card-field">{b.field?.name}</strong>
                             <div className="week-card-cust">
                               <span>{b.customer?.name}</span>
-                              <strong>{currency.format(b.total_price)}đ</strong>
+                              <strong>{formatMoney(b.total_price)}</strong>
                             </div>
                           </div>
                         )
@@ -674,7 +645,7 @@ export function OwnerSchedulePage() {
           <div className="booking-detail-modal-body">
             {/* Top Status Bar */}
             <div className="detail-status-bar">
-              <StatusBadge status={detailBooking.status} />
+              <StatusBadge status={detailBooking.status} payment={detailBooking.payment?.status} />
               {detailBooking.checked_in_at ? (
                 <span className="badge badge--success">
                   <CheckCircle2 size={13} /> Đã đến sân ({new Date(detailBooking.checked_in_at).toLocaleTimeString('vi-VN')})
@@ -713,7 +684,7 @@ export function OwnerSchedulePage() {
                 <div className="detail-time-highlight">
                   <CalendarDays size={13} />
                   <span>
-                    {new Date(detailBooking.booking_date).toLocaleDateString('vi-VN')} (
+                    {formatDate(detailBooking.booking_date)} (
                     {detailBooking.time_slot?.start_time} – {detailBooking.time_slot?.end_time})
                   </span>
                 </div>
@@ -724,9 +695,15 @@ export function OwnerSchedulePage() {
                   <DollarSign size={13} /> Thanh toán
                 </span>
                 <strong style={{ fontSize: '1.1rem', color: 'var(--forest)' }}>
-                  {currency.format(detailBooking.total_price)}đ
+                  {formatMoney(detailBooking.total_price)}
                 </strong>
-                <small>Thanh toán tại sân khi nhận sân</small>
+                <small>
+                  {detailBooking.payment?.status === 'paid'
+                    ? `Đã nhận ${formatMoney(detailBooking.payment.amount ?? 0)} chuyển khoản (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
+                    : detailBooking.payment?.status
+                      ? 'Khách chuyển khoản cọc hoặc trả hết trước khi đơn được xác nhận'
+                      : 'Duyệt đơn để khách chuyển khoản cọc hoặc trả hết'}
+                </small>
               </div>
 
               <div className="detail-item">
@@ -802,25 +779,12 @@ export function OwnerSchedulePage() {
 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {detailBooking.status === 'pending' && (
-                    <>
-                      <button
-                        type="button"
-                        className="button button--brand"
-                        disabled={updateStatus.isPending}
-                        onClick={() =>
-                          updateStatus.mutate({ bookingId: detailBooking.id, status: 'confirmed' })
-                        }
-                      >
-                        <CheckCircle2 size={16} /> Xác nhận đơn
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--ghost button--danger"
-                        onClick={() => setIsRejecting(true)}
-                      >
-                        <XCircle size={16} /> Từ chối
-                      </button>
-                    </>
+                    <OwnerPaymentActions
+                      booking={detailBooking}
+                      size=""
+                      onReject={() => setIsRejecting(true)}
+                      onDone={() => setDetailBooking(null)}
+                    />
                   )}
 
                   {detailBooking.status === 'confirmed' && (

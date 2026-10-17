@@ -18,6 +18,10 @@ class UpdateOwnerProfileRequest extends FormRequest
             'business_address' => ['required', 'string', 'max:255'],
             'business_phone' => ['required', 'string', 'max:20'],
             'description' => ['nullable', 'string'],
+            // Tài khoản nhận tiền chuyển khoản của khách; thiếu thì chưa duyệt được đơn.
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'regex:/^[0-9]{6,20}$/'],
+            'bank_account_holder' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

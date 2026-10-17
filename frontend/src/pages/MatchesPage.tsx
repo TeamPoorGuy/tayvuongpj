@@ -25,8 +25,8 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../context/auth-context'
 import type { ApiEnvelope, Category, MatchParticipant, MatchRequest, Paginated, SportsField, TimeSlot } from '../types/api'
 import { formatDay, getLocalTodayString } from '../utils/date'
+import { formatMoney } from '../utils/format'
 
-const currency = new Intl.NumberFormat('vi-VN')
 
 const matchStatusLabels: Record<string, string> = {
   open: 'Đang mở',
@@ -339,9 +339,9 @@ export function MatchesPage() {
                   </div>
                   <div>
                     {match.status === 'open' ? (
-                      <span className="badge badge--success">🟢 Đang mở</span>
+                      <span className="badge badge--success">Đang mở</span>
                     ) : match.status === 'full' ? (
-                      <span className="badge badge--warning">🔒 Đã đủ</span>
+                      <span className="badge badge--warning">Đã đủ</span>
                     ) : match.status === 'completed' ? (
                       <span className="badge badge--soft">Đã kết thúc</span>
                     ) : (
@@ -380,7 +380,7 @@ export function MatchesPage() {
                     to={`/fields/${match.sports_field.slug}?date=${match.play_date}&start=${match.start_time}`}
                     title={`Mở sân với ngày ${formatDay(match.play_date)}, khung ${match.start_time} – ${match.end_time}`}
                   >
-                    Xem sân & đặt khung giờ này
+                    Đặt sân này
                   </Link>
                 )}
 
@@ -474,7 +474,7 @@ export function MatchesPage() {
                       className="button button--brand button--small"
                       onClick={() => handleJoinClick(match)}
                     >
-                      <UserPlus size={15} /> Xin tham gia kèo
+                      <UserPlus size={15} /> Xin tham gia
                     </button>
                   ) : (
                     <button type="button" className="button button--ghost button--small" disabled>
@@ -882,7 +882,7 @@ function CreateMatchModal({
             <div>
               <strong>{field.name}</strong>
               <small>
-                <MapPin size={12} /> {field.address} · {currency.format(field.price_per_hour)}đ/giờ
+                <MapPin size={12} /> {field.address} · {formatMoney(field.price_per_hour)}/giờ
               </small>
             </div>
             <button
@@ -921,7 +921,7 @@ function CreateMatchModal({
                 >
                   <strong>{item.name}</strong>
                   <small>
-                    {item.address} · {currency.format(item.price_per_hour)}đ/giờ
+                    {item.address} · {formatMoney(item.price_per_hour)}/giờ
                   </small>
                 </button>
               ))}
@@ -1045,7 +1045,7 @@ function CreateMatchModal({
           Hủy
         </button>
         <button type="submit" disabled={busy || !startTime || !!timeError} className="button button--brand">
-          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ để đăng' : 'Đăng phòng tìm đối'}
+          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ' : 'Đăng phòng'}
         </button>
       </div>
     </Modal>

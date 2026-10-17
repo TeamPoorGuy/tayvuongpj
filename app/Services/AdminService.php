@@ -10,6 +10,7 @@ use App\Exceptions\ForbiddenException;
 use App\Mail\BookingStatusChanged;
 use App\Mail\MatchCancelled;
 use App\Mail\OwnerApplicationVerified;
+use App\Models\AdminLog;
 use App\Models\Booking;
 use App\Models\BookingWaitlist;
 use App\Models\FieldOwnerProfile;
@@ -53,9 +54,9 @@ class AdminService
                 ? $query->whereHas('fieldOwnerProfile', $approvedOwner)
                 : $query->whereDoesntHave('fieldOwnerProfile', $approvedOwner))
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where(fn ($inner) => $inner
-                ->where('name', 'like', "%".addcslashes($keyword, '%_\\')."%")
-                ->orWhere('email', 'like', "%".addcslashes($keyword, '%_\\')."%")
-                ->orWhere('phone', 'like', "%".addcslashes($keyword, '%_\\')."%")))
+                ->where('name', 'like', '%'.addcslashes($keyword, '%_\\').'%')
+                ->orWhere('email', 'like', '%'.addcslashes($keyword, '%_\\').'%')
+                ->orWhere('phone', 'like', '%'.addcslashes($keyword, '%_\\').'%')))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -68,6 +69,7 @@ class AdminService
         }
 
         $user->forceFill(['is_active' => ! $user->is_active])->save();
+        AdminLog::record('toggle_user', $user, ['is_active' => $user->is_active]);
 
         return $user->refresh();
     }
@@ -96,6 +98,11 @@ class AdminService
         ]);
 
         $profile->refresh()->load(['user', 'documents']);
+
+        AdminLog::record('verify_owner', $profile, [
+            'status' => $next->value,
+            'reason' => $reason,
+        ], $admin);
 
         // Gửi mail qua queue; lỗi mail không được chặn việc duyệt hồ sơ.
         SafeMail::queue($profile->user->email, new OwnerApplicationVerified($profile));
@@ -190,6 +197,12 @@ class AdminService
             }
         });
 
+        AdminLog::record('verify_field', $field, [
+            'status' => $status,
+            'reason' => $reason,
+            'cancel_future_bookings' => $cancelFutureBookings,
+        ]);
+
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
 
@@ -220,6 +233,14 @@ class AdminService
             ->withQueryString();
     }
 
+    public function cancelMatch(int $id, ?string $reason, User $admin): MatchRequest
+    {
+        $match = app(MatchmakingService::class)->cancel($admin, $id, $reason);
+        AdminLog::record('cancel_match', $match, ['reason' => $reason], $admin);
+
+        return $match;
+    }
+
     public function reviews(): LengthAwarePaginator
     {
         return Review::with(['user', 'sportsField'])->latest()->paginate(15);
@@ -228,6 +249,7 @@ class AdminService
     public function toggleReview(Review $review): Review
     {
         $review->update(['is_visible' => ! $review->is_visible]);
+        AdminLog::record('toggle_review', $review, ['is_visible' => $review->is_visible]);
 
         return $review->refresh()->load(['user', 'sportsField']);
     }
@@ -239,19 +261,24 @@ class AdminService
 
     public function createCategory(array $data): SportCategory
     {
-        return SportCategory::create([
+        $category = SportCategory::create([
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
             'icon' => $data['icon'] ?? '⚽',
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ])->load('fieldTypes')->loadCount('fieldTypes');
+
+        AdminLog::record('create_category', $category, ['name' => $category->name]);
+
+        return $category;
     }
 
     public function updateCategory(SportCategory $category, array $data): SportCategory
     {
         // Giữ nguyên slug để link /fields?category=... không bị gãy.
         $category->update($data);
+        AdminLog::record('update_category', $category, $data);
 
         return $category->load('fieldTypes')->loadCount('fieldTypes');
     }
@@ -259,19 +286,24 @@ class AdminService
     public function updateFieldType(FieldType $type, array $data): FieldType
     {
         $type->update($data);
+        AdminLog::record('update_field_type', $type, $data);
 
         return $type->load('sportCategory');
     }
 
     public function createFieldType(array $data): FieldType
     {
-        return FieldType::create([
+        $type = FieldType::create([
             'sport_category_id' => $data['sport_category_id'],
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ])->load('sportCategory');
+
+        AdminLog::record('create_field_type', $type, ['name' => $type->name]);
+
+        return $type;
     }
 
     public function userTrustScoreLogs(User $user): LengthAwarePaginator

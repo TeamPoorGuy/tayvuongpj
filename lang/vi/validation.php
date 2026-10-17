@@ -30,6 +30,7 @@ return [
         'array' => ':attribute không được quá :max mục.',
     ],
     'mimes' => ':attribute phải có định dạng: :values.',
+    'mimetypes' => ':attribute phải có định dạng: :values.',
     'min' => [
         'numeric' => ':attribute phải từ :min trở lên.',
         'file' => ':attribute phải từ :min KB.',
@@ -38,6 +39,7 @@ return [
     ],
     'numeric' => ':attribute phải là số.',
     'regex' => ':attribute không đúng định dạng.',
+    'uploaded' => ':attribute tải lên không thành công: tệp vượt giới hạn dung lượng của máy chủ hoặc bị gián đoạn.',
     'required' => 'Vui lòng nhập :attribute.',
     'required_if' => 'Vui lòng nhập :attribute.',
     'string' => ':attribute phải là chuỗi ký tự.',
@@ -85,5 +87,6 @@ return [
         'documents.id_front' => 'ảnh CCCD mặt trước',
         'documents.id_back' => 'ảnh CCCD mặt sau',
         'documents.business_license' => 'giấy phép kinh doanh',
+        'documents.land_right' => 'giấy tờ quyền sử dụng sân',
     ],
 ];

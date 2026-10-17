@@ -24,11 +24,14 @@ enum BookingStatus: string
         );
     }
 
-    /** Field-owner-driven transitions: what a booking may become next. */
+    /**
+     * Field-owner-driven transitions: what a booking may become next.
+     * Pending → Confirmed không nằm ở đây: chỉ xảy ra khi chủ sân xác nhận đã nhận tiền (BookingPaymentService).
+     */
     public function canTransitionTo(self $next): bool
     {
         $allowed = match ($this) {
-            self::Pending => [self::Confirmed, self::Rejected],
+            self::Pending => [self::Rejected],
             self::Confirmed => [self::Completed, self::Cancelled],
             default => [],
         };

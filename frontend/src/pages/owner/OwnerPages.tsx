@@ -22,6 +22,7 @@ import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
+import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
 import { useToast } from '../../components/Toast'
 import type {
   ApiEnvelope,
@@ -35,10 +36,11 @@ import type {
   TimeSlot,
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
-
-const currency = new Intl.NumberFormat('vi-VN')
+import { Avatar } from '../../components/Avatar'
+import { formatDate, formatMoney } from '../../utils/format'
 
 export function OwnerDashboardPage() {
+
   const dashboard = useQuery({
     queryKey: ['owner', 'dashboard'],
     queryFn: async () => (await api.get<ApiEnvelope<OwnerDashboard>>('/field-owner/dashboard')).data.data,
@@ -62,8 +64,8 @@ export function OwnerDashboardPage() {
         />
         <Stat
           label="Doanh thu tháng này"
-          value={`${currency.format(data?.current_month_revenue ?? 0)}đ`}
-          note={`Tổng: ${currency.format(data?.total_revenue ?? 0)}đ`}
+          value={formatMoney(data?.current_month_revenue ?? 0)}
+          note={`Tổng: ${formatMoney(data?.total_revenue ?? 0)}`}
         />
         <Stat label="Đơn tháng này" value={data?.current_month_bookings ?? 0} />
       </div>
@@ -175,7 +177,7 @@ export function OwnerFieldsPage() {
                     <small>{field.address}</small>
                   </td>
                   <td>{field.field_type?.name}</td>
-                  <td>{currency.format(field.price_per_hour)}đ</td>
+                  <td>{formatMoney(field.price_per_hour)}</td>
                   <td>
                     <StatusBadge status={field.status} />
                     {field.rejection_reason && field.status !== 'approved' && (
@@ -184,10 +186,15 @@ export function OwnerFieldsPage() {
                   </td>
                   <td>
                     <button
-                      className={`status ${field.is_active ? 'status--approved' : 'status--inactive'}`}
+                      type="button"
+                      role="switch"
+                      aria-checked={field.is_active}
+                      className="switch"
                       onClick={() => toggle.mutate(field)}
-                      title="Nhấn để đổi trạng thái mở / đóng"
+                      disabled={toggle.isPending}
+                      title="Bật/tắt nhận lịch đặt sân"
                     >
+                      <span className="switch__track"><span className="switch__knob" /></span>
                       {field.is_active ? 'Đang mở' : 'Đã đóng'}
                     </button>
                   </td>
@@ -344,7 +351,7 @@ function FieldModal({
         </label>
         <label>
           <span>Giá cơ bản mỗi giờ (VNĐ)</span>
-          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" step="5000" />
+          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" step="1000" />
         </label>
       </div>
       <label>
@@ -354,7 +361,7 @@ function FieldModal({
       {!current && (
         <label>
           <span>Hình ảnh ban đầu (tối đa 8 ảnh)</span>
-          <input name="images[]" type="file" accept="image/*" multiple />
+          <input name="images[]" type="file" accept=".jpg,.jpeg,.png,.webp" multiple />
         </label>
       )}
       {error && <div className="notice notice--error">{error}</div>}
@@ -460,7 +467,7 @@ function SlotManagerModal({
           <div className="slots-manager__head">
             <p className="form-help">
               Thiết lập các khung giờ nhận đặt sân và giá giờ cao điểm (nếu có). Giá mặc định của sân là{' '}
-              <strong>{currency.format(field.price_per_hour)}đ/giờ</strong>.
+              <strong>{formatMoney(field.price_per_hour)}/giờ</strong>.
             </p>
           </div>
 
@@ -489,11 +496,11 @@ function SlotManagerModal({
                 <span>Giá riêng/giờ (để trống nếu theo sân)</span>
                 <input
                   type="number"
-                  placeholder={`${currency.format(field.price_per_hour)}đ`}
+                  placeholder={formatMoney(field.price_per_hour)}
                   value={slotPrice}
                   onChange={(e) => setSlotPrice(e.target.value)}
                   min="1000"
-                  step="5000"
+                  step="1000"
                 />
               </label>
             </div>
@@ -520,8 +527,8 @@ function SlotManagerModal({
                       </strong>
                       <span className="slot-item__price">
                         {slot.price_per_hour != null
-                          ? `${currency.format(slot.price_per_hour)}đ/h (riêng)`
-                          : `${currency.format(field.price_per_hour)}đ/h`}
+                          ? `${formatMoney(slot.price_per_hour)}/h (riêng)`
+                          : `${formatMoney(field.price_per_hour)}/h`}
                       </span>
                     </div>
                     <div className="slot-item__actions">
@@ -656,7 +663,7 @@ function ImageGalleryModal({
                 <input
                   type="file"
                   name="images[]"
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png,.webp"
                   multiple
                   required
                   disabled={uploading}
@@ -746,7 +753,13 @@ export function OwnerBookingsPage() {
     queryFn: async () =>
       (
         await api.get<Paginated<Booking>>('/field-owner/bookings', {
-          params: { page, status: status || undefined, date: date || undefined },
+          // Giá trị "pay:*" trong ô lọc là bước thanh toán của đơn đang chờ, không phải trạng thái đơn.
+          params: {
+            page,
+            status: status.startsWith('pay:') ? 'pending' : status || undefined,
+            payment_status: status.startsWith('pay:') ? status.slice(4) : undefined,
+            date: date || undefined,
+          },
         })
       ).data,
   })
@@ -809,7 +822,7 @@ export function OwnerBookingsPage() {
         icon={<CalendarDays />}
         kicker="Vận hành"
         title="Đơn đặt sân"
-        copy="Xác nhận yêu cầu, đối chiếu khách theo tên/SĐT/mã đơn khi họ đến sân và hoàn tất lượt chơi."
+        copy="Duyệt yêu cầu, đối chiếu tiền chuyển khoản theo nội dung, xác nhận khách đến sân và hoàn tất lượt chơi."
         action={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link to="/owner/schedule" className="button button--ghost">
@@ -821,7 +834,9 @@ export function OwnerBookingsPage() {
       <div className="toolbar">
         <select value={status} onChange={(event) => handleFilterChange(event.target.value)}>
           <option value="">Mọi trạng thái</option>
-          <option value="pending">Chờ xử lý</option>
+          <option value="pending">Chờ xử lý (tất cả)</option>
+          <option value="pay:awaiting">Chờ khách thanh toán</option>
+          <option value="pay:reported">Chờ xác nhận tiền</option>
           <option value="confirmed">Đã xác nhận</option>
           <option value="completed">Hoàn thành</option>
           <option value="cancelled">Đã hủy</option>
@@ -864,22 +879,7 @@ export function OwnerBookingsPage() {
             actions={(booking) => (
               <>
                 {booking.status === 'pending' && (
-                  <>
-                    <button
-                      className="button button--brand button--small"
-                      onClick={() => update.mutate({ booking, status: 'confirmed' })}
-                      disabled={update.isPending}
-                    >
-                      Xác nhận
-                    </button>
-                    <button
-                      className="button button--danger button--small"
-                      onClick={() => setRejectingBooking(booking)}
-                      disabled={update.isPending}
-                    >
-                      Từ chối
-                    </button>
-                  </>
+                  <OwnerPaymentActions booking={booking} onReject={() => setRejectingBooking(booking)} />
                 )}
                 {booking.status === 'confirmed' && (
                   <>
@@ -997,10 +997,10 @@ export function OwnerReviewsPage() {
           {reviews.data?.data.map((review) => (
           <article className="review-card" key={review.id}>
             <div>
-              <div className="avatar">{review.user?.name.slice(0, 1)}</div>
+              <Avatar name={review.user?.name} src={review.user?.avatar} />
               <span>
                 <strong>{review.user?.name}</strong>
-                <small>{new Date(review.created_at).toLocaleDateString('vi-VN')}</small>
+                <small>{formatDate(review.created_at)}</small>
               </span>
               <b>{'★'.repeat(review.rating)}</b>
             </div>
@@ -1089,6 +1089,30 @@ export function OwnerProfilePage() {
           <span>Giới thiệu cơ sở</span>
           <textarea name="description" defaultValue={profile.data?.description ?? ''} rows={4} />
         </label>
+        <h2 style={{ marginTop: 18 }}>Tài khoản nhận tiền</h2>
+        <p className="form-help">
+          Khách chuyển khoản cọc hoặc trả hết vào tài khoản này sau khi bạn duyệt đơn. Chưa khai thì chưa duyệt được đơn.
+        </p>
+        <div className="form-grid">
+          <label>
+            <span>Ngân hàng</span>
+            <input name="bank_name" defaultValue={profile.data?.bank_name ?? ''} placeholder="Vietcombank, MB Bank..." />
+          </label>
+          <label>
+            <span>Số tài khoản</span>
+            <input
+              name="bank_account_number"
+              defaultValue={profile.data?.bank_account_number ?? ''}
+              inputMode="numeric"
+              pattern="[0-9]{6,20}"
+              title="Số tài khoản gồm 6–20 chữ số"
+            />
+          </label>
+          <label>
+            <span>Chủ tài khoản</span>
+            <input name="bank_account_holder" defaultValue={profile.data?.bank_account_holder ?? ''} placeholder="NGUYEN VAN A" />
+          </label>
+        </div>
         {update.isError && <div className="notice notice--error">{errorMessage(update.error)}</div>}
         <button disabled={update.isPending} className="button button--brand">
           {update.isPending ? 'Đang lưu...' : 'Lưu hồ sơ'}
@@ -1153,15 +1177,15 @@ function BookingTable({
                   {booking.notes && <small title={booking.notes}>Ghi chú: {booking.notes}</small>}
                 </td>
                 <td>
-                  {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
+                  {formatDate(booking.booking_date)}
                   <small>
                     {booking.time_slot?.start_time} – {booking.time_slot?.end_time}
                   </small>
                 </td>
-                <td>{currency.format(booking.total_price)}đ</td>
+                <td>{formatMoney(booking.total_price)}</td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                    <StatusBadge status={booking.status} />
+                    <StatusBadge status={booking.status} payment={booking.payment?.status} />
                     {booking.checked_in_at ? (
                       <span className="badge badge--success" style={{ fontSize: '0.72rem', padding: '2px 6px' }} title={`Check-in: ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
                         ✓ Đã đến sân
@@ -1194,7 +1218,7 @@ function BookingTable({
                 <h4>{booking.field?.name}</h4>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                <StatusBadge status={booking.status} />
+                <StatusBadge status={booking.status} payment={booking.payment?.status} />
                 {booking.checked_in_at && (
                   <span className="badge badge--success" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
                     ✓ Đã đến sân
@@ -1211,14 +1235,14 @@ function BookingTable({
               </div>
               <div className="mobile-booking-card__field">
                 <span>Tổng tiền</span>
-                <strong className="mobile-booking-card__price">{currency.format(booking.total_price)}đ</strong>
+                <strong className="mobile-booking-card__price">{formatMoney(booking.total_price)}</strong>
               </div>
             </div>
 
             <div className="mobile-booking-card__time">
               <CalendarDays size={13} />
               <span>
-                {new Date(booking.booking_date).toLocaleDateString('vi-VN')} ({booking.time_slot?.start_time} – {booking.time_slot?.end_time})
+                {formatDate(booking.booking_date)} ({booking.time_slot?.start_time} – {booking.time_slot?.end_time})
               </span>
             </div>
 

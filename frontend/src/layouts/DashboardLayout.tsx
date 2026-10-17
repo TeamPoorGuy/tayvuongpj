@@ -17,6 +17,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
+import { Avatar } from '../components/Avatar'
 
 const customerNav = [
   { to: '/bookings', label: 'Lịch chơi của tôi', icon: CalendarDays },
@@ -153,7 +154,7 @@ export function DashboardLayout() {
         </nav>
 
         <div className="sidebar__user">
-          <div className="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
+          <Avatar name={user.name} src={user.avatar} />
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>

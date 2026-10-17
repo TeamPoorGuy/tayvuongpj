@@ -24,8 +24,9 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
 import type { ApiEnvelope, Booking, BookingWaitlist, Paginated, User } from '../../types/api'
 import { getLocalTodayString } from '../../utils/date'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
-const currency = new Intl.NumberFormat('vi-VN')
+
 
 const fallbackFieldImage =
   'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=800&q=80'
@@ -100,7 +101,7 @@ export function CustomerBookingsPage() {
   const acceptWaitlist = useMutation({
     mutationFn: async (waitlistId: number) => api.post(`/customer/waitlist/${waitlistId}/accept`),
     onSuccess: () => {
-      toast.success('Tuyệt vời! Bạn đã nhận sân thành công. Đơn đặt sân mới đã được kích hoạt.')
+      toast.success('Bạn đã nhận được suất sân. Đơn đặt sân mới đang chờ chủ sân duyệt, sau đó bạn chuyển khoản để giữ sân.')
       void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
       void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
       setActiveTab('bookings')
@@ -200,7 +201,7 @@ export function CustomerBookingsPage() {
               }}
             >
               <option value="">Mọi trạng thái</option>
-              <option value="pending">Chờ chủ sân xác nhận</option>
+              <option value="pending">Chờ duyệt / chờ thanh toán</option>
               <option value="confirmed">Đã xác nhận</option>
               <option value="completed">Hoàn thành</option>
               <option value="cancelled">Đã hủy</option>
@@ -256,13 +257,13 @@ export function CustomerBookingsPage() {
                           <CheckCircle2 size={12} /> Đã đến sân (+10đ)
                         </span>
                       )}
-                      <StatusBadge status={booking.status} />
+                      <StatusBadge status={booking.status} payment={booking.payment?.status} />
                     </div>
                   </div>
                   <div className="booking-meta">
                     <span>
                       <CalendarDays />
-                      {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
+                      {formatDate(booking.booking_date)}
                     </span>
                     <span>
                       <Clock3 />
@@ -273,26 +274,48 @@ export function CustomerBookingsPage() {
                       {booking.field?.address}
                     </span>
                   </div>
-                  {booking.status === 'pending' && (
+                  {booking.status === 'pending' && !booking.payment?.status && (
                     <p className="form-help">
-                      Đang chờ chủ sân xác nhận — bạn có thể huỷ bất cứ lúc nào, không bị trừ điểm. Đơn sẽ tự huỷ nếu chủ
-                      sân không phản hồi sau 24 giờ.
+                      Đang chờ chủ sân duyệt — bạn có thể huỷ bất cứ lúc nào, không bị trừ điểm. Sau khi được duyệt bạn sẽ
+                      chuyển khoản cọc hoặc trả hết để giữ sân. Đơn tự huỷ nếu chủ sân không phản hồi sau 24 giờ.
+                    </p>
+                  )}
+                  {booking.status === 'pending' && booking.payment?.status === 'awaiting' && (
+                    <p className="form-help">
+                      Chủ sân đã duyệt. Hãy chuyển khoản
+                      {booking.payment.due_at &&
+                        ` trước ${formatDateTime(booking.payment.due_at)}`}
+                      , quá hạn đơn sẽ tự huỷ.
+                    </p>
+                  )}
+                  {booking.status === 'pending' && booking.payment?.status === 'reported' && (
+                    <p className="form-help">
+                      Bạn đã báo chuyển {formatMoney(booking.payment.amount ?? 0)} (nội dung {booking.payment.code}). Đang chờ
+                      chủ sân xác nhận đã nhận tiền.
                     </p>
                   )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
                     <p className="form-help">
                       {booking.can_be_cancelled && booking.cancel_until
-                        ? `Chủ sân đã xác nhận. Bạn có thể huỷ đến ${new Date(booking.cancel_until).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${new Date(booking.cancel_until).toLocaleDateString('vi-VN')}${booking.cancel_penalty ? ' (sát giờ chơi nên sẽ bị trừ 15 điểm uy tín)' : ''}.`
+                        ? `Chủ sân đã xác nhận. Bạn có thể huỷ đến ${formatDateTime(booking.cancel_until)}${booking.cancel_penalty ? ' (sát giờ chơi nên sẽ bị trừ 15 điểm uy tín)' : ''}.`
                         : 'Chủ sân đã xác nhận và hết thời gian tự huỷ. Cần huỷ vui lòng liên hệ chủ sân.'}{' '}
                       Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
+                      {booking.payment?.status === 'paid' &&
+                        ` Đã chuyển ${formatMoney(booking.payment.amount ?? 0)}${booking.payment.option === 'deposit' ? `, còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân` : ''}.`}
                     </p>
                   )}
                   {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
                     <p className="form-help">Lý do: {booking.cancel_reason}</p>
                   )}
                   <div className="booking-item__footer">
-                    <strong>{currency.format(booking.total_price)}đ</strong>
+                    <strong>{formatMoney(booking.total_price)}</strong>
+
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {booking.status === 'pending' && booking.payment?.status && (
+                        <Link to={`/bookings/${booking.id}/payment`} className="button button--brand button--small">
+                          {booking.payment.status === 'awaiting' ? 'Thanh toán' : 'Xem thanh toán'}
+                        </Link>
+                      )}
                       {booking.can_be_cancelled && (
                         <button
                           className="button button--danger button--small"
@@ -301,7 +324,7 @@ export function CustomerBookingsPage() {
                           Hủy lịch
                         </button>
                       )}
-                      {booking.status === 'completed' && !booking.review && (
+                      {booking.status === 'completed' && !booking.review && !booking.no_show && (
                         <button
                           className="button button--brand button--small"
                           onClick={() => openReview(booking)}
@@ -372,7 +395,7 @@ export function CustomerBookingsPage() {
                 <div className="booking-meta">
                   <span>
                     <CalendarDays />
-                    {new Date(item.booking_date).toLocaleDateString('vi-VN')}
+                    {formatDate(item.booking_date)}
                   </span>
                   <span>
                     <Clock3 />
@@ -411,7 +434,7 @@ export function CustomerBookingsPage() {
                         disabled={cancelWaitlist.isPending}
                         onClick={() => cancelWaitlist.mutate(item.id)}
                       >
-                        <XCircle size={16} /> Từ chối nhường lượt
+                        <XCircle size={16} /> Bỏ lượt
                       </button>
                     </>
                   )}
@@ -473,7 +496,7 @@ export function CustomerBookingsPage() {
         title="Xác nhận hủy đặt sân"
         message={`Bạn có chắc muốn hủy lịch đặt sân "${cancellingBooking?.field?.name}" ngày ${
           cancellingBooking?.booking_date
-            ? new Date(cancellingBooking.booking_date).toLocaleDateString('vi-VN')
+            ? formatDate(cancellingBooking.booking_date)
             : ''
         } (${cancellingBooking?.time_slot?.start_time} - ${cancellingBooking?.time_slot?.end_time})? ${
           cancellingBooking?.cancel_penalty
@@ -627,7 +650,7 @@ export function CustomerProfilePage() {
           </div>
           <label>
             <span>Ảnh đại diện</span>
-            <input name="avatar" type="file" accept="image/*" />
+            <input name="avatar" type="file" accept=".jpg,.jpeg,.png,.webp" />
           </label>
           <button disabled={update.isPending} className="button button--brand">
             {update.isPending ? 'Đang lưu...' : 'Lưu hồ sơ'}

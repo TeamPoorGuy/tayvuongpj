@@ -31,7 +31,7 @@ class MatchController extends Controller
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $match = $this->matches->cancel($request->user(), $id, $validated['reason'] ?? null);
+        $match = $this->service->cancelMatch($id, $validated['reason'] ?? null, $request->user());
 
         return response()->json([
             'message' => 'Đã huỷ phòng tìm đối.',

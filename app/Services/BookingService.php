@@ -6,16 +6,17 @@ use App\DTOs\Booking\CreateBookingData;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
+use App\Mail\BookingStatusChanged;
+use App\Mail\NewBookingRequest;
 use App\Models\Booking;
 use App\Models\BookingWaitlist;
 use App\Models\SportsField;
 use App\Models\TimeSlot;
 use App\Models\User;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use App\Mail\BookingStatusChanged;
-use App\Mail\NewBookingRequest;
 use App\Support\SafeMail;
+use App\Support\Settings;
 use Carbon\Carbon;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -103,7 +104,7 @@ class BookingService
         if (! $booking->canBeCancelled()) {
             throw new ConflictException(
                 $booking->status === BookingStatus::Confirmed
-                    ? 'Đơn đã được chủ sân xác nhận quá '.config('booking.confirmed_cancel_window_hours').' giờ nên không thể tự hủy. Vui lòng liên hệ chủ sân.'
+                    ? 'Đơn đã được chủ sân xác nhận quá '.Settings::getInt('confirmed_cancel_window_hours', 2).' giờ nên không thể tự hủy. Vui lòng liên hệ chủ sân.'
                     : 'Đơn đặt sân này không còn đủ điều kiện để hủy.'
             );
         }
@@ -137,22 +138,22 @@ class BookingService
     {
         $count = ['rejected' => 0, 'completed' => 0];
 
-        $expireBefore = now()->subHours((int) config('booking.pending_expire_hours'));
+        $expireBefore = now()->subHours(Settings::getInt('pending_expire_hours', 24));
 
         Booking::with(['timeSlot', 'customer', 'sportsField'])
             ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
             ->where(fn ($query) => $query->whereDate('booking_date', '<=', today())
-                ->orWhere(fn ($query) => $query->where('status', BookingStatus::Pending->value)->where('created_at', '<=', $expireBefore)))
+                ->orWhere(fn ($query) => $query->where('status', BookingStatus::Pending->value)
+                    ->where(fn ($query) => $query->where('created_at', '<=', $expireBefore)->orWhere('payment_due_at', '<=', now()))))
             ->lazyById()
             ->each(function (Booking $booking) use (&$count, $expireBefore) {
-                $unanswered = $booking->created_at->lte($expireBefore);
-                if ($booking->status === BookingStatus::Pending && ($unanswered || $booking->startsAt()->isPast())) {
+                $reason = $booking->status === BookingStatus::Pending ? $this->expiryReason($booking, $expireBefore) : null;
+                if ($reason) {
                     $booking->update([
-                        'status' => BookingStatus::Rejected->value,
+                        // Khách không chuyển khoản đúng hạn là lỗi phía khách → "đã huỷ"; còn lại là chủ sân không xử lý → "từ chối".
+                        'status' => ($booking->payment_status === 'awaiting' ? BookingStatus::Cancelled : BookingStatus::Rejected)->value,
                         'cancelled_at' => now(),
-                        'cancel_reason' => $booking->startsAt()->isPast()
-                            ? 'Quá giờ chơi mà chủ sân chưa xác nhận.'
-                            : 'Chủ sân không phản hồi trong '.config('booking.pending_expire_hours').' giờ nên đơn tự huỷ.',
+                        'cancel_reason' => $reason,
                     ]);
                     SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
                     app(WaitlistService::class)->handleSlotFreed(
@@ -174,5 +175,25 @@ class BookingService
             });
 
         return $count;
+    }
+
+    /** Lý do tự đóng một đơn đang chờ, hoặc null nếu đơn còn hạn. */
+    private function expiryReason(Booking $booking, Carbon $expireBefore): ?string
+    {
+        $started = $booking->startsAt()->isPast();
+
+        return match ($booking->payment_status) {
+            // Đã duyệt, chờ khách chuyển khoản.
+            'awaiting' => $booking->payment_due_at?->isPast() || $started ? 'Quá hạn thanh toán nên đơn tự huỷ.' : null,
+            // Khách đã báo chuyển: không huỷ theo hạn vì tiền có thể đã đi, chỉ đóng khi tới giờ chơi.
+            'reported' => $started
+                ? 'Chủ sân chưa xác nhận nhận tiền trước giờ chơi. Nếu bạn đã chuyển khoản, hãy liên hệ chủ sân hoặc quản trị viên để được hoàn tiền.'
+                : null,
+            default => match (true) {
+                $started => 'Quá giờ chơi mà chủ sân chưa duyệt đơn.',
+                $booking->created_at->lte($expireBefore) => 'Chủ sân không phản hồi trong '.Settings::getInt('pending_expire_hours', 24).' giờ nên đơn tự huỷ.',
+                default => null,
+            },
+        };
     }
 }

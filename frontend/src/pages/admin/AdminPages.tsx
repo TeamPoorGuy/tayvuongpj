@@ -42,10 +42,11 @@ import type {
   User,
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
-
-const currency = new Intl.NumberFormat('vi-VN')
+import { Avatar } from '../../components/Avatar'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
 export function AdminDashboardPage() {
+
   const dashboard = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: async () => (await api.get<ApiEnvelope<AdminDashboard>>('/admin/dashboard')).data.data,
@@ -73,7 +74,7 @@ export function AdminDashboardPage() {
           note={`${data?.pending_fields ?? 0} chờ duyệt`}
           to="/admin/fields?status=pending"
         />
-        <Stat label="Doanh thu" value={`${currency.format(data?.total_revenue ?? 0)}đ`} />
+        <Stat label="Doanh thu" value={formatMoney(data?.total_revenue ?? 0)} />
       </div>
       <section className="data-panel">
         <div className="data-panel__head">
@@ -301,7 +302,7 @@ export function AdminUsersPage() {
               rows={
                 trustLogs.data?.data?.map((log) => [
                   <small key="time" style={{ whiteSpace: 'nowrap' }}>
-                    {new Date(log.created_at).toLocaleString('vi-VN')}
+                    {formatDateTime(log.created_at)}
                   </small>,
                   <strong
                     key="change"
@@ -782,7 +783,7 @@ function OwnerDetailModal({
               <span>Thời gian chấp thuận</span>
               <strong>
                 {profile.terms_accepted_at
-                  ? new Date(profile.terms_accepted_at).toLocaleString('vi-VN')
+                  ? formatDateTime(profile.terms_accepted_at)
                   : '—'}
               </strong>
             </div>
@@ -790,7 +791,7 @@ function OwnerDetailModal({
               <span>Thời gian duyệt</span>
               <strong>
                 {profile.verified_at
-                  ? new Date(profile.verified_at).toLocaleString('vi-VN')
+                  ? formatDateTime(profile.verified_at)
                   : 'Chưa duyệt'}
               </strong>
             </div>
@@ -950,7 +951,7 @@ export function AdminFieldsPage() {
             </Fragment>,
             field.owner?.name,
             field.field_type?.name,
-            `${currency.format(field.price_per_hour)}đ`,
+            formatMoney(field.price_per_hour),
             <StatusBadge key="status" status={field.status} />,
             field.status === 'pending' ? (
               <div key="action" className="row-actions">
@@ -1154,13 +1155,21 @@ export function AdminBookingsPage() {
               {booking.customer?.phone && <small>{booking.customer.phone}</small>}
             </Fragment>,
             <Fragment key="schedule">
-              {new Date(booking.booking_date).toLocaleDateString('vi-VN')}
+              {formatDate(booking.booking_date)}
               <small>
                 {booking.time_slot?.start_time} – {booking.time_slot?.end_time}
               </small>
             </Fragment>,
-            `${currency.format(booking.total_price)}đ`,
-            <StatusBadge key="status" status={booking.status} />,
+            <Fragment key="price">
+              {formatMoney(booking.total_price)}
+              {booking.payment?.amount != null && (
+                <small>
+                  {booking.payment.status === 'paid' ? 'Đã nhận' : 'Khách báo chuyển'} {formatMoney(booking.payment.amount)} ·{' '}
+                  {booking.payment.code}
+                </small>
+              )}
+            </Fragment>,
+            <StatusBadge key="status" status={booking.status} payment={booking.payment?.status} />,
           ]) ?? []
         }
       />
@@ -1214,7 +1223,7 @@ export function AdminReviewsPage() {
         {reviews.data?.data.map((review) => (
           <article className="review-card" key={review.id}>
             <div>
-              <div className="avatar">{review.user?.name.slice(0, 1)}</div>
+              <Avatar name={review.user?.name} src={review.user?.avatar} />
               <span>
                 <strong>{review.user?.name}</strong>
                 <small>{review.field?.name}</small>
@@ -1531,7 +1540,7 @@ export function AdminMatchesPage() {
                 {match.contact_phone && <small>{match.contact_phone}</small>}
               </Fragment>,
               <Fragment key="when">
-                {new Date(match.play_date).toLocaleDateString('vi-VN')}
+                {formatDate(match.play_date)}
                 <small>
                   {match.start_time} – {match.end_time}
                 </small>

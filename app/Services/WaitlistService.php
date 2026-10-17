@@ -194,6 +194,13 @@ class WaitlistService
 
             $slot = $waitlist->timeSlot;
             $field = $waitlist->sportsField;
+
+            // Sân bị gỡ/ngưng hoặc khung giờ bị tắt trong lúc chờ thì lời mời không còn giá trị.
+            if (! $slot?->is_active || ! SportsField::approved()->whereKey($waitlist->sports_field_id)->exists()) {
+                $waitlist->update(['status' => 'expired']);
+                return 'Sân hoặc khung giờ này hiện không còn nhận đặt.';
+            }
+
             $pricePerHour = $slot->price_per_hour ?? $field->price_per_hour;
             $totalPrice = $pricePerHour * $slot->durationInHours();
 

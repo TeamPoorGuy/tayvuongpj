@@ -17,6 +17,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
+import { prepareFile } from '../../api/upload'
 import { useToast } from '../../components/Toast'
 import type { ApiEnvelope, OwnerProfile } from '../../types/api'
 import { PageTitle } from './CustomerPages'
@@ -181,17 +182,45 @@ export function OwnerApplicationPage() {
     }
   }
 
-  const handleFileChange = (type: 'business_license' | 'land_right' | 'id_front' | 'id_back', file: File | null) => {
-    setFiles((prev) => ({ ...prev, [type]: file }))
+  const handleFileChange = async (
+    type: 'business_license' | 'land_right' | 'id_front' | 'id_back',
+    file: File | null,
+  ): Promise<boolean> => {
     const errorKey = `documents.${type}`
-    if (errors[errorKey]) {
+    const setFileError = (message?: string) =>
       setErrors((prev) => {
         const next = { ...prev }
-        delete next[errorKey]
+        if (message) next[errorKey] = message
+        else delete next[errorKey]
         return next
       })
+
+    if (!file) {
+      setFiles((prev) => ({ ...prev, [type]: null }))
+      setFileError()
+      return true
+    }
+
+    // Kiểm tra định dạng/dung lượng và nén ảnh lớn ngay khi chọn, báo lỗi rõ cho đúng ô tải lên.
+    try {
+      const prepared = await prepareFile(file)
+      setFiles((prev) => ({ ...prev, [type]: prepared }))
+      setFileError()
+      return true
+    } catch (reason) {
+      setFiles((prev) => ({ ...prev, [type]: null }))
+      setFileError(errorMessage(reason))
+      return false
     }
   }
+
+  // Tệp bị từ chối thì xoá luôn khỏi ô chọn để không hiển thị như đã tải lên.
+  const onFileChange =
+    (type: 'business_license' | 'land_right' | 'id_front' | 'id_back') =>
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.currentTarget
+      if (!(await handleFileChange(type, input.files?.[0] ?? null))) input.value = ''
+    }
 
   // Validate a specific step
   const validateStep = (s: number): boolean => {
@@ -445,7 +474,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Cơ sở <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -516,7 +545,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Tài khoản & GPKD <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -613,10 +642,8 @@ export function OwnerApplicationPage() {
                     <input
                       name="documents[business_license]"
                       type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) =>
-                        handleFileChange('business_license', e.target.files?.[0] ?? null)
-                      }
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('business_license')}
                       className={errors['documents.business_license'] ? 'input--invalid' : ''}
                     />
                     {errors['documents.business_license'] && (
@@ -628,8 +655,8 @@ export function OwnerApplicationPage() {
                     <input
                       name="documents[land_right]"
                       type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('land_right', e.target.files?.[0] ?? null)}
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('land_right')}
                     />
                   </label>
                 </div>
@@ -647,7 +674,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Xác thực & Điều khoản <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -669,8 +696,8 @@ export function OwnerApplicationPage() {
                     <input
                       name="documents[id_front]"
                       type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('id_front', e.target.files?.[0] ?? null)}
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('id_front')}
                       className={errors['documents.id_front'] ? 'input--invalid' : ''}
                     />
                     {errors['documents.id_front'] && (
@@ -685,8 +712,8 @@ export function OwnerApplicationPage() {
                     <input
                       name="documents[id_back]"
                       type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('id_back', e.target.files?.[0] ?? null)}
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('id_back')}
                       className={errors['documents.id_back'] ? 'input--invalid' : ''}
                     />
                     {errors['documents.id_back'] && (
@@ -760,7 +787,7 @@ export function OwnerApplicationPage() {
                     disabled={submit.isPending}
                     className="button button--brand button--lg"
                   >
-                    <Send size={16} /> {submit.isPending ? 'Đang gửi hồ sơ...' : 'Xác nhận & Nộp hồ sơ xét duyệt'}
+                    <Send size={16} /> {submit.isPending ? 'Đang gửi...' : 'Nộp hồ sơ'}
                   </button>
                 </div>
               </div>

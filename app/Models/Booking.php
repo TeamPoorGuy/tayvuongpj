@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use App\Enums\BookingStatus;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Support\Settings;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
@@ -26,6 +27,13 @@ class Booking extends Model
         'checked_in_at',
         'checked_in_by',
         'no_show_at',
+        'payment_status',
+        'payment_option',
+        'payment_amount',
+        'payment_code',
+        'payment_due_at',
+        'payment_reported_at',
+        'paid_at',
     ];
 
     protected $casts = [
@@ -36,6 +44,10 @@ class Booking extends Model
         'cancelled_at' => 'datetime',
         'checked_in_at' => 'datetime',
         'no_show_at' => 'datetime',
+        'payment_amount' => 'decimal:2',
+        'payment_due_at' => 'datetime',
+        'payment_reported_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -49,7 +61,7 @@ class Booking extends Model
 
     public static function generateCheckInCode(): string
     {
-        return 'CK-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+        return 'CK-'.strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
     }
 
     public function customer()
@@ -104,13 +116,22 @@ class Booking extends Model
             return null;
         }
 
-        return $this->confirmed_at->copy()->addHours((int) config('booking.confirmed_cancel_window_hours'));
+        return $this->confirmed_at->copy()->addHours(Settings::getInt('confirmed_cancel_window_hours', 2));
+    }
+
+    /** Tiền cọc: % tổng tiền theo cấu hình, làm tròn lên nghìn đồng và không vượt tổng tiền. */
+    public function depositAmount(): float
+    {
+        $deposit = ceil((float) $this->total_price * Settings::getInt('deposit_percent', 30) / 100 / 1000) * 1000;
+
+        return min($deposit, (float) $this->total_price);
     }
 
     public function canBeCancelled(): bool
     {
         return match ($this->status) {
-            BookingStatus::Pending => true,
+            // Khách đã báo chuyển khoản thì phải chờ chủ sân đối chiếu, không tự huỷ khi tiền đang treo.
+            BookingStatus::Pending => $this->payment_status !== 'reported',
             BookingStatus::Confirmed => now()->lt($this->cancelUntil() ?? now()) && $this->startsAt()->isFuture(),
             default => false,
         };
@@ -120,6 +141,6 @@ class Booking extends Model
     public function isLateToCancel(): bool
     {
         return $this->status === BookingStatus::Confirmed
-            && $this->startsAt()->lte(now()->addHours((int) config('booking.late_cancel_hours')));
+            && $this->startsAt()->lte(now()->addHours(Settings::getInt('late_cancel_hours', 4)));
     }
 }

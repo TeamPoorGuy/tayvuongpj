@@ -7,7 +7,9 @@ import { FieldDetailPage } from './pages/FieldDetailPage'
 import { MatchesPage } from './pages/MatchesPage'
 import { EmailVerifiedPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPages'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { VerifyGate } from './components/VerifyGate'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
+import { BookingPaymentPage } from './pages/customer/BookingPaymentPage'
 import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
 import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
@@ -15,6 +17,7 @@ import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFields
 
 export default function App() {
   return (
+    <VerifyGate>
     <Routes>
       <Route element={<PublicLayout />}>
         <Route index element={<HomePage />} />
@@ -31,6 +34,7 @@ export default function App() {
       <Route element={<ProtectedRoute roles={['customer']} />}>
         <Route element={<DashboardLayout />}>
           <Route path="bookings" element={<CustomerBookingsPage />} />
+          <Route path="bookings/:id/payment" element={<BookingPaymentPage />} />
           <Route path="profile" element={<CustomerProfilePage />} />
           <Route path="become-owner" element={<OwnerApplicationPage />} />
         </Route>
@@ -62,5 +66,6 @@ export default function App() {
 
       <Route path="*" element={<div className="empty-page"><h1>404</h1><p>Trang bạn tìm không tồn tại.</p></div>} />
     </Routes>
+    </VerifyGate>
   )
 }

@@ -19,7 +19,7 @@ class UserResource extends JsonResource
             'address' => $this->address,
             'is_active' => (bool) $this->is_active,
             'trust_score' => (int) ($this->trust_score ?? 100),
-            'email_verified' => $this->hasVerifiedEmail(),
+            'email_verified' => ! config('auth.require_email_verification') || $this->hasVerifiedEmail(),
             'has_password' => $this->password !== null,
             'field_owner_profile' => $this->whenLoaded('fieldOwnerProfile', fn () => new OwnerProfileResource($this->fieldOwnerProfile)),
             'is_field_owner' => (bool) ($this->is_field_owner ?? $this->isApprovedOwner()),

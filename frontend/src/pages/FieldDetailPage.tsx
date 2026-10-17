@@ -27,10 +27,11 @@ import { useToast } from '../components/Toast'
 import { FieldMap } from '../components/FieldMap'
 import { addDays, formatDay, getLocalTodayString } from '../utils/date'
 import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
-
-const currency = new Intl.NumberFormat('vi-VN')
+import { Avatar } from '../components/Avatar'
+import { formatMoney } from '../utils/format'
 
 export function FieldDetailPage() {
+
   const { slug = '' } = useParams()
   const { user } = useAuth()
   const { success, error } = useToast()
@@ -106,7 +107,7 @@ export function FieldDetailPage() {
     onSuccess: () => {
       pickSlot(null)
       setNotes('')
-      success('Yêu cầu đặt sân đã được gửi. Chủ sân sẽ xác nhận và bạn nhận email thông báo.', 'Đặt sân thành công')
+      success('Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.', 'Đã gửi yêu cầu')
       void queryClient.invalidateQueries({ queryKey: ['slots'] })
     },
     onError: (err) => {
@@ -291,7 +292,7 @@ export function FieldDetailPage() {
                 <Check /> Xác nhận bởi chủ sân
               </span>
               <span>
-                <Info /> Hủy miễn phí trước giờ chơi 4 giờ · không hủy được khi còn dưới 2 giờ
+                <Info /> Chờ duyệt: hủy bất cứ lúc nào · Đã xác nhận: hủy được trong 2 giờ, hủy khi còn dưới 4 giờ trước giờ chơi bị trừ điểm uy tín
               </span>
             </div>
           </section>
@@ -332,7 +333,7 @@ export function FieldDetailPage() {
                   .map((review) => (
                     <article className="review" key={review.id}>
                       <div className="review__header">
-                        <div className="avatar avatar--sm">{review.user?.name.slice(0, 1)}</div>
+                        <Avatar name={review.user?.name} src={review.user?.avatar} className="avatar avatar--sm" />
                         <div>
                           <strong>{review.user?.name}</strong>
                           <span className="review__stars">{'★'.repeat(review.rating)}</span>
@@ -353,7 +354,7 @@ export function FieldDetailPage() {
           <div className="booking-price">
             <span>Giá thuê tiêu chuẩn</span>
             <strong>
-              {currency.format(item.price_per_hour)}đ <small>/ giờ</small>
+              {formatMoney(item.price_per_hour)} <small>/ giờ</small>
             </strong>
           </div>
 
@@ -391,7 +392,7 @@ export function FieldDetailPage() {
                 <span className="field-label">Khung giờ hoạt động</span>
                 {!slots.isPending && allSlots.length > 0 && (
                   <span className="slot-availability-pill">
-                    Còn <strong>{availableCount}</strong>/{allSlots.length} slot khả dụng
+                    Còn <strong>{availableCount}</strong>/{allSlots.length} khung giờ
                   </span>
                 )}
               </div>
@@ -454,7 +455,7 @@ export function FieldDetailPage() {
                   className="button button--brand button--small"
                   onClick={() => changeDate(tomorrowDateStr)}
                 >
-                  <CalendarDays size={13} /> Xem ngày kế tiếp ({formatDay(tomorrowDateStr)})
+                  <CalendarDays size={13} /> Xem ngày mai ({formatDay(tomorrowDateStr)})
                 </button>
               </div>
             )}
@@ -499,10 +500,10 @@ export function FieldDetailPage() {
                     </span>
                     {slot.price_per_hour && (
                       <small className="slot-custom-price">
-                        {currency.format(slot.price_per_hour)}đ/h
+                        {formatMoney(slot.price_per_hour)}/h
                       </small>
                     )}
-                    {slot.is_booked && <small className="slot-badge--booked">Đã đặt (Waitlist)</small>}
+                    {slot.is_booked && <small className="slot-badge--booked">Đã đặt · Chờ</small>}
                     {slot.is_past && <small className="slot-badge--past">Đã qua giờ</small>}
                     {slot.is_held && !slot.is_past && <small className="slot-badge--booked">Đang giữ chỗ</small>}
                     {isAvailable && <small className="slot-badge--avail">Còn trống</small>}
@@ -541,7 +542,7 @@ export function FieldDetailPage() {
                     onClick={() => joinWaitlist.mutate(selectedBookedSlot)}
                     disabled={joinWaitlist.isPending}
                   >
-                    <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Tham gia Hàng đợi (Waitlist)'}
+                    <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Vào hàng đợi'}
                   </button>
                 ) : (
                   <Link to="/login" state={loginState} className="button button--brand button--small">
@@ -597,12 +598,12 @@ export function FieldDetailPage() {
               {selectedSlot.price_per_hour && (
                 <div className="price-breakdown__row">
                   <span>Giá riêng khung giờ:</span>
-                  <strong>{currency.format(selectedSlot.price_per_hour)}đ/h</strong>
+                  <strong>{formatMoney(selectedSlot.price_per_hour)}/h</strong>
                 </div>
               )}
               <div className="price-breakdown__row price-breakdown__total">
                 <span>Tổng tạm tính:</span>
-                <strong>{currency.format(calculatedPrice.total)}đ</strong>
+                <strong>{formatMoney(calculatedPrice.total)}</strong>
               </div>
             </div>
           )}
@@ -630,19 +631,19 @@ export function FieldDetailPage() {
               className="button button--brand button--block button--lg"
             >
               <CalendarDays size={18} />{' '}
-              {booking.isPending ? 'Đang gửi...' : selectedSlot ? 'Gửi yêu cầu đặt sân' : 'Chọn khung giờ để đặt'}
+              {booking.isPending ? 'Đang gửi...' : selectedSlot ? 'Gửi yêu cầu' : 'Chọn khung giờ'}
             </button>
           )}
 
           {booking.isSuccess && !selectedSlot && (
             <div className="notice notice--success" role="status">
-              Đã gửi yêu cầu, đang chờ chủ sân xác nhận. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
+              Đã gửi yêu cầu, đang chờ chủ sân duyệt để thanh toán. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
             </div>
           )}
 
           <div className="booking-guarantee">
             <ShieldCheck size={14} />
-            <span>Thanh toán trực tiếp tại sân hoặc theo thỏa thuận với chủ sân.</span>
+            <span>Sau khi chủ sân duyệt, bạn chuyển khoản đặt cọc hoặc trả hết để giữ sân.</span>
           </div>
         </aside>
       </div>
@@ -652,7 +653,7 @@ export function FieldDetailPage() {
         <div className="mobile-booking-bar__price">
           <span>Giá thuê từ</span>
           <strong>
-            {calculatedPrice ? currency.format(calculatedPrice.total) + 'đ' : currency.format(item.price_per_hour) + 'đ/h'}
+            {calculatedPrice ? formatMoney(calculatedPrice.total) : `${formatMoney(item.price_per_hour)}/h`}
           </strong>
         </div>
         <button
@@ -662,7 +663,7 @@ export function FieldDetailPage() {
           onClick={() => (selectedSlot && user?.role === 'customer' ? booking.mutate() : scrollToBooking())}
         >
           <CalendarDays size={16} />{' '}
-          {booking.isPending ? 'Đang gửi...' : selectedSlot && user?.role === 'customer' ? 'Gửi yêu cầu đặt' : 'Chọn giờ & đặt sân'}
+          {booking.isPending ? 'Đang gửi...' : selectedSlot && user?.role === 'customer' ? 'Gửi yêu cầu' : 'Chọn giờ'}
         </button>
       </div>
     </div>

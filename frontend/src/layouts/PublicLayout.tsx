@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Brand } from '../components/Brand'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
+import { Avatar } from '../components/Avatar'
 
 export function PublicLayout() {
   const { user, logout } = useAuth()
@@ -51,7 +52,7 @@ export function PublicLayout() {
                   </Link>
                 )}
                 <Link className="button button--ghost user-pill" to={workspace}>
-                  <div className="user-avatar-tiny">{user.name.slice(0, 1).toUpperCase()}</div>
+                  <Avatar name={user.name} src={user.avatar} className="user-avatar-tiny" />
                   <span className="user-pill__name">{user.name}</span>
                   <span className="badge badge--soft">{workspaceLabel}</span>
                 </Link>
@@ -102,7 +103,7 @@ export function PublicLayout() {
                   {user ? (
                     <>
                       <div className="mobile-user-card">
-                        <div className="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
+                        <Avatar name={user.name} src={user.avatar} />
                         <div>
                           <strong>{user.name}</strong>
                           <small>{user.email}</small>

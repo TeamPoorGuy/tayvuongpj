@@ -122,6 +122,7 @@ class FieldOwnerService
             ->with(Booking::resourceRelations(withCustomer: true))
             ->when($filters['field_id'] ?? null, fn ($query, $id) => $query->where('sports_field_id', $id))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['payment_status'] ?? null, fn ($query, $payment) => $query->where('payment_status', $payment))
             ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereDate('booking_date', $date))
             ->when($filters['start_date'] ?? null, fn ($query, $start) => $query->whereDate('booking_date', '>=', $start))
             ->when($filters['end_date'] ?? null, fn ($query, $end) => $query->whereDate('booking_date', '<=', $end))
@@ -144,9 +145,6 @@ class FieldOwnerService
         }
 
         $attributes = ['status' => $next->value];
-        if ($next === BookingStatus::Confirmed) {
-            $attributes['confirmed_at'] = now();
-        }
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
             $attributes += [
                 'cancelled_at' => now(),
@@ -176,7 +174,8 @@ class FieldOwnerService
     {
         $fieldIds = SportsField::withTrashed()->where('field_owner_id', $owner->id)->pluck('id');
 
-        return Review::whereIn('sports_field_id', $fieldIds)->with(['user', 'sportsField'])->latest()->paginate(10);
+        // Đánh giá bị admin ẩn (vi phạm) không hiển thị lại cho chủ sân.
+        return Review::whereIn('sports_field_id', $fieldIds)->where('is_visible', true)->with(['user', 'sportsField'])->latest()->paginate(10);
     }
 
     public function deleteField(User $owner, SportsField $field): void
