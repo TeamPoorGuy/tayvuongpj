@@ -38,7 +38,11 @@ class CheckInService
                 throw new DomainException('Đơn đặt sân này không thuộc cụm sân của bạn.');
             }
 
-            if (in_array($booking->status, [BookingStatus::Cancelled, BookingStatus::Rejected, BookingStatus::Completed], true)) {
+            if ($booking->status === BookingStatus::Pending) {
+                throw new DomainException('Đơn chưa thanh toán xác nhận, không thể check-in.');
+            }
+
+            if ($booking->status !== BookingStatus::Confirmed) {
                 throw new DomainException('Đơn đặt sân này không còn hiệu lực để check-in.');
             }
 
@@ -59,9 +63,6 @@ class CheckInService
             $booking->update([
                 'checked_in_at' => now(),
                 'checked_in_by' => $owner->id,
-                // Nếu đơn đang pending mà khách đến sân check-in, tự động xác nhận
-                'status' => BookingStatus::Confirmed->value,
-                'confirmed_at' => $booking->confirmed_at ?? now(),
             ]);
 
             // Cộng điểm tin cậy cho khách hàng vì đã có mặt đúng hẹn

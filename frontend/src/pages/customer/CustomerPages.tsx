@@ -296,9 +296,19 @@ export function CustomerBookingsPage() {
                   )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
                     <p className="form-help">
-                      {booking.can_be_cancelled && booking.cancel_until
-                        ? `Chủ sân đã xác nhận. Bạn có thể huỷ đến ${formatDateTime(booking.cancel_until)}${booking.cancel_penalty ? ' (sát giờ chơi nên sẽ bị trừ 15 điểm uy tín)' : ''}.`
-                        : 'Chủ sân đã xác nhận và hết thời gian tự huỷ. Cần huỷ vui lòng liên hệ chủ sân.'}{' '}
+                      {booking.can_be_cancelled ? (
+                        booking.cancel_penalty ? (
+                          <span style={{ color: '#ef4444' }}>
+                            Chủ sân đã xác nhận. Đã vào khung huỷ muộn (dưới 4 giờ trước giờ chơi): bạn vẫn có thể huỷ nhưng sẽ mất cọc và bị trừ 15 điểm uy tín.
+                          </span>
+                        ) : (
+                          <span>
+                            Chủ sân đã xác nhận. Bạn có thể huỷ miễn phí (hoàn cọc, không trừ điểm) trước {booking.cancel_until ? formatDateTime(booking.cancel_until) : 'giờ chơi'}.
+                          </span>
+                        )
+                      ) : (
+                        <span>Chủ sân đã xác nhận và đã đến/quá giờ chơi nên không thể tự huỷ đơn.</span>
+                      )}{' '}
                       Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
                       {booking.payment?.status === 'paid' &&
                         ` Đã chuyển ${formatMoney(booking.payment.amount ?? 0)}${booking.payment.option === 'deposit' ? `, còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân` : ''}.`}
@@ -500,8 +510,8 @@ export function CustomerBookingsPage() {
             : ''
         } (${cancellingBooking?.time_slot?.start_time} - ${cancellingBooking?.time_slot?.end_time})? ${
           cancellingBooking?.cancel_penalty
-            ? 'Lưu ý: còn dưới 4 giờ trước giờ chơi nên hủy lúc này sẽ bị trừ 15 điểm uy tín.'
-            : 'Hủy lúc này không bị trừ điểm uy tín.'
+            ? 'Cảnh báo: Đang trong khung huỷ muộn (dưới 4 giờ trước giờ chơi), huỷ lúc này bạn sẽ KHÔNG được hoàn cọc và bị trừ 15 điểm uy tín.'
+            : 'Huỷ lúc này được hoàn tiền cọc và không bị trừ điểm uy tín.'
         }`}
         confirmText="Hủy lịch đặt"
         cancelText="Giữ lại"

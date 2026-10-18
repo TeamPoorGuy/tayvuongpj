@@ -34,11 +34,27 @@ class BookingService
 
     public function create(User $user, CreateBookingData $data): Booking
     {
+        $maxAdvanceDays = Settings::getInt('max_advance_days', 30);
+        if (Carbon::parse($data->bookingDate)->gt(today()->addDays($maxAdvanceDays))) {
+            throw new ConflictException("Chỉ được đặt sân trước tối đa {$maxAdvanceDays} ngày.");
+        }
+
         $booking = DB::transaction(function () use ($user, $data) {
             $field = SportsField::query()->approved()->lockForUpdate()->find($data->sportsFieldId);
 
             if (! $field) {
                 throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
+            }
+
+            $maxPending = Settings::getInt('max_pending_bookings', 3);
+            $pendingCount = Booking::query()
+                ->where('user_id', $user->id)
+                ->where('status', BookingStatus::Pending->value)
+                ->lockForUpdate()
+                ->count();
+
+            if ($pendingCount >= $maxPending) {
+                throw new ConflictException("Bạn đang có {$pendingCount} đơn chờ xử lý. Tối đa chỉ được có {$maxPending} đơn cùng lúc.");
             }
 
             $slot = TimeSlot::query()
@@ -102,22 +118,14 @@ class BookingService
         Gate::forUser($user)->authorize('cancel', $booking);
 
         if (! $booking->canBeCancelled()) {
-            throw new ConflictException(
-                $booking->status === BookingStatus::Confirmed
-                    ? 'Đơn đã được chủ sân xác nhận quá '.Settings::getInt('confirmed_cancel_window_hours', 2).' giờ nên không thể tự hủy. Vui lòng liên hệ chủ sân.'
-                    : 'Đơn đặt sân này không còn đủ điều kiện để hủy.'
-            );
+            throw new ConflictException('Đơn đặt sân này không còn đủ điều kiện để hủy.');
         }
 
         if ($booking->isLateToCancel()) {
             TrustScoreService::penalizeLateCancellation($user, $booking);
         }
 
-        $booking->update([
-            'status' => BookingStatus::Cancelled->value,
-            'cancelled_at' => now(),
-            'cancel_reason' => $reason ?: 'Khách hàng tự hủy đơn.',
-        ]);
+        $booking->markCancelled('customer', $reason ?: 'Khách hàng tự hủy đơn.');
 
         app(WaitlistService::class)->handleSlotFreed(
             $booking->sports_field_id,
@@ -149,12 +157,17 @@ class BookingService
             ->each(function (Booking $booking) use (&$count, $expireBefore) {
                 $reason = $booking->status === BookingStatus::Pending ? $this->expiryReason($booking, $expireBefore) : null;
                 if ($reason) {
-                    $booking->update([
-                        // Khách không chuyển khoản đúng hạn là lỗi phía khách → "đã huỷ"; còn lại là chủ sân không xử lý → "từ chối".
-                        'status' => ($booking->payment_status === 'awaiting' ? BookingStatus::Cancelled : BookingStatus::Rejected)->value,
-                        'cancelled_at' => now(),
-                        'cancel_reason' => $reason,
-                    ]);
+                    $status = ($booking->payment_status === 'awaiting' ? BookingStatus::Cancelled : BookingStatus::Rejected);
+                    if (in_array($booking->payment_status, ['reported', 'paid'], true)) {
+                        $booking->markCancelled('system', $reason, $status);
+                    } else {
+                        $booking->update([
+                            // Khách không chuyển khoản đúng hạn là lỗi phía khách → "đã huỷ"; còn lại là chủ sân không xử lý → "từ chối".
+                            'status' => $status->value,
+                            'cancelled_at' => now(),
+                            'cancel_reason' => $reason,
+                        ]);
+                    }
                     SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
                     app(WaitlistService::class)->handleSlotFreed(
                         $booking->sports_field_id,

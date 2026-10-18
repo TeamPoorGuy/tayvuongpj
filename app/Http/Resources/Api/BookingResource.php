@@ -36,6 +36,11 @@ class BookingResource extends JsonResource
                 'deposit_amount' => $this->depositAmount(),
                 'deposit_percent' => Settings::getInt('deposit_percent', 30),
             ],
+            'refund' => $this->refund_status !== null ? [
+                'status' => $this->refund_status,
+                'amount' => (float) $this->refund_amount,
+                'refunded_at' => $this->refunded_at?->toISOString(),
+            ] : null,
 
             // Tài khoản nhận tiền: chỉ trả cho chính khách của đơn, sau khi chủ sân đã duyệt, ở endpoint chi tiết.
             'bank' => $this->when(

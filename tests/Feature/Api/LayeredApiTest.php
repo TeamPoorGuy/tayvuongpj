@@ -575,11 +575,11 @@ class LayeredApiTest extends TestCase
         $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))->assertForbidden();
     }
 
-    public function test_confirmed_booking_can_only_be_cancelled_within_two_hours_of_confirmation(): void
+    public function test_confirmed_booking_cancellation_rules_and_penalty(): void
     {
         $this->travelTo(now()->setTime(12, 0));
         [$field, $slot] = $this->createApprovedFieldWithSlot('san-huy', '18:00:00', '19:30:00');
-        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
+        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true, 'trust_score' => 100]);
         $make = fn () => Booking::create([
             'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
             'booking_date' => today()->toDateString(), 'status' => 'confirmed', 'confirmed_at' => now(), 'total_price' => 1,
@@ -590,10 +590,14 @@ class LayeredApiTest extends TestCase
         $this->patchJson("/api/v1/customer/bookings/{$within->id}/cancel")->assertOk();
         $this->assertSame(100, $customer->fresh()->trust_score);
 
-        $expired = $make();
-        $this->travelTo(now()->addHours(2)->addMinute()); // quá 2 giờ kể từ lúc duyệt
-        $this->patchJson("/api/v1/customer/bookings/{$expired->id}/cancel")->assertStatus(409);
-        $this->assertSame('confirmed', $expired->fresh()->status->value);
+        $late = $make();
+        $this->travelTo(now()->addHours(2)->addMinute()); // 14:01: quá 2 giờ kể từ lúc duyệt và còn < 4 giờ tới giờ chơi → huỷ được nhưng bị trừ điểm (-15)
+        $this->patchJson("/api/v1/customer/bookings/{$late->id}/cancel")->assertOk();
+        $this->assertSame(85, $customer->fresh()->trust_score);
+
+        $past = $make();
+        $this->travelTo(today()->setTime(18, 5)); // Đã quá giờ bắt đầu trận đấu → không thể huỷ
+        $this->patchJson("/api/v1/customer/bookings/{$past->id}/cancel")->assertStatus(409);
     }
 
     public function test_pending_requests_are_auto_cancelled_when_owner_does_not_respond(): void
@@ -722,10 +726,10 @@ class LayeredApiTest extends TestCase
         $payload = ['name' => $field->name, 'field_type_id' => $field->field_type_id, 'address' => $field->address, 'price_per_hour' => 250000];
 
         $this->putJson("/api/v1/field-owner/fields/{$field->id}", $payload)->assertOk();
-        $this->assertSame('approved', $field->fresh()->status);
+        $this->assertSame('approved', $field->fresh()->status->value);
 
         $this->putJson("/api/v1/field-owner/fields/{$field->id}", ['name' => 'Tên mới'] + $payload)->assertOk();
-        $this->assertSame('pending', $field->fresh()->status);
+        $this->assertSame('pending', $field->fresh()->status->value);
     }
 
     public function test_admin_can_suspend_owner_which_hides_fields_and_blocks_owner_area(): void

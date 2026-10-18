@@ -129,6 +129,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
         Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
+        Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',

@@ -595,8 +595,7 @@ class SmartMatchdayTest extends TestCase
         $booking->update(['confirmed_at' => now()]);
         $this->getJson('/api/v1/customer/bookings')->assertJsonPath('data.0.cancel_penalty', false);
 
-        $this->travelTo($day->copy()->setTime(14, 30)); // còn 3 giờ: huỷ được nhưng bị trừ điểm
-        $booking->update(['confirmed_at' => now()]);
+        $this->travelTo($day->copy()->setTime(14, 30)); // còn 3 giờ (quá 2 giờ sau duyệt): huỷ được nhưng bị trừ điểm
         $this->getJson('/api/v1/customer/bookings?status=confirmed')
             ->assertJsonPath('data.0.can_be_cancelled', true)->assertJsonPath('data.0.cancel_penalty', true);
         $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel")->assertOk();
@@ -683,13 +682,13 @@ class SmartMatchdayTest extends TestCase
             'cancel_future_bookings' => false,
         ])->assertOk();
 
-        $this->assertSame('rejected', $field->fresh()->status);
+        $this->assertSame('rejected', $field->fresh()->status->value);
         $this->assertSame('confirmed', $futureBooking->fresh()->status->value);
         $this->assertSame('cancelled', $waiting->fresh()->status); // hàng đợi của sân đã gỡ bị đóng
         $this->assertSame('cancelled', $match->fresh()->status); // phòng tìm đối gắn với sân đã gỡ bị huỷ
 
         // Phục hồi lại approved để test trường hợp 2
-        $field->update(['status' => 'approved']);
+        $field->refresh()->update(['status' => 'approved']);
 
         // Trường hợp 2: Gỡ sân và huỷ luôn các đơn tương lai
         $this->patchJson("/api/v1/admin/fields/{$field->id}/verify", [
@@ -698,7 +697,7 @@ class SmartMatchdayTest extends TestCase
             'cancel_future_bookings' => true,
         ])->assertOk();
 
-        $this->assertSame('rejected', $field->fresh()->status);
+        $this->assertSame('rejected', $field->fresh()->status->value);
         $this->assertSame('cancelled', $futureBooking->fresh()->status->value);
         $this->assertStringContainsString('Vi phạm nghiêm trọng', (string) $futureBooking->fresh()->cancel_reason);
     }

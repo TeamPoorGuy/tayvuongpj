@@ -89,8 +89,9 @@ class FieldOwnerService
 
         // Đổi tên/địa chỉ/loại sân sau khi duyệt phải được admin duyệt lại; sân bị từ chối được gửi lại khi sửa.
         $sensitive = $field->name !== $data->name || $field->address !== $data->address || $field->field_type_id !== $data->fieldTypeId;
-        $resubmit = $field->status === FieldStatus::Rejected->value
-            || ($field->status === FieldStatus::Approved->value && $sensitive);
+        $statusValue = $field->status instanceof FieldStatus ? $field->status->value : $field->status;
+        $resubmit = $statusValue === FieldStatus::Rejected->value
+            || ($statusValue === FieldStatus::Approved->value && $sensitive);
 
         $field->update([
             'name' => $data->name,
@@ -108,6 +109,18 @@ class FieldOwnerService
     public function toggleField(User $owner, SportsField $field): SportsField
     {
         $this->assertOwner($owner, $field);
+
+        if ($field->is_active) {
+            $hasUpcoming = Booking::where('sports_field_id', $field->id)
+                ->whereIn('status', BookingStatus::blockingCases())
+                ->whereDate('booking_date', '>=', today())
+                ->exists();
+
+            if ($hasUpcoming) {
+                throw new ConflictException('Sân đang có đơn đặt sắp tới, không thể tạm dừng hoạt động.');
+            }
+        }
+
         $field->update(['is_active' => ! $field->is_active]);
 
         return $field->refresh()->load(['primaryImage', 'fieldType.sportCategory', 'reviews']);
@@ -140,19 +153,38 @@ class FieldOwnerService
             throw new ConflictException('Chuyển trạng thái đơn không hợp lệ.');
         }
 
-        if ($next === BookingStatus::Completed && $booking->endsAt()->isFuture()) {
-            throw new ConflictException('Chưa hết giờ thi đấu nên chưa thể hoàn thành đơn.');
-        }
-
-        $attributes = ['status' => $next->value];
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
-            $attributes += [
-                'cancelled_at' => now(),
-                'cancel_reason' => $reason ?: ($next === BookingStatus::Rejected ? 'Chủ sân từ chối đơn.' : 'Chủ sân huỷ đơn.'),
-            ];
+            if ($booking->payment_status === 'reported') {
+                throw new ConflictException('Khách đã báo chuyển khoản, vui lòng xác nhận hoặc đối soát thanh toán thay vì từ chối/huỷ.');
+            }
         }
 
-        $booking->update($attributes);
+        if ($next === BookingStatus::Cancelled && $booking->startsAt()->isPast()) {
+            throw new ConflictException('Đơn đã quá giờ bắt đầu, không thể huỷ.');
+        }
+
+        if ($next === BookingStatus::Completed) {
+            if ($booking->endsAt()->isFuture()) {
+                throw new ConflictException('Chưa hết giờ thi đấu nên chưa thể hoàn thành đơn.');
+            }
+            if ($booking->checked_in_at === null) {
+                throw new ConflictException('Chỉ có thể hoàn thành đơn sau khi khách đã check-in.');
+            }
+        }
+
+        if ($next === BookingStatus::Cancelled) {
+            $booking->markCancelled('field_owner', $reason ?: 'Chủ sân huỷ đơn.');
+        } else {
+            $attributes = ['status' => $next->value];
+            if ($next === BookingStatus::Rejected) {
+                $attributes += [
+                    'cancelled_at' => now(),
+                    'cancel_reason' => $reason ?: 'Chủ sân từ chối đơn.',
+                ];
+            }
+            $booking->update($attributes);
+        }
+
         $booking = $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
 
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
@@ -168,6 +200,38 @@ class FieldOwnerService
         }
 
         return $booking;
+    }
+
+    public function recordNoShow(User $owner, Booking $booking): Booking
+    {
+        Gate::forUser($owner)->authorize('manage', $booking);
+
+        if ($booking->status !== BookingStatus::Confirmed) {
+            throw new ConflictException('Chỉ có thể ghi nhận vắng mặt cho đơn đã xác nhận.');
+        }
+
+        if (! $booking->startsAt()->isPast()) {
+            throw new ConflictException('Chưa đến giờ thi đấu, chưa thể ghi nhận vắng mặt.');
+        }
+
+        if ($booking->checked_in_at !== null) {
+            throw new ConflictException('Đơn này đã check-in, không thể ghi nhận vắng mặt.');
+        }
+
+        if ($booking->no_show_at !== null) {
+            throw new ConflictException('Đơn này đã được ghi nhận vắng mặt trước đó.');
+        }
+
+        $booking->update([
+            'status' => BookingStatus::Completed->value,
+            'no_show_at' => now(),
+        ]);
+
+        if ($booking->customer) {
+            TrustScoreService::penalizeNoShow($booking->customer, $booking);
+        }
+
+        return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
     }
 
     public function reviews(User $owner): LengthAwarePaginator
@@ -266,6 +330,10 @@ class FieldOwnerService
 
         if ($slot && ($slot->start_time !== $start || $slot->end_time !== $end) && $this->slotHasUpcomingBookings($slot)) {
             throw new ConflictException('Khung giờ đang có đơn sắp tới, không thể đổi giờ.');
+        }
+
+        if ($slot && isset($data['is_active']) && ! (bool) $data['is_active'] && $slot->is_active && $this->slotHasUpcomingBookings($slot)) {
+            throw new ConflictException('Khung giờ đang có đơn sắp tới, không thể tắt hoạt động.');
         }
 
         $attributes = [

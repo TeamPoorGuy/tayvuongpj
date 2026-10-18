@@ -55,4 +55,14 @@ class BookingController extends Controller
 
         return response()->json(['message' => 'Đã cập nhật trạng thái đơn.', 'data' => new BookingResource($booking)]);
     }
+
+    public function noShow(Request $request, Booking $booking): JsonResponse
+    {
+        $booking = $this->service->recordNoShow($request->user(), $booking);
+
+        return response()->json([
+            'message' => 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.',
+            'data' => new BookingResource($booking),
+        ]);
+    }
 }

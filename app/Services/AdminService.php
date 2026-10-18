@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\BookingStatus;
+use App\Enums\FieldStatus;
 use App\Enums\UserRole;
 use App\Enums\VerificationStatus;
 use App\Exceptions\ConflictException;
@@ -62,6 +63,32 @@ class AdminService
             ->withQueryString();
     }
 
+    public function cancelFutureBookings(iterable $bookings, string $reason): int
+    {
+        $count = 0;
+        foreach ($bookings as $booking) {
+            if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
+                continue;
+            }
+
+            $booking->markCancelled('system', $reason);
+
+            if ($booking->customer?->email) {
+                SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
+            }
+
+            app(WaitlistService::class)->handleSlotFreed(
+                $booking->sports_field_id,
+                $booking->time_slot_id,
+                $booking->booking_date->toDateString()
+            );
+
+            $count++;
+        }
+
+        return $count;
+    }
+
     public function toggleUser(User $user): User
     {
         if ($user->role === UserRole::Admin->value) {
@@ -70,6 +97,25 @@ class AdminService
 
         $user->forceFill(['is_active' => ! $user->is_active])->save();
         AdminLog::record('toggle_user', $user, ['is_active' => $user->is_active]);
+
+        if (! $user->is_active) {
+            $customerBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                ->where('user_id', $user->id)
+                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->whereDate('booking_date', '>=', today())
+                ->get();
+            $this->cancelFutureBookings($customerBookings, 'Tài khoản của bạn đã bị tạm khoá bởi quản trị viên.');
+
+            $fieldIds = SportsField::withTrashed()->where('field_owner_id', $user->id)->pluck('id');
+            if ($fieldIds->isNotEmpty()) {
+                $ownerBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                    ->whereIn('sports_field_id', $fieldIds)
+                    ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                    ->whereDate('booking_date', '>=', today())
+                    ->get();
+                $this->cancelFutureBookings($ownerBookings, 'Chủ sân đã bị tạm khoá tài khoản bởi quản trị viên.');
+            }
+        }
 
         return $user->refresh();
     }
@@ -96,6 +142,23 @@ class AdminService
             'verified_at' => now(),
             'verified_by' => $admin->id,
         ]);
+
+        if (in_array($next, [VerificationStatus::Rejected, VerificationStatus::Suspended], true)) {
+            $fieldIds = SportsField::withTrashed()->where('field_owner_id', $profile->user_id)->pluck('id');
+            if ($fieldIds->isNotEmpty()) {
+                $ownerBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
+                    ->whereIn('sports_field_id', $fieldIds)
+                    ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                    ->whereDate('booking_date', '>=', today())
+                    ->get();
+                $this->cancelFutureBookings(
+                    $ownerBookings,
+                    $reason
+                        ? ($next === VerificationStatus::Suspended ? "Chủ sân đã bị đình chỉ: {$reason}" : "Hồ sơ chủ sân đã bị từ chối: {$reason}")
+                        : ($next === VerificationStatus::Suspended ? 'Chủ sân đã bị đình chỉ hoạt động bởi quản trị viên.' : 'Hồ sơ chủ sân đã bị từ chối.')
+                );
+            }
+        }
 
         $profile->refresh()->load(['user', 'documents']);
 
@@ -131,13 +194,20 @@ class AdminService
 
     public function verifyField(SportsField $field, string $status, ?string $reason = null, bool $cancelFutureBookings = false): SportsField
     {
-        DB::transaction(function () use ($field, $status, $reason, $cancelFutureBookings) {
+        $next = FieldStatus::from($status);
+        $currentStatus = $field->status instanceof FieldStatus ? $field->status : FieldStatus::from($field->status);
+
+        if (! $currentStatus->canTransitionTo($next)) {
+            throw new ConflictException('Sân này không thể chuyển sang trạng thái này.');
+        }
+
+        DB::transaction(function () use ($field, $next, $reason, $cancelFutureBookings) {
             $field->update([
-                'status' => $status,
-                'rejection_reason' => $status === 'rejected' ? $reason : null,
+                'status' => $next->value,
+                'rejection_reason' => $next === FieldStatus::Rejected ? $reason : null,
             ]);
 
-            if ($status === 'rejected') {
+            if ($next === FieldStatus::Rejected) {
                 // Sân đã bị gỡ: hàng đợi của sân này không còn ý nghĩa, đóng để khách không nhận lời mời giữ chỗ vô ích.
                 BookingWaitlist::where('sports_field_id', $field->id)
                     ->whereIn('status', ['waiting', 'offered'])
@@ -170,7 +240,7 @@ class AdminService
                 }
             }
 
-            if ($status === 'rejected' && $cancelFutureBookings) {
+            if ($next === FieldStatus::Rejected && $cancelFutureBookings) {
                 $cancelReason = $reason ? "Sân đã bị gỡ khỏi hệ thống: {$reason}" : 'Sân đã bị gỡ khỏi hệ thống.';
 
                 $futureBookings = Booking::with(['customer', 'sportsField', 'timeSlot'])
@@ -179,26 +249,12 @@ class AdminService
                     ->whereDate('booking_date', '>=', today())
                     ->get();
 
-                foreach ($futureBookings as $booking) {
-                    if ($booking->booking_date->isToday() && $booking->endsAt()->isPast()) {
-                        continue;
-                    }
-
-                    $booking->update([
-                        'status' => BookingStatus::Cancelled->value,
-                        'cancelled_at' => now(),
-                        'cancel_reason' => $cancelReason,
-                    ]);
-
-                    if ($booking->customer?->email) {
-                        SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
-                    }
-                }
+                $this->cancelFutureBookings($futureBookings, $cancelReason);
             }
         });
 
         AdminLog::record('verify_field', $field, [
-            'status' => $status,
+            'status' => $next->value,
             'reason' => $reason,
             'cancel_future_bookings' => $cancelFutureBookings,
         ]);

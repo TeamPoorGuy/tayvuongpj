@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FieldStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -26,6 +27,7 @@ class SportsField extends Model
     ];
 
     protected $casts = [
+        'status' => FieldStatus::class,
         'price_per_hour' => 'decimal:2',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',

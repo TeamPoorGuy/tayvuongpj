@@ -13,10 +13,13 @@ class CreateBookingRequest extends FormRequest
 
     public function rules(): array
     {
+        $maxAdvanceDays = \App\Support\Settings::getInt('max_advance_days', 30);
+        $maxDate = today()->addDays($maxAdvanceDays)->toDateString();
+
         return [
             'sports_field_id' => ['required', 'integer', 'exists:sports_fields,id'],
             'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
-            'booking_date' => ['required', 'date', 'after_or_equal:today'],
+            'booking_date' => ['required', 'date', 'after_or_equal:today', 'before_or_equal:'.$maxDate],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

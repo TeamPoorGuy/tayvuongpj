@@ -112,12 +112,19 @@ export interface Booking {
   check_in_code?: string | null
   checked_in_at?: string | null
   payment?: BookingPayment
+  refund?: BookingRefund | null
   bank?: { bank_name: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
   review?: Review | null
   created_at: string
+}
+
+export interface BookingRefund {
+  status: 'pending' | 'done' | 'waived'
+  amount: number
+  refunded_at: string | null
 }
 
 /** Thanh toán chuyển khoản: null = chưa duyệt, awaiting = chờ khách chuyển, reported = khách báo đã chuyển, paid = đã nhận tiền. */

@@ -104,6 +104,12 @@ class WaitlistService
         }
 
         return DB::transaction(function () use ($fieldId, $slotId, $date) {
+            // Khoá dòng sân để serialize cùng khoá với BookingService::create và acceptOffer
+            $field = SportsField::query()->lockForUpdate()->find($fieldId);
+            if (! $field) {
+                return null;
+            }
+
             // Kiểm tra xem hiện tại slot có bị đơn nào khác giữ không
             $isOccupied = Booking::where('sports_field_id', $fieldId)
                 ->where('time_slot_id', $slotId)
@@ -173,6 +179,17 @@ class WaitlistService
                 throw new ConflictException('Lời mời này không còn khả dụng hoặc đã kết thúc.');
             }
 
+            // Khoá dòng sân để serialize cùng khoá với BookingService::create
+            $field = SportsField::query()->approved()->lockForUpdate()->find($waitlist->sports_field_id);
+            if (! $field || ! $field->is_active) {
+                $waitlist->update(['status' => 'expired']);
+                return 'Sân này hiện không còn nhận đặt.';
+            }
+
+            if ($field->field_owner_id === $user->id) {
+                return 'Bạn không thể đặt sân của chính mình.';
+            }
+
             if ($waitlist->offer_expires_at && now()->gt($waitlist->offer_expires_at)) {
                 $waitlist->update(['status' => 'expired']);
                 $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->time_slot_id, $waitlist->booking_date->toDateString());
@@ -193,12 +210,20 @@ class WaitlistService
             }
 
             $slot = $waitlist->timeSlot;
-            $field = $waitlist->sportsField;
 
-            // Sân bị gỡ/ngưng hoặc khung giờ bị tắt trong lúc chờ thì lời mời không còn giá trị.
-            if (! $slot?->is_active || ! SportsField::approved()->whereKey($waitlist->sports_field_id)->exists()) {
+            $maxPending = \App\Support\Settings::getInt('max_pending_bookings', 3);
+            $pendingCount = Booking::where('user_id', $user->id)
+                ->where('status', BookingStatus::Pending->value)
+                ->count();
+
+            if ($pendingCount >= $maxPending) {
+                return "Bạn đang có {$pendingCount} đơn chờ xử lý. Tối đa chỉ được có {$maxPending} đơn cùng lúc.";
+            }
+
+            // Khung giờ bị tắt trong lúc chờ thì lời mời không còn giá trị.
+            if (! $slot?->is_active) {
                 $waitlist->update(['status' => 'expired']);
-                return 'Sân hoặc khung giờ này hiện không còn nhận đặt.';
+                return 'Khung giờ này hiện không còn nhận đặt.';
             }
 
             $pricePerHour = $slot->price_per_hour ?? $field->price_per_hour;
