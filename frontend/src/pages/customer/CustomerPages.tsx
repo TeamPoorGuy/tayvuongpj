@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircle,
   CalendarDays,
   CheckCircle2,
   CircleUserRound,
@@ -65,11 +66,20 @@ export function CustomerBookingsPage() {
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
   const [reviewing, setReviewing] = useState<Booking | null>(null)
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
+  const [complaintBooking, setComplaintBooking] = useState<Booking | null>(null)
+  const [complaintCategory, setComplaintCategory] = useState('refund_pending')
+  const [complaintContent, setComplaintContent] = useState('')
   const currentReview = reviewing ?? activeReviewing
 
   const openReview = (booking: Booking) => {
     setReviewing(booking)
     setActiveReviewing(booking)
+  }
+
+  const openComplaint = (booking: Booking) => {
+    setComplaintBooking(booking)
+    setComplaintCategory(booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
+    setComplaintContent('')
   }
 
   const bookings = useQuery({
@@ -133,6 +143,33 @@ export function CustomerBookingsPage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể gửi đánh giá')
+    },
+  })
+
+  const complaintMutation = useMutation({
+    mutationFn: async ({
+      bookingId,
+      category,
+      content,
+    }: {
+      bookingId: number
+      category: string
+      content: string
+    }) =>
+      api.post('/customer/complaints', {
+        booking_id: bookingId,
+        subject_type: 'booking',
+        subject_id: String(bookingId),
+        category,
+        content,
+      }),
+    onSuccess: () => {
+      toast.success('Đã gửi khiếu nại tới Ban quản trị SportHub thành công!')
+      setComplaintBooking(null)
+      setComplaintContent('')
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể gửi khiếu nại')
     },
   })
 
@@ -329,6 +366,16 @@ export function CustomerBookingsPage() {
                   {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
                     <p className="form-help">Lý do: {booking.cancel_reason}</p>
                   )}
+                  {booking.refund?.status === 'pending' && (
+                    <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Khoản hoàn tiền:</strong> Đơn đã ghi nhận hoàn cọc {formatMoney(booking.refund.amount)}. Nếu sau 24h chưa nhận được chuyển khoản, bạn hãy bấm &quot;Khiếu nại&quot; bên dưới để ban quản trị đối soát hỗ trợ.
+                    </div>
+                  )}
+                  {booking.refund?.status === 'done' && (
+                    <div className="notice notice--success" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      Đã hoàn trả {formatMoney(booking.refund.amount)} tiền cọc{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                    </div>
+                  )}
                   <div className="booking-item__footer">
                     <strong>{formatMoney(booking.total_price)}</strong>
 
@@ -354,6 +401,14 @@ export function CustomerBookingsPage() {
                           <Star size={15} /> Đánh giá
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => openComplaint(booking)}
+                        title="Khiếu nại hoặc phản ánh về đơn đặt sân này"
+                      >
+                        <AlertCircle size={14} /> Khiếu nại
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -534,6 +589,80 @@ export function CustomerBookingsPage() {
           if (cancellingBooking) cancel.mutate(cancellingBooking)
         }}
       />
+
+      <Modal
+        isOpen={!!complaintBooking}
+        onClose={() => setComplaintBooking(null)}
+        title={`Khiếu nại / Phản ánh đơn #BK-${complaintBooking?.id}`}
+      >
+        {complaintBooking && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              complaintMutation.mutate({
+                bookingId: complaintBooking.id,
+                category: complaintCategory,
+                content: complaintContent,
+              })
+            }}
+            style={{ maxWidth: 480 }}
+          >
+            <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+              <div>Sân: <strong>{complaintBooking.field?.name}</strong></div>
+              <div>Ngày chơi: <strong>{formatDate(complaintBooking.booking_date)}</strong> ({complaintBooking.time_slot?.start_time} – {complaintBooking.time_slot?.end_time})</div>
+              {complaintBooking.refund && (
+                <div style={{ marginTop: 4, color: 'var(--pitch)', fontWeight: 600 }}>
+                  Tiền cọc cần hoàn: {formatMoney(complaintBooking.refund.amount)} ({complaintBooking.refund.status === 'pending' ? 'Chưa nhận' : 'Đã hoàn'})
+                </div>
+              )}
+            </div>
+
+            <div className="form-stack">
+              <label>
+                <span>Loại khiếu nại / Vấn đề gặp phải</span>
+                <select
+                  value={complaintCategory}
+                  onChange={(e) => setComplaintCategory(e.target.value)}
+                >
+                  <option value="refund_pending">Chưa nhận được tiền hoàn cọc</option>
+                  <option value="field_mismatch">Sân không đúng thực tế / mô tả sai</option>
+                  <option value="owner_cancelled">Chủ sân tự ý huỷ sân hoặc không đón tiếp</option>
+                  <option value="bad_behavior">Thái độ phục vụ của nhân viên / chủ sân</option>
+                  <option value="other">Vấn đề khác</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Nội dung chi tiết (tối thiểu 5 ký tự)</span>
+                <textarea
+                  required
+                  rows={4}
+                  value={complaintContent}
+                  onChange={(e) => setComplaintContent(e.target.value)}
+                  placeholder="Mô tả cụ thể sự việc để Ban quản trị đối soát với chủ sân..."
+                />
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setComplaintBooking(null)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="button button--brand"
+                  disabled={complaintMutation.isPending || complaintContent.trim().length < 5}
+                >
+                  {complaintMutation.isPending ? 'Đang gửi...' : 'Gửi khiếu nại'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   )
 }

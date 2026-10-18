@@ -179,7 +179,7 @@ export function AdminStatementsPage() {
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         <div className="stat-card">
           <span className="stat-card__label">Tổng giá trị đơn toàn sàn (GMV)</span>
-          <strong className="stat-card__val">{formatMoney(stats?.total_gmv ?? stats?.total_revenue ?? 0)}</strong>
+          <strong className="stat-card__val">{formatMoney(stats?.total_gmv ?? 0)}</strong>
           <small className="stat-card__note">Tổng doanh thu các đơn đã xác nhận / xong</small>
         </div>
         <div className="stat-card stat-card--highlight">

@@ -26,6 +26,7 @@ class TrustScoreService
         self::apply($user, -25, 'Không đến nhận sân và không hủy trước (No-show) (-25 điểm)', $booking);
     }
 
+
     /** Cập nhật điểm trong khoảng 0–150 và ghi log theo mức thay đổi thực tế (không phải mức danh nghĩa). */
     private static function apply(User $user, int $delta, string $reason, ?Booking $booking): void
     {

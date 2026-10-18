@@ -116,6 +116,11 @@ class Booking extends Model
             return (float) $this->total_price;
         }
 
+        // Đơn đã xác nhận (chưa đến giờ check-in nhưng đã giữ chỗ/cọc): cơ sở hoa hồng ước tính trên tổng đơn
+        if ($this->status === BookingStatus::Confirmed) {
+            return (float) $this->total_price;
+        }
+
         if ($this->no_show_at !== null) {
             return (float) ($this->payment_amount ?? $this->depositAmount());
         }

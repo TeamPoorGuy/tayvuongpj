@@ -419,7 +419,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
 
         Sanctum::actingAs($admin);
         // Khoá tài khoản chủ sân
-        $res = $this->patchJson("/api/v1/admin/users/{$this->owner->id}/toggle");
+        $res = $this->patchJson("/api/v1/admin/users/{$this->owner->id}/toggle", [
+            'reason' => 'Chủ sân vi phạm quy chế hoạt động.',
+        ]);
         $res->assertOk();
 
         $fresh = $booking->fresh();

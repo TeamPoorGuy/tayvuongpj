@@ -81,8 +81,8 @@ export function OwnerDashboardPage() {
         />
         <Stat
           label="Doanh thu thực nhận"
-          value={formatMoney(data?.current_month_net_revenue ?? data?.current_month_revenue ?? 0)}
-          note={`GMV: ${formatMoney(data?.current_month_gmv ?? data?.current_month_revenue ?? 0)}`}
+          value={formatMoney(data?.current_month_net_revenue ?? 0)}
+          note={`GMV: ${formatMoney(data?.current_month_gmv ?? 0)}`}
         />
         <Stat
           label="Phí sàn ước tính"

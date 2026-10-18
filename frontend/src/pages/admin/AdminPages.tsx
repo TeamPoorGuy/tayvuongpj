@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Ban,
   Building2,
   CalendarDays,
-  ChartNoAxesCombined,
   CreditCard,
+  Download,
   ExternalLink,
   Eye,
   FileText,
   FolderTree,
+  RotateCcw,
   Search,
   Trophy,
   MessageSquareText,
@@ -19,8 +21,7 @@ import {
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
-import { AnimatedCounter } from '../../components/AnimatedCounter'
-import { Link, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
@@ -29,8 +30,7 @@ import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
 import type {
-  AdminDashboard,
-  ApiEnvelope,
+  AdminUserDetail,
   Booking,
   Category,
   MatchRequest,
@@ -45,73 +45,6 @@ import { Empty, PageTitle } from '../customer/CustomerPages'
 import { Avatar } from '../../components/Avatar'
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
-export function AdminDashboardPage() {
-
-  const dashboard = useQuery({
-    queryKey: ['admin', 'dashboard'],
-    queryFn: async () => (await api.get<ApiEnvelope<AdminDashboard>>('/admin/dashboard')).data.data,
-  })
-  const data = dashboard.data
-  return (
-    <>
-      <PageTitle
-        icon={<ChartNoAxesCombined />}
-        kicker="Toàn hệ thống"
-        title="Trung tâm điều hành"
-        copy="Một góc nhìn rõ ràng cho người dùng, nguồn cung và giao dịch."
-      />
-      <div className="stats-grid">
-        <Stat label="Khách hàng" value={data?.total_customers ?? 0} />
-        <Stat
-          label="Chủ sân"
-          value={data?.total_field_owners ?? 0}
-          note={`${data?.pending_owners ?? 0} chờ duyệt`}
-          to="/admin/owners?status=pending"
-        />
-        <Stat
-          label="Sân thể thao"
-          value={data?.total_fields ?? 0}
-          note={`${data?.pending_fields ?? 0} chờ duyệt`}
-          to="/admin/fields?status=pending"
-        />
-        <Stat label="Tổng giá trị đơn (GMV)" value={formatMoney(data?.total_gmv ?? data?.total_revenue ?? 0)} />
-        <Stat
-          label="Hoa hồng đã thu"
-          value={formatMoney(data?.total_commission_collected ?? 0)}
-          note="Đã xác nhận thanh toán"
-          to="/admin/statements?status=paid"
-        />
-        <Stat
-          label="Hoa hồng chờ thu"
-          value={formatMoney(data?.total_commission_pending ?? 0)}
-          note="Cần đối soát"
-          to="/admin/statements"
-        />
-      </div>
-      <section className="data-panel">
-        <div className="data-panel__head">
-          <div>
-            <span>Xếp hạng</span>
-            <h2>Sân được đặt nhiều nhất</h2>
-          </div>
-        </div>
-        <div className="ranking">
-          {data?.most_booked_fields.map((field, index) => (
-            <article key={field.id}>
-              <b>{String(index + 1).padStart(2, '0')}</b>
-              <div>
-                <strong>{field.name}</strong>
-                <small>{field.address}</small>
-              </div>
-              <span>{field.bookings_count} lượt đặt</span>
-            </article>
-          ))}
-        </div>
-      </section>
-    </>
-  )
-}
-
 export function AdminUsersPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -120,7 +53,9 @@ export function AdminUsersPage() {
   const [role, setRole] = useState('')
   const [page, setPage] = useState(1)
   const [togglingUser, setTogglingUser] = useState<User | null>(null)
+  const [toggleReason, setToggleReason] = useState('')
   const [viewingTrustUser, setViewingTrustUser] = useState<User | null>(null)
+  const [viewingDetailUser, setViewingDetailUser] = useState<User | null>(null)
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -151,15 +86,24 @@ export function AdminUsersPage() {
     enabled: !!viewingTrustUser,
   })
 
+  const userDetail = useQuery<{ data: AdminUserDetail }>({
+    queryKey: ['admin', 'users', 'detail', viewingDetailUser?.id],
+    queryFn: async () =>
+      (await api.get<{ data: AdminUserDetail }>(`/admin/users/${viewingDetailUser?.id}/detail`)).data,
+    enabled: !!viewingDetailUser,
+  })
+
   const toggle = useMutation({
-    mutationFn: async (user: User) => api.patch(`/admin/users/${user.id}/toggle`),
-    onSuccess: (_, user) => {
+    mutationFn: async ({ user, reason }: { user: User; reason?: string }) =>
+      api.patch(`/admin/users/${user.id}/toggle`, { reason: reason || undefined }),
+    onSuccess: (_, { user }) => {
       toast.success(
         user.is_active
           ? `Đã khóa tài khoản ${user.name}.`
           : `Đã mở khóa tài khoản ${user.name}.`,
       )
       setTogglingUser(null)
+      setToggleReason('')
       void client.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
     onError: (err) => {
@@ -170,6 +114,11 @@ export function AdminUsersPage() {
   const handleRoleChange = (newRole: string) => {
     setRole(newRole)
     setPage(1)
+  }
+
+  const handleOpenToggle = (user: User) => {
+    setTogglingUser(user)
+    setToggleReason('')
   }
 
   return (
@@ -224,14 +173,24 @@ export function AdminUsersPage() {
                 </Fragment>,
                 user.is_field_owner ? 'Chủ sân' : 'Khách hàng',
                 <StatusBadge key="status" status={user.is_active ? 'approved' : 'inactive'} />,
-                <button
-                  key="action"
-                  className={`button button--small ${user.is_active ? 'button--danger' : 'button--brand'}`}
-                  onClick={() => setTogglingUser(user)}
-                  disabled={toggle.isPending}
-                >
-                  {user.is_active ? 'Khóa' : 'Mở khóa'}
-                </button>,
+                <div key="action" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="button button--small button--ghost"
+                    onClick={() => setViewingDetailUser(user)}
+                    title="Xem chi tiết hồ sơ & lịch sử đơn"
+                  >
+                    <Eye size={14} /> Chi tiết
+                  </button>
+                  <button
+                    type="button"
+                    className={`button button--small ${user.is_active ? 'button--danger' : 'button--brand'}`}
+                    onClick={() => handleOpenToggle(user)}
+                    disabled={toggle.isPending}
+                  >
+                    {user.is_active ? 'Khóa' : 'Mở khóa'}
+                  </button>
+                </div>,
               ]
             }) ?? []
           }
@@ -244,24 +203,168 @@ export function AdminUsersPage() {
         onPageChange={setPage}
       />
 
-      <ConfirmModal
+      {/* Modal Khóa / Mở khóa tài khoản có lý do */}
+      <Modal
         isOpen={!!togglingUser}
-        title={togglingUser?.is_active ? 'Xác nhận khóa tài khoản' : 'Xác nhận mở khóa tài khoản'}
-        message={
-          togglingUser?.is_active
-            ? `Bạn có chắc muốn khóa tài khoản "${togglingUser?.name}" (${togglingUser?.email})? Người dùng này sẽ không thể tiếp tục đăng nhập.`
-            : `Bạn có muốn mở lại quyền truy cập cho tài khoản "${togglingUser?.name}"?`
-        }
-        confirmText={togglingUser?.is_active ? 'Khóa tài khoản' : 'Mở khóa'}
-        cancelText="Đóng"
-        danger={!!togglingUser?.is_active}
-        busy={toggle.isPending}
         onClose={() => setTogglingUser(null)}
-        onConfirm={() => {
-          if (togglingUser) toggle.mutate(togglingUser)
-        }}
-      />
+        title={togglingUser?.is_active ? 'Xác nhận khóa tài khoản' : 'Xác nhận mở khóa tài khoản'}
+      >
+        {togglingUser && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              toggle.mutate({ user: togglingUser, reason: toggleReason })
+            }}
+            style={{ maxWidth: 460 }}
+          >
+            <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--ink)' }}>
+              {togglingUser.is_active
+                ? `Bạn có chắc muốn khóa tài khoản "${togglingUser.name}" (${togglingUser.email})? Người dùng này sẽ bị thu hồi phiên đăng nhập ngay lập tức và nhận email thông báo lý do.`
+                : `Bạn có muốn mở lại quyền truy cập cho tài khoản "${togglingUser.name}"?`}
+            </p>
 
+            {togglingUser.is_active && (
+              <label style={{ display: 'block', marginBottom: 16 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                  Lý do khóa tài khoản (bắt buộc gửi qua email):
+                </span>
+                <textarea
+                  required
+                  rows={3}
+                  value={toggleReason}
+                  onChange={(e) => setToggleReason(e.target.value)}
+                  placeholder="Ví dụ: Vi phạm chính sách huỷ đơn nhiều lần, có dấu hiệu gian lận..."
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </label>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setTogglingUser(null)}
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className={`button ${togglingUser.is_active ? 'button--danger' : 'button--brand'}`}
+                disabled={toggle.isPending}
+              >
+                {toggle.isPending ? 'Đang xử lý...' : togglingUser.is_active ? 'Xác nhận khóa' : 'Mở khóa'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+
+      {/* Modal Chi tiết người dùng */}
+      <Modal
+        isOpen={!!viewingDetailUser}
+        onClose={() => setViewingDetailUser(null)}
+        title={`Hồ sơ người dùng: ${viewingDetailUser?.name}`}
+      >
+        {viewingDetailUser && (
+          <div style={{ maxWidth: 640 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+              <Avatar name={viewingDetailUser.name} className="avatar avatar--lg" />
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--forest)' }}>{viewingDetailUser.name}</h3>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+                  {viewingDetailUser.email} · {viewingDetailUser.phone ?? 'Chưa cập nhật SĐT'}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <span className="badge badge--brand">{viewingDetailUser.is_field_owner ? 'Chủ sân' : 'Khách hàng'}</span>
+                  <StatusBadge status={viewingDetailUser.is_active ? 'approved' : 'inactive'} />
+                  <span className="badge badge--success">{viewingDetailUser.trust_score ?? 100} điểm uy tín</span>
+                </div>
+              </div>
+            </div>
+
+            {userDetail.isLoading ? (
+              <div className="query-state query-state--loading">Đang tải thông tin chi tiết...</div>
+            ) : userDetail.isError || !userDetail.data ? (
+              <div className="query-state query-state--error">Không thể tải chi tiết người dùng.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {/* Stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                  <div style={{ padding: 10, background: 'var(--surface)', borderRadius: 8, textAlign: 'center' }}>
+                    <small style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>Tổng đơn đặt</small>
+                    <strong style={{ fontSize: 16 }}>{userDetail.data.data.stats.total_bookings}</strong>
+                  </div>
+                  <div style={{ padding: 10, background: 'var(--surface)', borderRadius: 8, textAlign: 'center' }}>
+                    <small style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>Đã huỷ</small>
+                    <strong style={{ fontSize: 16, color: '#ef4444' }}>{userDetail.data.data.stats.cancelled_bookings}</strong>
+                  </div>
+                  <div style={{ padding: 10, background: 'var(--surface)', borderRadius: 8, textAlign: 'center' }}>
+                    <small style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>Vắng mặt (No-show)</small>
+                    <strong style={{ fontSize: 16, color: 'var(--warn)' }}>{userDetail.data.data.stats.no_show_bookings}</strong>
+                  </div>
+                  <div style={{ padding: 10, background: 'var(--surface)', borderRadius: 8, textAlign: 'center' }}>
+                    <small style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>Khiếu nại</small>
+                    <strong style={{ fontSize: 16 }}>{userDetail.data.data.stats.complaints_count}</strong>
+                  </div>
+                </div>
+
+                {/* Recent bookings */}
+                <div>
+                  <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--forest)' }}>Đơn đặt gần đây</h4>
+                  {userDetail.data.data.recent_bookings.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Chưa có đơn đặt nào.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                      {userDetail.data.data.recent_bookings.map((b) => (
+                        <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12 }}>
+                          <div>
+                            <strong>#BK-{b.id}</strong> · {b.field?.name ?? 'Sân'} · {formatDate(b.booking_date)}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>{formatMoney(b.total_price)}</span>
+                            <StatusBadge status={b.status} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Trust score history */}
+                <div>
+                  <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--forest)' }}>Lịch sử biến động điểm uy tín gần đây</h4>
+                  {userDetail.data.data.recent_trust_scores.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Chưa có biến động điểm uy tín.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                      {userDetail.data.data.recent_trust_scores.map((log) => (
+                        <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--muted)', marginRight: 6 }}>{formatDateTime(log.created_at)}:</span>
+                            <span>{log.reason}</span>
+                          </div>
+                          <strong style={{ color: log.change >= 0 ? 'var(--pitch)' : '#ef4444', whiteSpace: 'nowrap' }}>
+                            {log.change >= 0 ? `+${log.change}` : log.change} ({log.score_after}đ)
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+              <button type="button" className="button button--ghost" onClick={() => setViewingDetailUser(null)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Lịch sử điểm uy tín */}
       <Modal
         isOpen={!!viewingTrustUser}
         onClose={() => setViewingTrustUser(null)}
@@ -1095,11 +1198,22 @@ export function AdminFieldsPage() {
 }
 
 export function AdminBookingsPage() {
+  const client = useQueryClient()
+  const toast = useToast()
   const [status, setStatus] = useState('')
   const [date, setDate] = useState('')
   const [keyword, setKeyword] = useState('')
   const search = useDebouncedValue(keyword.trim())
   const [page, setPage] = useState(1)
+
+  // Modals state
+  const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
+  const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
+  const [adminCancelReason, setAdminCancelReason] = useState('')
+  const [refundingBooking, setRefundingBooking] = useState<Booking | null>(null)
+  const [refundStatusInput, setRefundStatusInput] = useState<'pending' | 'done' | 'waived'>('done')
+  const [refundAmountInput, setRefundAmountInput] = useState<number | ''>('')
+
   const bookings = useQuery({
     queryKey: ['admin', 'bookings', status, date, search, page],
     queryFn: async () =>
@@ -1110,9 +1224,58 @@ export function AdminBookingsPage() {
       ).data,
   })
 
+  const cancelBookingMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) =>
+      api.post(`/admin/bookings/${id}/cancel`, { reason }),
+    onSuccess: () => {
+      toast.success('Admin đã huỷ đơn đặt sân thành công.')
+      setCancellingBooking(null)
+      setAdminCancelReason('')
+      void client.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+      void client.invalidateQueries({ queryKey: ['admin', 'logs'] })
+    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể huỷ đơn'),
+  })
+
+  const updateRefundMutation = useMutation({
+    mutationFn: async ({
+      id,
+      refund_status,
+      refund_amount,
+    }: {
+      id: number
+      refund_status: string
+      refund_amount?: number
+    }) =>
+      api.patch(`/admin/bookings/${id}/refund`, {
+        refund_status,
+        refund_amount: typeof refund_amount === 'number' ? refund_amount : undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Đã cập nhật trạng thái hoàn tiền cọc thành công.')
+      setRefundingBooking(null)
+      void client.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+      void client.invalidateQueries({ queryKey: ['admin', 'logs'] })
+    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể cập nhật hoàn tiền'),
+  })
+
   const handleStatusChange = (newStatus: string) => {
     setStatus(newStatus)
     setPage(1)
+  }
+
+  const handleOpenCancel = (booking: Booking) => {
+    setCancellingBooking(booking)
+    setAdminCancelReason('')
+  }
+
+  const handleOpenRefund = (booking: Booking) => {
+    setRefundingBooking(booking)
+    setRefundStatusInput(booking.refund?.status === 'done' ? 'done' : 'done')
+    setRefundAmountInput(booking.refund?.amount ?? booking.payment?.deposit_amount ?? 0)
   }
 
   return (
@@ -1123,7 +1286,7 @@ export function AdminBookingsPage() {
         title="Toàn bộ lượt đặt"
         copy="Theo dõi lịch chơi và giá trị giao dịch trong hệ thống."
       />
-      <div className="toolbar">
+      <div className="toolbar" style={{ flexWrap: 'wrap' }}>
         <select value={status} onChange={(e) => handleStatusChange(e.target.value)}>
           <option value="">Mọi trạng thái</option>
           <option value="pending">Chờ xử lý</option>
@@ -1153,9 +1316,18 @@ export function AdminBookingsPage() {
             aria-label="Tìm đơn đặt"
           />
         </label>
+        <a
+          href={`/api/v1/admin/bookings/export-csv?status=${status}&date=${date}&keyword=${encodeURIComponent(search)}`}
+          download
+          className="button button--ghost"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', marginLeft: 'auto' }}
+          title="Tải về file Excel / CSV toàn bộ đơn theo bộ lọc"
+        >
+          <Download size={15} /> Xuất CSV
+        </a>
       </div>
       <DataTable
-        heads={['Mã & sân', 'Khách hàng', 'Lịch chơi', 'Giá trị', 'Trạng thái']}
+        heads={['Mã & sân', 'Khách hàng', 'Lịch chơi', 'Giá trị', 'Trạng thái', 'Thao tác']}
         rows={
           bookings.data?.data.map((booking) => [
             <Fragment key="booking">
@@ -1180,8 +1352,43 @@ export function AdminBookingsPage() {
                   {booking.payment.code}
                 </small>
               )}
+              {booking.refund && (
+                <small style={{ color: booking.refund.status === 'pending' ? 'var(--warn)' : 'var(--pitch)', display: 'block' }}>
+                  Hoàn: {formatMoney(booking.refund.amount)} ({booking.refund.status === 'pending' ? 'Chờ hoàn' : booking.refund.status === 'done' ? 'Đã hoàn' : 'Miễn'})
+                </small>
+              )}
             </Fragment>,
             <StatusBadge key="status" status={booking.status} payment={booking.payment?.status} />,
+            <div key="action" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="button button--small button--ghost"
+                onClick={() => setViewingBooking(booking)}
+                title="Xem chi tiết đơn & dòng thời gian"
+              >
+                <Eye size={14} /> Chi tiết
+              </button>
+              {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  className="button button--small button--danger"
+                  onClick={() => handleOpenCancel(booking)}
+                  title="Admin can thiệp huỷ đơn"
+                >
+                  <Ban size={14} /> Huỷ
+                </button>
+              )}
+              {(booking.refund || (booking.status === 'cancelled' && booking.payment?.status === 'paid')) && (
+                <button
+                  type="button"
+                  className="button button--small button--ghost"
+                  onClick={() => handleOpenRefund(booking)}
+                  title="Cập nhật trạng thái chuyển khoản hoàn tiền"
+                >
+                  <RotateCcw size={14} /> Hoàn cọc
+                </button>
+              )}
+            </div>,
           ]) ?? []
         }
       />
@@ -1191,6 +1398,229 @@ export function AdminBookingsPage() {
         total={bookings.data?.meta.total}
         onPageChange={setPage}
       />
+
+      {/* Modal Chi tiết đơn & Timeline */}
+      <Modal
+        isOpen={!!viewingBooking}
+        onClose={() => setViewingBooking(null)}
+        title={`Chi tiết đơn đặt sân #BK-${viewingBooking?.id}`}
+      >
+        {viewingBooking && (
+          <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--surface)', borderRadius: 8 }}>
+              <div>
+                <strong style={{ fontSize: 16, color: 'var(--forest)' }}>#BK-{viewingBooking.id}</strong>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Tạo lúc: {formatDateTime(viewingBooking.created_at)}</div>
+              </div>
+              <StatusBadge status={viewingBooking.status} payment={viewingBooking.payment?.status} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: 13 }}>
+              <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>KHÁCH HÀNG</span>
+                <strong>{viewingBooking.customer?.name ?? '—'}</strong>
+                <div>{viewingBooking.customer?.email}</div>
+                <div>{viewingBooking.customer?.phone ?? 'Chưa có SĐT'}</div>
+              </div>
+
+              <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>SÂN THỂ THAO</span>
+                <strong>{viewingBooking.field?.name ?? 'Sân'}</strong>
+                <div>{viewingBooking.field?.address}</div>
+                <div style={{ color: 'var(--pitch)', marginTop: 2, fontWeight: 600 }}>
+                  {formatDate(viewingBooking.booking_date)} · {viewingBooking.time_slot?.start_time} – {viewingBooking.time_slot?.end_time}
+                </div>
+              </div>
+            </div>
+
+            {/* Tài chính & Thanh toán */}
+            <div style={{ padding: 14, background: 'var(--surface)', borderRadius: 8, fontSize: 13 }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 8 }}>CHI TIẾT THANH TOÁN & HOA HỒNG</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span>Tổng giá trị đơn:</span>
+                <strong>{formatMoney(viewingBooking.total_price)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span>Khách đã thanh toán:</span>
+                <strong style={{ color: viewingBooking.payment?.status === 'paid' ? 'var(--pitch)' : 'var(--warn)' }}>
+                  {formatMoney(viewingBooking.payment?.amount ?? 0)} ({viewingBooking.payment?.status === 'paid' ? 'Đã nhận' : viewingBooking.payment?.status === 'reported' ? 'Báo chuyển' : 'Chờ'})
+                </strong>
+              </div>
+              {viewingBooking.payment?.code && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span>Mã giao dịch / Nội dung:</span>
+                  <code>{viewingBooking.payment.code}</code>
+                </div>
+              )}
+              {viewingBooking.commission && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, borderTop: '1px dashed var(--line)', paddingTop: 6 }}>
+                  <span>Hoa hồng nền tảng ({viewingBooking.commission.rate}%):</span>
+                  <strong style={{ color: 'var(--forest)' }}>{formatMoney(viewingBooking.commission.amount)}</strong>
+                </div>
+              )}
+              {viewingBooking.refund && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, padding: '8px 10px', background: '#fef3c7', borderRadius: 6, color: '#92400e' }}>
+                  <span>Tiền cọc cần hoàn trả:</span>
+                  <strong>{formatMoney(viewingBooking.refund.amount)} ({viewingBooking.refund.status === 'done' ? 'Đã chuyển hoàn' : viewingBooking.refund.status === 'waived' ? 'Miễn hoàn' : 'Chờ chuyển'})</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Dòng thời gian mốc sự kiện */}
+            <div style={{ padding: 14, background: 'var(--surface)', borderRadius: 8, fontSize: 13 }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 8 }}>DÒNG THỜI GIAN ĐƠN</span>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--soft)' }}>
+                <li>Tạo đơn: {formatDateTime(viewingBooking.created_at)}</li>
+                {viewingBooking.confirmed_at && <li>Chủ sân xác nhận: {formatDateTime(viewingBooking.confirmed_at)}</li>}
+                {viewingBooking.payment?.paid_at && <li>Nhận tiền cọc: {formatDateTime(viewingBooking.payment.paid_at)}</li>}
+                {viewingBooking.checked_in_at && <li>Khách check-in: {formatDateTime(viewingBooking.checked_in_at)}</li>}
+                {viewingBooking.cancelled_at && (
+                  <li style={{ color: '#ef4444' }}>
+                    Huỷ đơn: {formatDateTime(viewingBooking.cancelled_at)} · Lý do: {viewingBooking.cancel_reason ?? '—'}
+                  </li>
+                )}
+                {viewingBooking.refund?.refunded_at && (
+                  <li style={{ color: 'var(--pitch)' }}>
+                    Hoàn cọc thành công: {formatDateTime(viewingBooking.refund.refunded_at)}
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+              <button type="button" className="button button--ghost" onClick={() => setViewingBooking(null)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Admin huỷ đơn */}
+      <Modal
+        isOpen={!!cancellingBooking}
+        onClose={() => setCancellingBooking(null)}
+        title={`Admin can thiệp huỷ đơn #BK-${cancellingBooking?.id}`}
+      >
+        {cancellingBooking && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              cancelBookingMutation.mutate({
+                id: cancellingBooking.id,
+                reason: adminCancelReason,
+              })
+            }}
+            style={{ maxWidth: 480 }}
+          >
+            <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+              <div>Sân: <strong>{cancellingBooking.field?.name}</strong></div>
+              <div>Khách: <strong>{cancellingBooking.customer?.name}</strong> ({cancellingBooking.customer?.email})</div>
+              <div>Ngày: <strong>{formatDate(cancellingBooking.booking_date)}</strong> ({cancellingBooking.time_slot?.start_time} – {cancellingBooking.time_slot?.end_time})</div>
+              <div>Đã thanh toán: <strong>{formatMoney(cancellingBooking.payment?.amount ?? 0)}</strong></div>
+            </div>
+
+            <div className="form-stack">
+              <label>
+                <span>Lý do huỷ đơn (bắt buộc, lưu vào nhật ký và gửi cho các bên)</span>
+                <textarea
+                  required
+                  rows={3}
+                  value={adminCancelReason}
+                  onChange={(e) => setAdminCancelReason(e.target.value)}
+                  placeholder="Ví dụ: Theo yêu cầu can thiệp tranh chấp, sự cố sân đột xuất..."
+                />
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setCancellingBooking(null)}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="button button--danger"
+                  disabled={cancelBookingMutation.isPending || adminCancelReason.trim().length < 3}
+                >
+                  {cancelBookingMutation.isPending ? 'Đang huỷ...' : 'Xác nhận huỷ đơn'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal Cập nhật hoàn tiền cọc */}
+      <Modal
+        isOpen={!!refundingBooking}
+        onClose={() => setRefundingBooking(null)}
+        title={`Cập nhật hoàn cọc đơn #BK-${refundingBooking?.id}`}
+      >
+        {refundingBooking && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              updateRefundMutation.mutate({
+                id: refundingBooking.id,
+                refund_status: refundStatusInput,
+                refund_amount: refundAmountInput !== '' ? Number(refundAmountInput) : undefined,
+              })
+            }}
+            style={{ maxWidth: 460 }}
+          >
+            <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+              <div>Khách hàng: <strong>{refundingBooking.customer?.name}</strong></div>
+              <div>Tổng tiền đơn: <strong>{formatMoney(refundingBooking.total_price)}</strong></div>
+              <div>Đã trả cọc: <strong>{formatMoney(refundingBooking.payment?.amount ?? 0)}</strong></div>
+            </div>
+
+            <div className="form-stack">
+              <label>
+                <span>Trạng thái hoàn tiền</span>
+                <select
+                  value={refundStatusInput}
+                  onChange={(e) => setRefundStatusInput(e.target.value as any)}
+                >
+                  <option value="done">Đã hoàn tiền (đã chuyển khoản trả khách)</option>
+                  <option value="pending">Chờ hoàn tiền (chưa chuyển khoản)</option>
+                  <option value="waived">Miễn hoàn tiền (khách tự ý bỏ/vi phạm)</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Số tiền hoàn cọc (VNĐ)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={refundAmountInput}
+                  onChange={(e) => setRefundAmountInput(e.target.value === '' ? '' : Number(e.target.value))}
+                />
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setRefundingBooking(null)}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  className="button button--brand"
+                  disabled={updateRefundMutation.isPending}
+                >
+                  {updateRefundMutation.isPending ? 'Đang lưu...' : 'Lưu kết quả hoàn cọc'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   )
 }
@@ -1409,18 +1839,6 @@ export function AdminCategoriesPage() {
         </section>
       </div>
     </>
-  )
-}
-
-function Stat({ label, value, note, to }: { label: string; value: string | number; note?: string; to?: string }) {
-  return (
-    <article className="stat">
-      <span>{label}</span>
-      <strong>
-        <AnimatedCounter value={value} />
-      </strong>
-      {note && (to ? <Link className="stat__link" to={to}>{note} →</Link> : <small>{note}</small>)}
-    </article>
   )
 }
 

@@ -14,7 +14,11 @@ import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
 import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
 import { OwnerStatementsPage } from './pages/owner/OwnerStatementsPage'
-import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
+import { AdminBookingsPage, AdminCategoriesPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { AdminComplaintsPage } from './pages/admin/AdminComplaintsPage'
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
+import { AdminLogsPage } from './pages/admin/AdminLogsPage'
 import { AdminStatementsPage } from './pages/admin/AdminStatementsPage'
 import {
   AboutPage,
@@ -77,10 +81,13 @@ export default function App() {
           <Route path="admin/owners" element={<AdminOwnersPage />} />
           <Route path="admin/fields" element={<AdminFieldsPage />} />
           <Route path="admin/bookings" element={<AdminBookingsPage />} />
+          <Route path="admin/complaints" element={<AdminComplaintsPage />} />
           <Route path="admin/statements" element={<AdminStatementsPage />} />
           <Route path="admin/matches" element={<AdminMatchesPage />} />
           <Route path="admin/reviews" element={<AdminReviewsPage />} />
           <Route path="admin/categories" element={<AdminCategoriesPage />} />
+          <Route path="admin/settings" element={<AdminSettingsPage />} />
+          <Route path="admin/logs" element={<AdminLogsPage />} />
         </Route>
       </Route>
 

@@ -103,6 +103,7 @@ export interface Booking {
   status: string
   total_price: number
   notes: string | null
+  cancelled_at?: string | null
   cancel_reason: string | null
   can_be_cancelled: boolean
   cancel_penalty?: boolean
@@ -211,11 +212,9 @@ export interface OwnerDashboard {
   total_fields: number
   total_bookings: number
   pending_bookings: number
-  total_revenue: number
-  total_gmv?: number
+  total_gmv: number
   current_month_bookings: number
-  current_month_revenue: number
-  current_month_gmv?: number
+  current_month_gmv: number
   current_month_collected?: number
   current_month_commission?: number
   current_month_net_revenue?: number
@@ -226,17 +225,9 @@ export interface OwnerDashboard {
 }
 
 export interface AdminDashboard {
-  total_customers: number
-  total_field_owners: number
-  pending_owners: number
-  total_fields: number
-  pending_fields: number
-  total_bookings: number
-  total_revenue: number
-  total_gmv?: number
-  total_commission_collected?: number
-  total_commission_pending?: number
-  most_booked_fields: SportsField[]
+  total_gmv: number
+  total_commission_collected: number
+  total_commission_pending: number
 }
 
 export interface BookingWaitlist {
@@ -336,5 +327,82 @@ export interface AdminLog {
   meta?: Record<string, unknown> | null
   created_at: string
   admin?: Pick<User, 'id' | 'name' | 'email'>
+}
+
+export interface Complaint {
+  id: number
+  user_id: number | null
+  user?: Pick<User, 'id' | 'name' | 'email' | 'phone'> | null
+  booking_id: number | null
+  booking?: {
+    id: number
+    booking_date: string
+    status: string
+    total_price: number
+    refund_status: 'pending' | 'done' | 'waived' | null
+    refund_amount: number | null
+    field_name?: string
+  } | null
+  subject_type: 'booking' | 'contact'
+  subject_id: string | null
+  category: string
+  content: string
+  status: 'open' | 'processing' | 'resolved' | 'rejected'
+  resolution: string | null
+  handled_by: number | null
+  handler?: Pick<User, 'id' | 'name'> | null
+  handled_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminDashboardData {
+  period: 'this_month' | 'last_month'
+  from_date: string
+  to_date: string
+  kpis: {
+    gmv: number
+    paid_amount: number
+    commission_accrued: number
+    commission_collected: number
+    commission_debt: number
+    total_bookings: number
+    cancelled_bookings: number
+    cancel_rate: number
+    no_show_bookings: number
+    no_show_rate: number
+    new_users: number
+    new_owners: number
+  }
+  daily_series: Array<{
+    date: string
+    label: string
+    gmv: number
+    commission: number
+    booking_count: number
+  }>
+  top_fields: SportsField[]
+  action_queue: {
+    pending_owners: number
+    pending_fields: number
+    open_complaints: number
+    reported_statements: number
+    pending_refunds: number
+  }
+  total_gmv?: number
+  total_commission_collected?: number
+  total_commission_pending?: number
+}
+
+export interface AdminUserDetail {
+  user: User
+  stats: {
+    total_bookings: number
+    cancelled_bookings: number
+    no_show_bookings: number
+    complaints_count: number
+  }
+  recent_bookings: Booking[]
+  recent_trust_scores: TrustScoreLog[]
 }
 

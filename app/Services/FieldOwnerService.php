@@ -48,10 +48,8 @@ class FieldOwnerService
             'total_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->count(),
             'pending_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->where('status', 'pending')->count(),
             'total_gmv' => $totalGmv,
-            'total_revenue' => $totalGmv, // Giữ để tương thích ngược frontend
             'current_month_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->whereYear('booking_date', $now->year)->whereMonth('booking_date', $now->month)->count(),
             'current_month_gmv' => $currentMonthGmv,
-            'current_month_revenue' => $currentMonthGmv, // Giữ để tương thích ngược frontend
             'current_month_collected' => $currentMonthPaid,
             'current_month_commission' => $monthSummary['estimated_commission'],
             'current_month_net_revenue' => max(0.0, $currentMonthPaid - $monthSummary['estimated_commission']),

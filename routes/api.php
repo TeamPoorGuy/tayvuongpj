@@ -45,8 +45,12 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
 
 
+    Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
+
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
+            Route::get('/complaints', [Customer\ComplaintController::class, 'index']);
+            Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
             Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
@@ -150,14 +154,21 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
             Route::get('/users', [Admin\UserController::class, 'index']);
+            Route::get('/users/{user}/detail', [Admin\UserController::class, 'detail']);
             Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);
             Route::patch('/users/{user}/toggle', [Admin\UserController::class, 'toggle']);
+            Route::get('/settings', [Admin\SettingController::class, 'index']);
+            Route::put('/settings', [Admin\SettingController::class, 'update'])->middleware('throttle:writes');
+            Route::get('/logs', [Admin\LogController::class, 'index']);
             Route::get('/field-owners', [Admin\FieldOwnerController::class, 'index']);
             Route::get('/field-owners/{profile}/documents/{document}', [Admin\FieldOwnerController::class, 'document']);
             Route::patch('/field-owners/{profile}/verify', [Admin\FieldOwnerController::class, 'verify']);
             Route::get('/fields', [Admin\FieldController::class, 'index']);
             Route::patch('/fields/{field}/verify', [Admin\FieldController::class, 'verify']);
             Route::get('/bookings', [Admin\BookingController::class, 'index']);
+            Route::get('/bookings/export-csv', [Admin\BookingController::class, 'exportCsv']);
+            Route::post('/bookings/{booking}/cancel', [Admin\BookingController::class, 'cancel'])->middleware('throttle:writes');
+            Route::patch('/bookings/{booking}/refund', [Admin\BookingController::class, 'updateRefund'])->middleware('throttle:writes');
             Route::get('/matches', [Admin\MatchController::class, 'index']);
             Route::delete('/matches/{id}', [Admin\MatchController::class, 'cancel']);
             Route::get('/reviews', [Admin\ReviewController::class, 'index']);
@@ -168,6 +179,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::put('/categories/{category}', [Admin\CategoryController::class, 'updateCategory']);
             Route::put('/field-types/{fieldType}', [Admin\CategoryController::class, 'updateFieldType']);
 
+            Route::get('/complaints', [Admin\ComplaintController::class, 'index']);
+            Route::get('/complaints/{complaint}', [Admin\ComplaintController::class, 'show']);
+            Route::patch('/complaints/{complaint}/handle', [Admin\ComplaintController::class, 'handle'])->middleware('throttle:writes');
             Route::get('/statements', [Admin\StatementController::class, 'index']);
             Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
             Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');

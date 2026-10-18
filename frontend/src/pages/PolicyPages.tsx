@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 import { useToast } from '../components/Toast'
+import { api } from '../api/client'
+import { errorMessage } from '../api/errors'
 
 function PolicyShell({
   kicker,
@@ -399,18 +401,29 @@ export function AboutPage() {
 /** 7. Liên hệ hỗ trợ (/lien-he) */
 export function ContactPage() {
   const { data: settings } = usePublicSettings()
-  const { success } = useToast()
+  const { success, error } = useToast()
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [name, setName] = useState('')
+  const [contact, setContact] = useState('')
+  const [content, setContent] = useState('')
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
+    try {
+      await api.post('/contact', {
+        subject_type: 'contact',
+        category: 'other',
+        content: `[Người gửi: ${name} | Liên hệ: ${contact}] ${content}`,
+      })
       setLoading(false)
       setSent(true)
       success('Cảm ơn bạn đã gửi liên hệ! Đội ngũ hỗ trợ sẽ phản hồi trong vòng 24 giờ.', 'Đã tiếp nhận yêu cầu')
-    }, 600)
+    } catch (err) {
+      setLoading(false)
+      error(errorMessage(err), 'Không thể gửi tin nhắn liên hệ')
+    }
   }
 
   return (
@@ -460,21 +473,38 @@ export function ContactPage() {
           {sent ? (
             <div className="notice notice--success" style={{ margin: 0 }}>
               <CheckCircle2 size={18} />
-              <span>Tin nhắn của bạn đã được gửi thành công. Chúng tôi sẽ phản hồi sớm nhất!</span>
+              <span>Tin nhắn của bạn đã được gửi thành công. Ban quản trị SportHub đã ghi nhận và sẽ phản hồi sớm nhất!</span>
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <label>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Họ và tên</span>
-                <input required placeholder="Nguyễn Văn A" />
+                <input
+                  required
+                  placeholder="Nguyễn Văn A"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </label>
               <label>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Email hoặc số điện thoại</span>
-                <input required placeholder="email@domain.com hoặc 0901234567" />
+                <input
+                  required
+                  placeholder="email@domain.com hoặc 0901234567"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                />
               </label>
               <label>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Nội dung cần hỗ trợ</span>
-                <textarea required rows={4} placeholder="Mô tả thắc mắc hoặc sự cố bạn gặp phải..." />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Nội dung cần hỗ trợ (tối thiểu 5 ký tự)</span>
+                <textarea
+                  required
+                  rows={4}
+                  minLength={5}
+                  placeholder="Mô tả thắc mắc hoặc sự cố bạn gặp phải..."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                />
               </label>
               <button disabled={loading} type="submit" className="button button--brand button--block">
                 <Send size={15} /> {loading ? 'Đang gửi...' : 'Gửi yêu cầu hỗ trợ'}
