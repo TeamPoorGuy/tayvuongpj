@@ -24,6 +24,8 @@ class ReviewResource extends JsonResource
                 'name' => $this->sportsField->name,
                 'slug' => $this->sportsField->slug,
             ]),
+            'owner_reply' => $this->owner_reply,
+            'owner_replied_at' => $this->owner_replied_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

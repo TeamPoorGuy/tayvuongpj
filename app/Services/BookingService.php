@@ -17,8 +17,10 @@ use App\Support\SafeMail;
 use App\Support\Settings;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 class BookingService
 {
@@ -44,6 +46,12 @@ class BookingService
 
             if (! $field) {
                 throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
+            }
+
+            $bookingDateStr = Carbon::parse($data->bookingDate)->toDateString();
+            $closure = $field->closureOn($bookingDateStr);
+            if ($closure) {
+                throw new ConflictException("Sân tạm đóng cửa từ {$closure->start_date->format('d/m/Y')} đến {$closure->end_date->format('d/m/Y')}: {$closure->reason}");
             }
 
             $maxPending = Settings::getInt('max_pending_bookings', 3);
@@ -209,4 +217,165 @@ class BookingService
             },
         };
     }
+
+    /** Đặt cố định hàng tuần (2 - 8 tuần). */
+    public function createRecurring(User $user, array $data): array
+    {
+        $sportsFieldId = (int) $data['sports_field_id'];
+        $timeSlotId = (int) $data['time_slot_id'];
+        $startDate = Carbon::parse($data['start_date'])->toDateString();
+        $weeks = max(2, min(8, (int) ($data['weeks'] ?? 4)));
+        $skipConflicts = (bool) ($data['skip_conflicts'] ?? false);
+        $notes = $data['notes'] ?? null;
+
+        $maxAdvanceDays = Settings::getInt('max_advance_days', 60);
+        $lastDate = Carbon::parse($startDate)->addWeeks($weeks - 1);
+        if ($lastDate->gt(today()->addDays($maxAdvanceDays))) {
+            throw new ConflictException("Chuỗi đặt cố định vượt quá giới hạn đặt trước ({$maxAdvanceDays} ngày).");
+        }
+
+        return DB::transaction(function () use ($user, $sportsFieldId, $timeSlotId, $startDate, $weeks, $skipConflicts, $notes) {
+            $field = SportsField::query()->approved()->lockForUpdate()->find($sportsFieldId);
+            if (! $field) {
+                throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
+            }
+            if ($field->field_owner_id === $user->id) {
+                throw new ForbiddenException('Bạn không thể đặt sân của chính mình.');
+            }
+
+            $maxPending = Settings::getInt('max_pending_bookings', 3);
+            $pendingCount = Booking::query()
+                ->where('user_id', $user->id)
+                ->where('status', BookingStatus::Pending->value)
+                ->lockForUpdate()
+                ->count();
+
+            if ($pendingCount >= $maxPending) {
+                throw new ConflictException("Bạn đang có {$pendingCount} đơn chờ xử lý. Tối đa chỉ được có {$maxPending} đơn cùng lúc.");
+            }
+
+            $slot = TimeSlot::query()
+                ->where('sports_field_id', $field->id)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->findOrFail($timeSlotId);
+
+            $conflicts = [];
+            $availableDates = [];
+
+            for ($i = 0; $i < $weeks; $i++) {
+                $currentDate = Carbon::parse($startDate)->addWeeks($i)->toDateString();
+
+                if ($currentDate.' '.$slot->start_time <= now()->format('Y-m-d H:i:s')) {
+                    $conflicts[] = ['date' => $currentDate, 'reason' => 'Khung giờ này đã trôi qua.'];
+                    continue;
+                }
+
+                if ($field->isClosedOn($currentDate)) {
+                    $closure = $field->closureOn($currentDate);
+                    $conflicts[] = ['date' => $currentDate, 'reason' => "Sân đóng cửa: {$closure->reason}"];
+                    continue;
+                }
+
+                $isBooked = Booking::query()
+                    ->where('sports_field_id', $field->id)
+                    ->where('time_slot_id', $slot->id)
+                    ->whereDate('booking_date', $currentDate)
+                    ->whereIn('status', BookingStatus::blockingCases())
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($isBooked) {
+                    $conflicts[] = ['date' => $currentDate, 'reason' => 'Khung giờ này đã có người đặt.'];
+                    continue;
+                }
+
+                $offer = BookingWaitlist::query()
+                    ->where('sports_field_id', $field->id)
+                    ->where('time_slot_id', $slot->id)
+                    ->whereDate('booking_date', $currentDate)
+                    ->where('status', 'offered')
+                    ->where('offer_expires_at', '>', now())
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($offer && $offer->user_id !== $user->id) {
+                    $conflicts[] = ['date' => $currentDate, 'reason' => 'Khung giờ đang được giữ cho người trong hàng đợi.'];
+                    continue;
+                }
+
+                $availableDates[] = ['date' => $currentDate, 'offer' => $offer];
+            }
+
+            if (count($conflicts) > 0 && ! $skipConflicts) {
+                return [
+                    'has_conflicts' => true,
+                    'conflicts' => $conflicts,
+                    'available_dates' => array_column($availableDates, 'date'),
+                    'message' => 'Có '.count($conflicts).' ngày trong chuỗi bị trùng lịch hoặc sân nghỉ.',
+                ];
+            }
+
+            if (empty($availableDates)) {
+                throw new ConflictException('Tất cả các ngày trong chuỗi lặp lại đều đã có người đặt hoặc sân nghỉ.');
+            }
+
+            $groupId = (string) Str::uuid();
+            $totalPrice = ($slot->price_per_hour ?? $field->price_per_hour) * $slot->durationInHours();
+
+            $created = [];
+            foreach ($availableDates as $item) {
+                $booking = Booking::create([
+                    'user_id' => $user->id,
+                    'sports_field_id' => $field->id,
+                    'time_slot_id' => $slot->id,
+                    'booking_date' => $item['date'],
+                    'status' => BookingStatus::Pending->value,
+                    'total_price' => $totalPrice,
+                    'notes' => $notes,
+                    'recurring_group_id' => $groupId,
+                ]);
+                $item['offer']?->update(['status' => 'accepted']);
+                $created[] = $booking;
+            }
+
+            SafeMail::queue($field->owner->email, new NewBookingRequest($created[0]));
+
+            return [
+                'has_conflicts' => false,
+                'recurring_group_id' => $groupId,
+                'total_bookings' => count($created),
+                'bookings' => Booking::where('recurring_group_id', $groupId)->with(Booking::resourceRelations(withCustomer: true))->get(),
+                'skipped_dates' => $conflicts,
+            ];
+        });
+    }
+
+    /** Khách huỷ các buổi sắp tới trong chuỗi đặt cố định. */
+    public function cancelRecurring(User $user, string $groupId, ?string $reason = null): Collection
+    {
+        $bookings = Booking::where('recurring_group_id', $groupId)
+            ->where('user_id', $user->id)
+            ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->whereDate('booking_date', '>=', today())
+            ->get();
+
+        if ($bookings->isEmpty()) {
+            throw new ConflictException('Không có buổi nào sắp tới trong chuỗi để huỷ.');
+        }
+
+        $cancelled = collect();
+        foreach ($bookings as $booking) {
+            if ($booking->canBeCancelled()) {
+                $cancelled->push($this->cancel($user, $booking, $reason ?: 'Khách huỷ chuỗi đặt cố định.'));
+            }
+        }
+
+        if ($cancelled->isEmpty()) {
+            throw new ConflictException('Các buổi sắp tới trong chuỗi không còn đủ điều kiện để huỷ.');
+        }
+
+        return new Collection($cancelled->all());
+    }
 }
+

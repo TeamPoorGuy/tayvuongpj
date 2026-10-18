@@ -65,4 +65,49 @@ class BookingController extends Controller
 
         return response()->json(['message' => 'Đã hủy đơn đặt sân.', 'data' => new BookingResource($booking)]);
     }
+
+    public function storeRecurring(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sports_field_id' => ['required', 'integer', 'exists:sports_fields,id'],
+            'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'weeks' => ['required', 'integer', 'min:2', 'max:8'],
+            'skip_conflicts' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ], [
+            'sports_field_id.required' => 'Vui lòng chọn sân.',
+            'time_slot_id.required' => 'Vui lòng chọn khung giờ.',
+            'start_date.required' => 'Vui lòng chọn ngày bắt đầu.',
+            'weeks.min' => 'Đặt cố định tối thiểu từ 2 tuần.',
+            'weeks.max' => 'Đặt cố định tối đa 8 tuần.',
+        ]);
+
+        $result = $this->bookingService->createRecurring($request->user(), $validated);
+
+        if (! empty($result['has_conflicts'])) {
+            return response()->json($result, 409);
+        }
+
+        return response()->json([
+            'message' => 'Đã gửi yêu cầu đặt cố định ' . $result['total_bookings'] . ' buổi.',
+            'data' => [
+                'recurring_group_id' => $result['recurring_group_id'],
+                'total_bookings' => $result['total_bookings'],
+                'bookings' => BookingResource::collection($result['bookings']),
+                'skipped_dates' => $result['skipped_dates'],
+            ],
+        ], 201);
+    }
+
+    public function cancelRecurring(Request $request, string $groupId): JsonResponse
+    {
+        $reason = $request->input('cancel_reason');
+        $cancelled = $this->bookingService->cancelRecurring($request->user(), $groupId, $reason);
+
+        return response()->json([
+            'message' => 'Đã huỷ các buổi sắp tới trong chuỗi đặt cố định.',
+            'data' => BookingResource::collection($cancelled),
+        ]);
+    }
 }

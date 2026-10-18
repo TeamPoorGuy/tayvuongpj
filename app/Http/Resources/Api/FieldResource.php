@@ -51,6 +51,7 @@ class FieldResource extends JsonResource
                 'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
             ])),
             'reviews' => ReviewResource::collection($this->whenLoaded('reviews')),
+            'closures' => FieldClosureResource::collection($this->whenLoaded('closures')),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

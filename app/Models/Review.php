@@ -15,12 +15,15 @@ class Review extends Model
         'booking_id',
         'rating',
         'comment',
+        'owner_reply',
+        'owner_replied_at',
         'is_visible',
     ];
 
     protected $casts = [
         'rating' => 'integer',
         'is_visible' => 'boolean',
+        'owner_replied_at' => 'datetime',
     ];
 
     public function user()

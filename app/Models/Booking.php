@@ -41,6 +41,7 @@ class Booking extends Model
         'commission_rate',
         'commission_amount',
         'statement_id',
+        'recurring_group_id',
     ];
 
     protected $casts = [
@@ -101,6 +102,11 @@ class Booking extends Model
     public function statement()
     {
         return $this->belongsTo(OwnerStatement::class, 'statement_id');
+    }
+
+    public function recurringGroup()
+    {
+        return $this->hasMany(Booking::class, 'recurring_group_id', 'recurring_group_id');
     }
 
     /**

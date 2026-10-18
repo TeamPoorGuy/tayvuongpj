@@ -56,6 +56,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/bookings/recurring', [Customer\BookingController::class, 'storeRecurring'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/bookings/recurring/{groupId}/cancel', [Customer\BookingController::class, 'cancelRecurring'])->middleware('throttle:writes');
             Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
             Route::post('/bookings/{booking}/payment', [Customer\BookingController::class, 'reportPayment'])->middleware(['verified', 'throttle:writes']);
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
@@ -124,6 +126,11 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::put('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'update']);
         Route::delete('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'destroy']);
 
+        // Phase 6: Field closures / holidays
+        Route::get('/fields/{field}/closures', [FieldOwner\FieldClosureController::class, 'index']);
+        Route::post('/fields/{field}/closures', [FieldOwner\FieldClosureController::class, 'store'])->middleware('throttle:writes');
+        Route::delete('/fields/{field}/closures/{closure}', [FieldOwner\FieldClosureController::class, 'destroy'])->middleware('throttle:writes');
+
         Route::patch(
             '/fields/{field}/toggle',
             [FieldOwner\FieldController::class, 'toggle']
@@ -137,6 +144,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
         Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
         Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
+        Route::patch('/bookings/recurring/{groupId}/approve', [FieldOwner\BookingController::class, 'approveRecurring'])->middleware('throttle:writes');
+        Route::patch('/bookings/recurring/{groupId}/reject', [FieldOwner\BookingController::class, 'rejectRecurring'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',
@@ -147,6 +156,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             '/reviews',
             [FieldOwner\ReviewController::class, 'index']
         );
+        Route::patch('/reviews/{review}/reply', [FieldOwner\ReviewController::class, 'reply'])->middleware('throttle:writes');
 
         Route::get('/statements', [FieldOwner\StatementController::class, 'index']);
         Route::get('/statements/current-summary', [FieldOwner\StatementController::class, 'currentSummary']);

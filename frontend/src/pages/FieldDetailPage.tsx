@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   CalendarDays,
   Check,
   Clock3,
+  CornerDownRight,
   Flame,
   Info,
   MapPin,
@@ -29,7 +31,7 @@ import { FieldMap } from '../components/FieldMap'
 import { addDays, formatDay, getLocalTodayString } from '../utils/date'
 import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
 import { Avatar } from '../components/Avatar'
-import { formatMoney } from '../utils/format'
+import { formatMoney, formatDate } from '../utils/format'
 import { BookingConfirmModal } from '../components/BookingConfirmModal'
 
 export function FieldDetailPage() {
@@ -62,14 +64,21 @@ export function FieldDetailPage() {
     queryFn: async () => (await api.get<ApiEnvelope<SportsField>>(`/fields/${slug}`)).data.data,
   })
 
+  const [recurringConflicts, setRecurringConflicts] = useState<Array<{ date: string; reason: string }> | null>(null)
+  const [pendingRecurringConfig, setPendingRecurringConfig] = useState<{ isRecurring: boolean; weeks: number } | null>(null)
+
   const slots = useQuery({
     queryKey: ['slots', field.data?.id, date],
     enabled: !!field.data,
     queryFn: async () =>
-      (await api.get<ApiEnvelope<{ date: string; slots: TimeSlot[] }>>(
+      (await api.get<ApiEnvelope<{ date: string; is_closed?: boolean; closure_reason?: string; slots: TimeSlot[] }>>(
         `/fields/${field.data?.id}/available-slots?date=${date}`,
-      )).data.data.slots,
+      )).data.data,
   })
+
+  const slotsList = useMemo(() => slots.data?.slots ?? [], [slots.data?.slots])
+  const isDateClosed = !!slots.data?.is_closed
+  const closureReason = slots.data?.closure_reason
 
   const suggestions = useQuery({
     queryKey: ['suggestions', slug, selectedBookedSlot?.id, date],
@@ -100,22 +109,44 @@ export function FieldDetailPage() {
   })
 
   const booking = useMutation({
-    mutationFn: async () =>
-      api.post('/customer/bookings', {
+    mutationFn: async ({ isRecurring, weeks, skipConflicts }: { isRecurring: boolean; weeks: number; skipConflicts?: boolean }) => {
+      if (isRecurring) {
+        return (await api.post('/customer/bookings/recurring', {
+          sports_field_id: field.data?.id,
+          time_slot_id: selectedSlot?.id,
+          start_date: date,
+          weeks,
+          notes,
+          skip_conflicts: skipConflicts ?? false,
+        })).data
+      }
+      return (await api.post('/customer/bookings', {
         sports_field_id: field.data?.id,
         time_slot_id: selectedSlot?.id,
         booking_date: date,
         notes,
-      }),
-    onSuccess: () => {
+      })).data
+    },
+    onSuccess: (_, vars) => {
       setShowConfirmModal(false)
+      setRecurringConflicts(null)
+      setPendingRecurringConfig(null)
       pickSlot(null)
       setNotes('')
-      success('Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.', 'Đã gửi yêu cầu')
+      const msg = vars.isRecurring
+        ? `Đã gửi yêu cầu đặt cố định ${vars.weeks} buổi. Khi chủ sân duyệt, bạn sẽ thanh toán cọc theo từng tuần.`
+        : 'Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.'
+      success(msg, 'Đã gửi yêu cầu')
       void queryClient.invalidateQueries({ queryKey: ['slots'] })
+      void queryClient.invalidateQueries({ queryKey: ['customer', 'bookings'] })
     },
-    onError: (err) => {
-      error(errorMessage(err), 'Không thể đặt sân')
+    onError: (err: any) => {
+      const data = err?.response?.data
+      if (data?.has_conflicts && data?.conflicts) {
+        setRecurringConflicts(data.conflicts)
+      } else {
+        error(errorMessage(err), 'Không thể đặt sân')
+      }
     },
   })
 
@@ -130,9 +161,9 @@ export function FieldDetailPage() {
   }, [item])
 
   const selectedSlot =
-    slots.data?.find((s) => s.id === slotId) ??
+    slotsList.find((s) => s.id === slotId) ??
     (startHint
-      ? slots.data?.find((s) => s.start_time === startHint && !s.is_booked && !s.is_past && !s.is_held)
+      ? slotsList.find((s) => s.start_time === startHint && !s.is_booked && !s.is_past && !s.is_held)
       : null) ??
     null
 
@@ -170,17 +201,16 @@ export function FieldDetailPage() {
 
   // Categorize slots by day period
   const filteredSlots = useMemo(() => {
-    if (!slots.data) return []
-    return slots.data.filter((slot) => {
+    return slotsList.filter((slot) => {
       const hour = parseInt(slot.start_time.slice(0, 2), 10)
       if (periodFilter === 'morning') return hour < 12
       if (periodFilter === 'afternoon') return hour >= 12 && hour < 17
       if (periodFilter === 'evening') return hour >= 17
       return true
     })
-  }, [slots.data, periodFilter])
+  }, [slotsList, periodFilter])
 
-  const allSlots = useMemo(() => slots.data ?? [], [slots.data])
+  const allSlots = slotsList
   const availableCount = useMemo(
     () => allSlots.filter((s) => !s.is_booked && !s.is_past && !s.is_held).length,
     [allSlots],
@@ -281,6 +311,27 @@ export function FieldDetailPage() {
         </div>
       </div>
 
+      {/* Thông báo lịch nghỉ / đóng sân nếu có */}
+      {(() => {
+        const upcoming = (item.closures ?? []).filter((c) => c.end_date >= todayStr)
+        if (upcoming.length === 0) return null
+        return (
+          <div className="notice notice--warn" style={{ marginBottom: 20 }}>
+            <AlertTriangle size={18} />
+            <div>
+              <strong>Thông báo lịch nghỉ & bảo dưỡng sân:</strong>
+              <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 13 }}>
+                {upcoming.map((c) => (
+                  <li key={c.id}>
+                    Từ <strong>{formatDate(c.start_date)}</strong> đến <strong>{formatDate(c.end_date)}</strong>: {c.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Gallery Showcase */}
       <div className="gallery-showcase">
         <div className="gallery-showcase__main">
@@ -379,6 +430,40 @@ export function FieldDetailPage() {
                         </div>
                       </div>
                       <p>{review.comment}</p>
+                      {review.owner_reply && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            padding: '10px 14px',
+                            background: 'var(--surface-sunken, #f8fafc)',
+                            borderRadius: 8,
+                            borderLeft: '3px solid var(--pitch, #0b3025)',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: 'var(--pitch, #0b3025)',
+                              marginBottom: 4,
+                            }}
+                          >
+                            <CornerDownRight size={14} />
+                            <span>Phản hồi từ chủ sân</span>
+                            {review.owner_replied_at && (
+                              <span style={{ fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>
+                                • {formatDate(review.owner_replied_at)}
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ margin: 0, fontSize: 13, color: 'var(--text)' }}>
+                            {review.owner_reply}
+                          </p>
+                        </div>
+                      )}
                     </article>
                   ))}
               </div>
@@ -479,8 +564,18 @@ export function FieldDetailPage() {
               </div>
             )}
 
+            {/* Notice when date is closed/maintenance */}
+            {isDateClosed && (
+              <div className="notice notice--warn" style={{ marginBottom: 16 }}>
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>Sân tạm đóng cửa vào ngày này:</strong> {closureReason || 'Bảo trì hoặc nghỉ lễ theo lịch của chủ sân.'}
+                </div>
+              </div>
+            )}
+
             {/* Smart notice when date is fully booked */}
-            {isDateFullyBooked && (
+            {!isDateClosed && isDateFullyBooked && (
               <div className="fully-booked-notice">
                 <div className="fully-booked-head">
                   <Info size={15} />
@@ -709,14 +804,31 @@ export function FieldDetailPage() {
       {showConfirmModal && selectedSlot && item && calculatedPrice && (
         <BookingConfirmModal
           isOpen={showConfirmModal}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={() => booking.mutate()}
+          onClose={() => {
+            setShowConfirmModal(false)
+            setRecurringConflicts(null)
+            setPendingRecurringConfig(null)
+          }}
+          onConfirm={(isRecurring, weeks) => {
+            setPendingRecurringConfig({ isRecurring, weeks })
+            booking.mutate({ isRecurring, weeks, skipConflicts: false })
+          }}
           field={item}
           slot={selectedSlot}
           date={date}
           totalPrice={calculatedPrice.total}
           notes={notes}
           busy={booking.isPending}
+          conflicts={recurringConflicts}
+          onSkipConflicts={() => {
+            if (pendingRecurringConfig) {
+              booking.mutate({
+                isRecurring: pendingRecurringConfig.isRecurring,
+                weeks: pendingRecurringConfig.weeks,
+                skipConflicts: true,
+              })
+            }
+          }}
         />
       )}
     </div>

@@ -9,6 +9,7 @@ import {
   ListOrdered,
   MapPin,
   Phone,
+  Repeat,
   ShieldCheck,
   Sparkles,
   Star,
@@ -121,6 +122,7 @@ export function CustomerBookingsPage() {
   const [status, setStatus] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
   const [cancelReason, setCancelReason] = useState('')
+  const [cancelScope, setCancelScope] = useState<'single' | 'recurring'>('single')
   const [cancellingWaitlist, setCancellingWaitlist] = useState<{ id: number; isOffered: boolean } | null>(null)
   const [reviewing, setReviewing] = useState<Booking | null>(null)
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
@@ -163,11 +165,28 @@ export function CustomerBookingsPage() {
       toast.success(`Đã hủy lịch đặt sân #BK-${booking.id}.`)
       setCancellingBooking(null)
       setCancelReason('')
+      setCancelScope('single')
       void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể hủy lịch')
+    },
+  })
+
+  const cancelRecurring = useMutation({
+    mutationFn: async ({ groupId, cancelReason }: { groupId: string; cancelReason?: string }) =>
+      api.post(`/customer/bookings/recurring/${groupId}/cancel`, { cancel_reason: cancelReason }),
+    onSuccess: () => {
+      toast.success('Đã hủy các buổi sắp tới trong chuỗi đặt cố định.')
+      setCancellingBooking(null)
+      setCancelReason('')
+      setCancelScope('single')
+      void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể hủy chuỗi lịch')
     },
   })
 
@@ -351,6 +370,11 @@ export function CustomerBookingsPage() {
                       </h3>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {booking.recurring_group_id && (
+                        <span className="badge badge--info" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Chuỗi đặt cố định hằng tuần">
+                          <Repeat size={11} /> Cố định hằng tuần
+                        </span>
+                      )}
                       {booking.no_show && <span className="badge badge--warning">Vắng mặt (-25 điểm)</span>}
                       {booking.checked_in_at && (
                         <span className="badge badge--success" title={`Chủ sân xác nhận đến sân lúc ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
@@ -643,12 +667,19 @@ export function CustomerBookingsPage() {
         onClose={() => {
           setCancellingBooking(null)
           setCancelReason('')
+          setCancelScope('single')
         }}
         title={`Hủy đơn đặt sân #BK-${cancellingBooking?.id}`}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
-          if (cancellingBooking) {
+          if (!cancellingBooking) return
+          if (cancelScope === 'recurring' && cancellingBooking.recurring_group_id) {
+            cancelRecurring.mutate({
+              groupId: cancellingBooking.recurring_group_id,
+              cancelReason: cancelReason.trim() || undefined,
+            })
+          } else {
             cancel.mutate({
               booking: cancellingBooking,
               cancelReason: cancelReason.trim() || undefined,
@@ -662,6 +693,36 @@ export function CustomerBookingsPage() {
               Bạn đang yêu cầu hủy đơn đặt sân <strong>{cancellingBooking.field?.name}</strong> ngày{' '}
               <strong>{formatDate(cancellingBooking.booking_date)}</strong> ({cancellingBooking.time_slot?.start_time} – {cancellingBooking.time_slot?.end_time}).
             </p>
+
+            {cancellingBooking.recurring_group_id && (
+              <div style={{ padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--forest)' }}>
+                  <Repeat size={14} /> Đơn thuộc chuỗi đặt cố định hằng tuần:
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                    <input
+                      type="radio"
+                      name="customer_cancel_scope"
+                      value="single"
+                      checked={cancelScope === 'single'}
+                      onChange={() => setCancelScope('single')}
+                    />
+                    <span>Chỉ hủy lịch buổi này (#BK-{cancellingBooking.id})</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                    <input
+                      type="radio"
+                      name="customer_cancel_scope"
+                      value="recurring"
+                      checked={cancelScope === 'recurring'}
+                      onChange={() => setCancelScope('recurring')}
+                    />
+                    <span>Hủy tất cả các buổi sắp tới trong chuỗi cố định</span>
+                  </label>
+                </div>
+              </div>
+            )}
 
             {(() => {
               const ownerPhone =
@@ -712,6 +773,7 @@ export function CustomerBookingsPage() {
                 onClick={() => {
                   setCancellingBooking(null)
                   setCancelReason('')
+                  setCancelScope('single')
                 }}
               >
                 Giữ lại đơn
@@ -719,9 +781,13 @@ export function CustomerBookingsPage() {
               <button
                 type="submit"
                 className="button button--danger"
-                disabled={cancel.isPending}
+                disabled={cancel.isPending || cancelRecurring.isPending}
               >
-                {cancel.isPending ? 'Đang hủy...' : 'Xác nhận hủy đặt sân'}
+                {cancel.isPending || cancelRecurring.isPending
+                  ? 'Đang hủy...'
+                  : cancelScope === 'recurring'
+                    ? 'Hủy toàn bộ chuỗi'
+                    : 'Xác nhận hủy đặt sân'}
               </button>
             </div>
           </div>

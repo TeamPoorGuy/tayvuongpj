@@ -3,12 +3,16 @@ import {
   AlertTriangle,
   Building2,
   CalendarDays,
+  CalendarX,
   ChartNoAxesCombined,
   CircleUserRound,
   Clock,
+  CornerDownRight,
   Image as ImageIcon,
+  MessageSquareReply,
   MessageSquareText,
   Plus,
+  Repeat,
   UserCheck,
   Trash2,
   Upload,
@@ -28,6 +32,7 @@ import { useToast } from '../../components/Toast'
 import type {
   ApiEnvelope,
   Booking,
+  FieldClosure,
   FieldType,
   OwnerDashboard,
   OwnerProfile,
@@ -39,6 +44,7 @@ import type {
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { Avatar } from '../../components/Avatar'
 import { VIETNAMESE_BANKS } from '../../utils/banks'
+import { getLocalTodayString } from '../../utils/date'
 import { formatDate, formatMoney } from '../../utils/format'
 
 export function OwnerDashboardPage() {
@@ -145,6 +151,7 @@ export function OwnerFieldsPage() {
   const [editing, setEditing] = useState<SportsField | 'new' | null>(null)
   const [slotField, setSlotField] = useState<SportsField | null>(null)
   const [galleryField, setGalleryField] = useState<SportsField | null>(null)
+  const [closureField, setClosureField] = useState<SportsField | null>(null)
   const [deletingField, setDeletingField] = useState<SportsField | null>(null)
   const [togglingField, setTogglingField] = useState<SportsField | null>(null)
 
@@ -160,6 +167,7 @@ export function OwnerFieldsPage() {
   // Synchronize modal state with latest query data
   const currentSlotField = fields.data?.data.find((f) => f.id === slotField?.id) ?? slotField
   const currentGalleryField = fields.data?.data.find((f) => f.id === galleryField?.id) ?? galleryField
+  const currentClosureField = fields.data?.data.find((f) => f.id === closureField?.id) ?? closureField
 
   const save = useMutation({
     mutationFn: async ({ field, data }: { field: SportsField | 'new'; data: FormData }) =>
@@ -281,6 +289,13 @@ export function OwnerFieldsPage() {
                       >
                         <ImageIcon size={14} /> Ảnh ({field.images?.length ?? 0}/8)
                       </button>
+                      <button
+                        className="button button--ghost button--small"
+                        onClick={() => setClosureField(field)}
+                        title="Quản lý ngày nghỉ và bảo trì sân"
+                      >
+                        <CalendarX size={14} /> Lịch nghỉ ({field.closures?.length ?? 0})
+                      </button>
                     </div>
                   </td>
                   <td>
@@ -339,6 +354,14 @@ export function OwnerFieldsPage() {
         <ImageGalleryModal
           field={currentGalleryField}
           onClose={() => setGalleryField(null)}
+          onRefresh={() => client.invalidateQueries({ queryKey: ['owner', 'fields'] })}
+        />
+      )}
+
+      {currentClosureField && (
+        <FieldClosureModal
+          field={currentClosureField}
+          onClose={() => setClosureField(null)}
           onRefresh={() => client.invalidateQueries({ queryKey: ['owner', 'fields'] })}
         />
       )}
@@ -848,6 +871,209 @@ function ImageGalleryModal({
   )
 }
 
+function FieldClosureModal({
+  field,
+  onClose,
+  onRefresh,
+}: {
+  field: SportsField
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const toast = useToast()
+  const today = getLocalTodayString()
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
+  const [reason, setReason] = useState('')
+  const [deletingClosure, setDeletingClosure] = useState<FieldClosure | null>(null)
+
+  const closuresQuery = useQuery({
+    queryKey: ['owner', 'fields', field.id, 'closures'],
+    queryFn: async () =>
+      (await api.get<ApiEnvelope<FieldClosure[]>>(`/field-owner/fields/${field.id}/closures`)).data.data,
+  })
+
+  const addClosure = useMutation({
+    mutationFn: async (payload: { start_date: string; end_date: string; reason: string }) =>
+      api.post(`/field-owner/fields/${field.id}/closures`, payload),
+    onSuccess: () => {
+      toast.success('Đã thêm lịch nghỉ / bảo trì đóng sân.')
+      setReason('')
+      void closuresQuery.refetch()
+      onRefresh()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể tạo lịch đóng sân')
+    },
+  })
+
+  const removeClosure = useMutation({
+    mutationFn: async (closureId: number) =>
+      api.delete(`/field-owner/fields/${field.id}/closures/${closureId}`),
+    onSuccess: () => {
+      toast.success('Đã xoá lịch nghỉ. Sân đã mở lại hoạt động.')
+      setDeletingClosure(null)
+      void closuresQuery.refetch()
+      onRefresh()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể xoá lịch nghỉ')
+    },
+  })
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!startDate || !endDate || !reason.trim()) return
+    addClosure.mutate({
+      start_date: startDate,
+      end_date: endDate,
+      reason: reason.trim(),
+    })
+  }
+
+  const closures = closuresQuery.data ?? field.closures ?? []
+
+  return (
+    <>
+      <Modal
+        isOpen
+        onClose={onClose}
+        title={`Lịch nghỉ & bảo trì: ${field.name}`}
+        ariaLabel="Quản lý lịch nghỉ sân"
+      >
+        <div style={{ maxWidth: 640 }}>
+          <p className="form-help" style={{ marginBottom: 16 }}>
+            Thiết lập các ngày sân tạm dừng hoạt động do bảo dưỡng, sửa chữa hoặc nghỉ lễ.
+            Khách hàng sẽ không thể đặt lịch vào các ngày này. Nếu có đơn đang chờ hoặc đã xác nhận, hệ thống sẽ yêu cầu bạn xử lý trước khi đóng sân.
+          </p>
+
+          <form onSubmit={handleSubmit} style={{ background: 'var(--surface-sunken, #f8fafc)', padding: 16, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 20 }}>
+            <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>Thêm khoảng thời gian nghỉ / đóng sân</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Từ ngày</span>
+                <input
+                  type="date"
+                  required
+                  min={today}
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value)
+                    if (e.target.value > endDate) setEndDate(e.target.value)
+                  }}
+                />
+              </label>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Đến ngày</span>
+                <input
+                  type="date"
+                  required
+                  min={startDate || today}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </label>
+            </div>
+            <label style={{ margin: '0 0 12px' }}>
+              <span style={{ fontSize: 12 }}>Lý do nghỉ / đóng sân</span>
+              <input
+                type="text"
+                required
+                maxLength={255}
+                placeholder="Ví dụ: Thay cỏ nhân tạo định kỳ, Nghỉ lễ Quốc khánh 2/9, Bảo dưỡng hệ thống đèn..."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              className="button button--brand button--small"
+              disabled={addClosure.isPending || !reason.trim()}
+            >
+              <Plus size={14} /> {addClosure.isPending ? 'Đang lưu...' : 'Thêm lịch nghỉ'}
+            </button>
+          </form>
+
+          <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700 }}>
+            Danh sách lịch nghỉ ({closures.length})
+          </h4>
+
+          {closuresQuery.isPending && (
+            <div className="query-state query-state--loading">Đang tải lịch nghỉ...</div>
+          )}
+
+          {!closuresQuery.isPending && closures.length === 0 && (
+            <p className="empty-inline" style={{ padding: '16px 0', textAlign: 'center', color: 'var(--muted)' }}>
+              Chưa có lịch nghỉ hoặc bảo dưỡng nào được tạo. Sân đang mở nhận lịch bình thường.
+            </p>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
+            {closures.map((c) => {
+              const isOngoing = c.start_date <= today && c.end_date >= today
+              const isUpcoming = c.start_date > today
+              return (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: isOngoing ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <strong>
+                        {formatDate(c.start_date)} {c.start_date !== c.end_date ? `→ ${formatDate(c.end_date)}` : ''}
+                      </strong>
+                      {isOngoing && <span className="badge badge--danger" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Đang đóng sân</span>}
+                      {isUpcoming && <span className="badge badge--warning" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Sắp tới</span>}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{c.reason}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--danger-ghost button--icon"
+                    title="Xoá lịch nghỉ này"
+                    onClick={() => setDeletingClosure(c)}
+                    disabled={removeClosure.isPending}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="modal__actions" style={{ marginTop: 20 }}>
+            <button type="button" className="button button--ghost" onClick={onClose}>
+              Đóng
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={!!deletingClosure}
+        onClose={() => setDeletingClosure(null)}
+        onConfirm={() => {
+          if (deletingClosure) removeClosure.mutate(deletingClosure.id)
+        }}
+        title="Xoá lịch đóng sân"
+        message={`Bạn có chắc muốn xoá lịch nghỉ từ ${deletingClosure ? formatDate(deletingClosure.start_date) : ''} đến ${deletingClosure ? formatDate(deletingClosure.end_date) : ''}? Sân sẽ mở lại khung giờ cho khách đặt bình thường.`}
+        confirmText="Mở lại sân"
+        cancelText="Giữ lại"
+        danger={false}
+        busy={removeClosure.isPending}
+      />
+    </>
+  )
+}
+
 export function OwnerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -857,6 +1083,7 @@ export function OwnerBookingsPage() {
   const [page, setPage] = useState(1)
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [rejectScope, setRejectScope] = useState<'single' | 'recurring'>('single')
 
   const bookings = useQuery({
     queryKey: ['owner', 'bookings', status, date, page],
@@ -900,11 +1127,28 @@ export function OwnerBookingsPage() {
       toast.success(`Đã ${label} đơn đặt sân #BK-${vars.booking.id}.`)
       setRejectingBooking(null)
       setRejectReason('')
+      setRejectScope('single')
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể cập nhật đơn')
+    },
+  })
+
+  const rejectRecurring = useMutation({
+    mutationFn: async ({ groupId, reason }: { groupId: string; reason?: string }) =>
+      api.patch(`/field-owner/bookings/recurring/${groupId}/reject`, { reason }),
+    onSuccess: () => {
+      toast.success('Đã từ chối toàn bộ chuỗi đặt sân cố định.')
+      setRejectingBooking(null)
+      setRejectReason('')
+      setRejectScope('single')
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể từ chối chuỗi đơn')
     },
   })
 
@@ -1108,12 +1352,22 @@ export function OwnerBookingsPage() {
       {/* Reject Modal */}
       <Modal
         isOpen={!!rejectingBooking}
-        onClose={() => setRejectingBooking(null)}
+        onClose={() => {
+          setRejectingBooking(null)
+          setRejectReason('')
+          setRejectScope('single')
+        }}
         title={rejectingBooking?.status === 'confirmed' ? 'Huỷ đơn đã xác nhận' : 'Từ chối đơn đặt sân'}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
-          if (rejectingBooking) {
+          if (!rejectingBooking) return
+          if (rejectScope === 'recurring' && rejectingBooking.recurring_group_id) {
+            rejectRecurring.mutate({
+              groupId: rejectingBooking.recurring_group_id,
+              reason: rejectReason || 'Chủ sân không thể tiếp tục nhận chuỗi đặt cố định.',
+            })
+          } else {
             update.mutate({
               booking: rejectingBooking,
               status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
@@ -1126,6 +1380,37 @@ export function OwnerBookingsPage() {
           Bạn có chắc chắn muốn {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} đơn <strong>#BK-{rejectingBooking?.id}</strong> của khách hàng{' '}
           <strong>{rejectingBooking?.customer?.name}</strong>?
         </p>
+
+        {rejectingBooking?.recurring_group_id && (
+          <div style={{ padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, border: '1px solid var(--border)', margin: '12px 0' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--forest)' }}>
+              <Repeat size={14} /> Đơn thuộc chuỗi đặt cố định hằng tuần:
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="radio"
+                  name="reject_scope"
+                  value="single"
+                  checked={rejectScope === 'single'}
+                  onChange={() => setRejectScope('single')}
+                />
+                <span>Chỉ {rejectingBooking.status === 'confirmed' ? 'huỷ' : 'từ chối'} buổi này (#BK-{rejectingBooking.id})</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="radio"
+                  name="reject_scope"
+                  value="recurring"
+                  checked={rejectScope === 'recurring'}
+                  onChange={() => setRejectScope('recurring')}
+                />
+                <span>{rejectingBooking.status === 'confirmed' ? 'Huỷ' : 'Từ chối'} toàn bộ các buổi trong chuỗi cố định</span>
+              </label>
+            </div>
+          </div>
+        )}
+
         <label style={{ marginTop: 12 }}>
           <span>Lý do {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} (thông báo tới khách)</span>
           <textarea
@@ -1140,12 +1425,26 @@ export function OwnerBookingsPage() {
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => setRejectingBooking(null)}
+            onClick={() => {
+              setRejectingBooking(null)
+              setRejectReason('')
+              setRejectScope('single')
+            }}
           >
             Đóng
           </button>
-          <button type="submit" disabled={update.isPending} className="button button--danger">
-            {update.isPending ? 'Đang xử lý...' : rejectingBooking?.status === 'confirmed' ? 'Xác nhận huỷ đơn' : 'Xác nhận từ chối'}
+          <button
+            type="submit"
+            disabled={update.isPending || rejectRecurring.isPending}
+            className="button button--danger"
+          >
+            {update.isPending || rejectRecurring.isPending
+              ? 'Đang xử lý...'
+              : rejectScope === 'recurring'
+                ? 'Từ chối toàn bộ chuỗi'
+                : rejectingBooking?.status === 'confirmed'
+                  ? 'Xác nhận huỷ đơn'
+                  : 'Xác nhận từ chối'}
           </button>
         </div>
       </Modal>
@@ -1222,7 +1521,10 @@ export function OwnerBookingsPage() {
 }
 
 export function OwnerReviewsPage() {
+  const client = useQueryClient()
   const [page, setPage] = useState(1)
+  const [replyingReview, setReplyingReview] = useState<Review | null>(null)
+
   const reviews = useQuery({
     queryKey: ['owner', 'reviews', page],
     queryFn: async () =>
@@ -1235,7 +1537,7 @@ export function OwnerReviewsPage() {
         icon={<MessageSquareText />}
         kicker="Phản hồi"
         title="Khách hàng nói gì?"
-        copy="Lắng nghe trải nghiệm thật để cải thiện chất lượng sân."
+        copy="Lắng nghe trải nghiệm thật và phản hồi trực tiếp các ý kiến của khách hàng để xây dựng uy tín cho sân."
       />
       <QueryState
         isPending={reviews.isPending}
@@ -1246,20 +1548,44 @@ export function OwnerReviewsPage() {
       >
         <div className="review-grid">
           {reviews.data?.data.map((review) => (
-          <article className="review-card" key={review.id}>
-            <div>
-              <Avatar name={review.user?.name} src={review.user?.avatar} />
-              <span>
-                <strong>{review.user?.name}</strong>
-                <small>{formatDate(review.created_at)}</small>
-              </span>
-              <b>{'★'.repeat(review.rating)}</b>
-            </div>
-            <p>“{review.comment}”</p>
-            <small>
-              Đánh giá cho <strong>{review.field?.name}</strong>
-            </small>
-          </article>
+            <article className="review-card" key={review.id} style={{ display: 'flex', flexDirection: 'column' }}>
+              <div>
+                <Avatar name={review.user?.name} src={review.user?.avatar} />
+                <span>
+                  <strong>{review.user?.name}</strong>
+                  <small>{formatDate(review.created_at)}</small>
+                </span>
+                <b>{'★'.repeat(review.rating)}</b>
+              </div>
+              <p>“{review.comment}”</p>
+              <small>
+                Đánh giá cho <strong>{review.field?.name}</strong>
+              </small>
+
+              {review.owner_reply && (
+                <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--surface-sunken, #f8fafc)', borderRadius: 8, borderLeft: '3px solid var(--pitch, #0b3025)', fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--forest, #0b3025)' }}>
+                      <CornerDownRight size={13} /> Phản hồi của bạn:
+                    </strong>
+                    {review.owner_replied_at && (
+                      <small style={{ color: 'var(--muted)', fontSize: 11 }}>{formatDate(review.owner_replied_at)}</small>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontStyle: 'normal' }}>{review.owner_reply}</p>
+                </div>
+              )}
+
+              <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="button button--ghost button--small"
+                  onClick={() => setReplyingReview(review)}
+                >
+                  <MessageSquareReply size={13} /> {review.owner_reply ? 'Sửa phản hồi' : 'Trả lời đánh giá'}
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       </QueryState>
@@ -1269,7 +1595,96 @@ export function OwnerReviewsPage() {
         total={reviews.data?.meta.total}
         onPageChange={setPage}
       />
+
+      {replyingReview && (
+        <OwnerReviewReplyModal
+          review={replyingReview}
+          onClose={() => setReplyingReview(null)}
+          onSuccess={() => void client.invalidateQueries({ queryKey: ['owner', 'reviews'] })}
+        />
+      )}
     </>
+  )
+}
+
+function OwnerReviewReplyModal({
+  review,
+  onClose,
+  onSuccess,
+}: {
+  review: Review
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const toast = useToast()
+  const [replyText, setReplyText] = useState(review.owner_reply ?? '')
+
+  const replyMutation = useMutation({
+    mutationFn: async (reply: string) =>
+      api.patch(`/field-owner/reviews/${review.id}/reply`, { reply }),
+    onSuccess: () => {
+      toast.success('Đã gửi phản hồi đánh giá.')
+      onSuccess()
+      onClose()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể lưu phản hồi')
+    },
+  })
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Phản hồi đánh giá của khách hàng"
+      asForm
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!replyText.trim()) return
+        replyMutation.mutate(replyText.trim())
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: 'var(--surface-sunken)', padding: 12, borderRadius: 8, fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <strong>{review.user?.name}</strong>
+            <span style={{ color: '#f59e0b' }}>{'★'.repeat(review.rating)}</span>
+          </div>
+          <p style={{ margin: 0, fontStyle: 'italic', color: 'var(--text)' }}>“{review.comment}”</p>
+          <small style={{ color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+            Sân: {review.field?.name}
+          </small>
+        </div>
+
+        <label style={{ margin: 0 }}>
+          <span>Nội dung phản hồi từ chủ sân</span>
+          <textarea
+            required
+            rows={4}
+            maxLength={1000}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder="Cảm ơn quý khách đã ghé sân và để lại góp ý. Chúng tôi sẽ cải thiện..."
+          />
+          <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block', marginTop: 4 }}>
+            {replyText.length}/1000 ký tự
+          </small>
+        </label>
+
+        <div className="modal__actions">
+          <button type="button" className="button button--ghost" onClick={onClose}>
+            Hủy
+          </button>
+          <button
+            type="submit"
+            className="button button--brand"
+            disabled={replyMutation.isPending || !replyText.trim()}
+          >
+            {replyMutation.isPending ? 'Đang gửi...' : 'Lưu phản hồi'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -1492,6 +1907,11 @@ function BookingTable({
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                     <StatusBadge status={booking.status} payment={booking.payment?.status} />
+                    {booking.recurring_group_id && (
+                      <span className="badge badge--info" style={{ fontSize: '0.72rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="Chuỗi đặt cố định hàng tuần">
+                        <Repeat size={10} /> Đặt cố định
+                      </span>
+                    )}
                     {booking.checked_in_at ? (
                       <span className="badge badge--success" style={{ fontSize: '0.72rem', padding: '2px 6px' }} title={`Check-in: ${new Date(booking.checked_in_at).toLocaleTimeString('vi-VN')}`}>
                         ✓ Đã đến sân
@@ -1525,6 +1945,11 @@ function BookingTable({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 <StatusBadge status={booking.status} payment={booking.payment?.status} />
+                {booking.recurring_group_id && (
+                  <span className="badge badge--info" style={{ fontSize: '0.7rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <Repeat size={10} /> Đặt cố định
+                  </span>
+                )}
                 {booking.checked_in_at && (
                   <span className="badge badge--success" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
                     ✓ Đã đến sân

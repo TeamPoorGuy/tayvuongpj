@@ -263,6 +263,19 @@ class FieldOwnerService
         return Review::whereIn('sports_field_id', $fieldIds)->where('is_visible', true)->with(['user', 'sportsField'])->latest()->paginate(10);
     }
 
+    public function replyReview(User $owner, Review $review, string $reply): Review
+    {
+        $review->loadMissing('sportsField');
+        $this->assertOwner($owner, $review->sportsField);
+
+        $review->update([
+            'owner_reply' => trim($reply),
+            'owner_replied_at' => now(),
+        ]);
+
+        return $review->refresh()->load(['user', 'sportsField']);
+    }
+
     public function deleteField(User $owner, SportsField $field): void
     {
         $this->assertOwner($owner, $field);

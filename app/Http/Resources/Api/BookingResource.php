@@ -25,6 +25,7 @@ class BookingResource extends JsonResource
             'check_in_code' => $this->check_in_code,
             'checked_in_at' => $this->checked_in_at?->toISOString(),
             'no_show' => $this->no_show_at !== null,
+            'recurring_group_id' => $this->recurring_group_id,
             'payment' => [
                 'status' => $this->payment_status,
                 'option' => $this->payment_option,

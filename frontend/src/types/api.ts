@@ -74,7 +74,17 @@ export interface SportsField {
   images?: Array<{ id: number; url: string; is_primary: boolean }>
   time_slots?: TimeSlot[]
   reviews?: Review[]
+  closures?: FieldClosure[]
   bookings_count?: number
+}
+
+export interface FieldClosure {
+  id: number
+  sports_field_id: number
+  start_date: string
+  end_date: string
+  reason: string
+  created_at?: string
 }
 
 export interface TimeSlot {
@@ -93,6 +103,8 @@ export interface Review {
   rating: number
   comment: string | null
   is_visible: boolean
+  owner_reply?: string | null
+  owner_replied_at?: string | null
   user?: Pick<User, 'id' | 'name' | 'avatar'>
   field?: Pick<SportsField, 'id' | 'name' | 'slug'>
   created_at: string
@@ -104,6 +116,7 @@ export interface Booking {
   status: string
   total_price: number
   notes: string | null
+  recurring_group_id?: string | null
   cancelled_at?: string | null
   cancel_reason: string | null
   can_be_cancelled: boolean

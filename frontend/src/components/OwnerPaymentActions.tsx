@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { Eye } from 'lucide-react'
+import { Eye, Repeat } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -39,6 +39,12 @@ export function OwnerPaymentActions({
     onError: (err) => toast.error(errorMessage(err), 'Không thể duyệt đơn'),
   })
 
+  const approveRecurring = useMutation({
+    mutationFn: async () => api.patch(`/field-owner/bookings/recurring/${booking.recurring_group_id}/approve`),
+    onSuccess: () => done('Đã duyệt toàn bộ chuỗi đặt sân cố định. Đang chờ khách chuyển khoản cọc.'),
+    onError: (err) => toast.error(errorMessage(err), 'Không thể duyệt chuỗi đơn'),
+  })
+
   const resolve = useMutation({
     mutationFn: async (received: boolean) => api.patch(`/field-owner/bookings/${booking.id}/payment`, { received }),
     onSuccess: (_, received) => {
@@ -48,7 +54,7 @@ export function OwnerPaymentActions({
     onError: (err) => toast.error(errorMessage(err), 'Không thể cập nhật thanh toán'),
   })
 
-  const busy = approve.isPending || resolve.isPending
+  const busy = approve.isPending || approveRecurring.isPending || resolve.isPending
   const payment = booking.payment
   const reject = (
     <button type="button" className={`button button--danger ${size}`} onClick={onReject} disabled={busy}>
@@ -107,8 +113,20 @@ export function OwnerPaymentActions({
       {!payment?.status && (
         <>
           <button type="button" className={`button button--brand ${size}`} onClick={() => approve.mutate()} disabled={busy}>
-            Duyệt
+            {booking.recurring_group_id ? 'Duyệt buổi này' : 'Duyệt'}
           </button>
+          {booking.recurring_group_id && (
+            <button
+              type="button"
+              className={`button button--brand ${size}`}
+              style={{ background: 'var(--pitch, #0b3025)', color: '#fff' }}
+              onClick={() => approveRecurring.mutate()}
+              disabled={busy}
+              title="Duyệt tất cả các tuần trong chuỗi đặt cố định của khách"
+            >
+              <Repeat size={12} /> {approveRecurring.isPending ? 'Đang duyệt...' : 'Duyệt cả chuỗi'}
+            </button>
+          )}
           {reject}
         </>
       )}

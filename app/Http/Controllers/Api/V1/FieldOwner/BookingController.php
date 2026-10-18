@@ -65,4 +65,25 @@ class BookingController extends Controller
             'data' => new BookingResource($booking),
         ]);
     }
+
+    public function approveRecurring(Request $request, string $groupId, BookingPaymentService $payments): JsonResponse
+    {
+        $approved = $payments->approveRecurring($request->user(), $groupId);
+
+        return response()->json([
+            'message' => 'Đã duyệt toàn bộ chuỗi đặt sân cố định (' . $approved->count() . ' buổi).',
+            'data' => BookingResource::collection($approved),
+        ]);
+    }
+
+    public function rejectRecurring(Request $request, string $groupId, BookingPaymentService $payments): JsonResponse
+    {
+        $reason = $request->input('reason');
+        $rejected = $payments->rejectRecurring($request->user(), $groupId, $reason);
+
+        return response()->json([
+            'message' => 'Đã từ chối toàn bộ chuỗi đặt sân cố định.',
+            'data' => BookingResource::collection($rejected),
+        ]);
+    }
 }

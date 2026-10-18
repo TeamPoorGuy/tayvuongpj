@@ -61,6 +61,105 @@ class BookingPaymentService
         return $booking;
     }
 
+    /** Chủ sân duyệt cả chuỗi đặt sân cố định hàng tuần. */
+    public function approveRecurring(User $owner, string $groupId): \Illuminate\Database\Eloquent\Collection
+    {
+        if ($this->statementService->hasOverdueDebt($owner)) {
+            throw new ConflictException('Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
+        }
+
+        $bookings = Booking::where('recurring_group_id', $groupId)
+            ->where('status', BookingStatus::Pending->value)
+            ->with(['sportsField.owner.fieldOwnerProfile', 'timeSlot', 'customer'])
+            ->orderBy('booking_date', 'asc')
+            ->get();
+
+        if ($bookings->isEmpty()) {
+            throw new ConflictException('Không tìm thấy đơn chờ duyệt nào trong chuỗi đặt này.');
+        }
+
+        $profile = $owner->fieldOwnerProfile;
+        if (! $profile?->bank_name || ! $profile->bank_account_number || ! $profile->bank_account_holder) {
+            throw new ConflictException('Bạn chưa khai tài khoản ngân hàng nhận tiền. Hãy cập nhật ở mục Hồ sơ cơ sở rồi duyệt lại.');
+        }
+
+        $windowHours = Settings::getInt('payment_window_hours', 2);
+
+        $bookings = DB::transaction(function () use ($groupId, $owner, $windowHours) {
+            $bookings = Booking::where('recurring_group_id', $groupId)
+                ->where('status', BookingStatus::Pending->value)
+                ->with(['sportsField.owner.fieldOwnerProfile', 'timeSlot', 'customer'])
+                ->orderBy('booking_date', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            if ($bookings->isEmpty()) {
+                throw new ConflictException('Không tìm thấy đơn chờ duyệt nào trong chuỗi đặt này.');
+            }
+
+            foreach ($bookings as $index => $booking) {
+                Gate::forUser($owner)->authorize('manage', $booking);
+
+                if ($booking->startsAt()->isPast()) {
+                    continue;
+                }
+
+                $dueAt = $index === 0
+                    ? $this->dueAt($booking)
+                    : now()->addHours($windowHours)->max($booking->startsAt()->subHours(24))->min($booking->startsAt());
+
+                $booking->update([
+                    'payment_status' => 'awaiting',
+                    'payment_code' => 'SH'.$booking->id.Str::upper(Str::random(4)),
+                    'payment_due_at' => $dueAt,
+                ]);
+            }
+
+            return $bookings;
+        });
+
+        $first = $bookings->first();
+        if ($first?->customer?->email) {
+            SafeMail::queue($first->customer->email, new BookingStatusChanged($first));
+        }
+
+        return Booking::where('recurring_group_id', $groupId)->with(Booking::resourceRelations(withCustomer: true))->get();
+    }
+
+    /** Chủ sân từ chối cả chuỗi đặt sân cố định hàng tuần. */
+    public function rejectRecurring(User $owner, string $groupId, ?string $reason = null): \Illuminate\Database\Eloquent\Collection
+    {
+        $bookings = DB::transaction(function () use ($groupId, $owner, $reason) {
+            $bookings = Booking::where('recurring_group_id', $groupId)
+                ->where('status', BookingStatus::Pending->value)
+                ->with(['sportsField', 'customer'])
+                ->lockForUpdate()
+                ->get();
+
+            if ($bookings->isEmpty()) {
+                throw new ConflictException('Không tìm thấy đơn chờ duyệt nào trong chuỗi đặt này.');
+            }
+
+            foreach ($bookings as $booking) {
+                Gate::forUser($owner)->authorize('manage', $booking);
+                $booking->update([
+                    'status' => BookingStatus::Rejected->value,
+                    'cancelled_at' => now(),
+                    'cancel_reason' => $reason ?: 'Chủ sân từ chối chuỗi đặt cố định.',
+                ]);
+            }
+
+            return $bookings;
+        });
+
+        $first = $bookings->first();
+        if ($first?->customer?->email) {
+            SafeMail::queue($first->customer->email, new BookingStatusChanged($first));
+        }
+
+        return Booking::where('recurring_group_id', $groupId)->with(Booking::resourceRelations(withCustomer: true))->get();
+    }
+
     /** Khách báo đã chuyển khoản (cọc hoặc trả hết). */
     public function report(User $customer, Booking $booking, string $option, UploadedFile|string|null $proof = null): Booking
     {
