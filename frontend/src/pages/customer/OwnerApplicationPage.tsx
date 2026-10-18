@@ -758,9 +758,18 @@ export function OwnerApplicationPage() {
                       style={{ marginTop: 3 }}
                     />
                     <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--soft)' }}>
-                      Tôi cam kết toàn bộ thông tin kê khai là chính xác, đồng ý với Quy chế hoạt động, Chính
-                      sách huỷ/hoàn và xử lý tranh chấp của SportHub, và đồng ý để SportHub xử lý dữ liệu cá nhân
-                      theo Nghị định 13/2023/NĐ-CP.
+                      Tôi cam kết toàn bộ thông tin kê khai là chính xác, đồng ý với{' '}
+                      <Link to="/quy-che-chu-san" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Quy chế đối tác chủ sân
+                      </Link>
+                      ,{' '}
+                      <Link to="/chinh-sach-huy-hoan" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Chính sách huỷ/hoàn
+                      </Link>
+                      {' '}và xử lý tranh chấp của SportHub, và đồng ý để SportHub xử lý dữ liệu cá nhân theo{' '}
+                      <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Nghị định 13/2023/NĐ-CP
+                      </Link>.
                     </span>
                   </label>
                   {errors.accept_terms && (

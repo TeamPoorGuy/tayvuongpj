@@ -16,6 +16,15 @@ import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
 import { OwnerStatementsPage } from './pages/owner/OwnerStatementsPage'
 import { AdminBookingsPage, AdminCategoriesPage, AdminDashboardPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 import { AdminStatementsPage } from './pages/admin/AdminStatementsPage'
+import {
+  AboutPage,
+  ContactPage,
+  FaqPage,
+  OwnerRegulationsPage,
+  PrivacyPage,
+  RefundPolicyPage,
+  TermsPage,
+} from './pages/PolicyPages'
 
 export default function App() {
   return (
@@ -26,6 +35,13 @@ export default function App() {
         <Route path="fields" element={<FieldsPage />} />
         <Route path="fields/:slug" element={<FieldDetailPage />} />
         <Route path="matches" element={<MatchesPage />} />
+        <Route path="dieu-khoan" element={<TermsPage />} />
+        <Route path="chinh-sach-bao-mat" element={<PrivacyPage />} />
+        <Route path="chinh-sach-huy-hoan" element={<RefundPolicyPage />} />
+        <Route path="quy-che-chu-san" element={<OwnerRegulationsPage />} />
+        <Route path="cau-hoi-thuong-gap" element={<FaqPage />} />
+        <Route path="gioi-thieu" element={<AboutPage />} />
+        <Route path="lien-he" element={<ContactPage />} />
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />

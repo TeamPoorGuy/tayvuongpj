@@ -820,6 +820,9 @@ export function OwnerBookingsPage() {
     },
   })
 
+  const [showCodeModal, setShowCodeModal] = useState(false)
+  const [checkInInputCode, setCheckInInputCode] = useState('')
+
   const checkIn = useMutation({
     mutationFn: async (booking: Booking) =>
       (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/check-in`)).data,
@@ -830,6 +833,21 @@ export function OwnerBookingsPage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
+    },
+  })
+
+  const checkInByCode = useMutation({
+    mutationFn: async (code: string) =>
+      (await api.post<{ message: string; data: Booking }>('/field-owner/check-in', { code })).data,
+    onSuccess: (res) => {
+      toast.success(res.message || 'Check-in thành công (+10 điểm uy tín cho khách).')
+      setShowCodeModal(false)
+      setCheckInInputCode('')
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Check-in không thành công')
     },
   })
 
@@ -847,6 +865,13 @@ export function OwnerBookingsPage() {
         copy="Duyệt yêu cầu, đối chiếu tiền chuyển khoản theo nội dung, xác nhận khách đến sân và hoàn tất lượt chơi."
         action={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="button button--brand"
+              onClick={() => setShowCodeModal(true)}
+            >
+              <UserCheck size={16} /> Nhập mã check-in
+            </button>
             <Link to="/owner/schedule" className="button button--ghost">
               <CalendarDays size={16} /> Xem lịch trực quan
             </Link>
@@ -988,6 +1013,57 @@ export function OwnerBookingsPage() {
         </div>
       </Modal>
 
+      {/* Check In By Code Modal */}
+      <Modal
+        isOpen={showCodeModal}
+        onClose={() => {
+          setShowCodeModal(false)
+          setCheckInInputCode('')
+        }}
+        title="Check-in bằng mã đơn"
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (checkInInputCode.trim()) {
+            checkInByCode.mutate(checkInInputCode.trim())
+          }
+        }}
+      >
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--soft)' }}>
+          Nhập mã <strong>CK-XXXXXXXX</strong> do khách cung cấp khi tới sân để xác nhận có mặt và tích +10 điểm uy tín cho khách.
+        </p>
+        <label>
+          <span>Mã check-in</span>
+          <input
+            type="text"
+            value={checkInInputCode}
+            onChange={(e) => setCheckInInputCode(e.target.value.toUpperCase())}
+            placeholder="Ví dụ: CK-A1B2C3D4"
+            required
+            autoFocus
+            style={{ letterSpacing: '0.08em', fontWeight: 600, fontSize: 16 }}
+          />
+        </label>
+        <div className="modal__actions" style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => {
+              setShowCodeModal(false)
+              setCheckInInputCode('')
+            }}
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="submit"
+            disabled={checkInByCode.isPending || !checkInInputCode.trim()}
+            className="button button--brand"
+          >
+            {checkInByCode.isPending ? 'Đang xác nhận...' : 'Xác nhận khách đến'}
+          </button>
+        </div>
+      </Modal>
     </>
   )
 }

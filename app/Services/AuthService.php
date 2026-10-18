@@ -38,6 +38,7 @@ class AuthService
             'password' => Hash::make($data->password),
             'phone' => $data->phone,
             'address' => $data->address,
+            'terms_accepted_at' => $data->termsAccepted ? now() : null,
         ])->refresh(); // load DB defaults: role=customer, is_active=true
 
         event(new Registered($user)); // gửi email xác thực

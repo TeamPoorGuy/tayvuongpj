@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle2, Copy, CreditCard, Timer } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, CreditCard, ShieldAlert, Timer } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../../api/client'
@@ -145,6 +145,13 @@ export function BookingPaymentPage() {
               {row('Chủ tài khoản', booking.bank?.account_holder)}
               {row('Nội dung chuyển khoản', payment.code, 'nội dung chuyển khoản')}
             </dl>
+
+            <div className="notice notice--warn" style={{ margin: '14px 0', fontSize: 13, lineHeight: 1.5 }}>
+              <ShieldAlert size={18} />
+              <span>
+                <strong>Cảnh báo an toàn:</strong> Chỉ chuyển khoản đúng tài khoản hiển thị ở trên. SportHub tuyệt đối không yêu cầu chuyển qua Zalo/số điện thoại riêng. Mọi giao dịch ngoài nền tảng đều không được bảo vệ.
+              </span>
+            </div>
 
             <p className="form-help">
               Ghi đúng nội dung <strong>{payment.code}</strong> để chủ sân đối chiếu được giao dịch của bạn. Huỷ đơn trong thời hạn

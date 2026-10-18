@@ -11,6 +11,7 @@ import {
   Star,
   Timer,
   XCircle,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
@@ -293,6 +294,17 @@ export function CustomerBookingsPage() {
                       Bạn đã báo chuyển {formatMoney(booking.payment.amount ?? 0)} (nội dung {booking.payment.code}). Đang chờ
                       chủ sân xác nhận đã nhận tiền.
                     </p>
+                  )}
+                  {booking.status === 'confirmed' && !booking.checked_in_at && booking.check_in_code && (
+                    <div style={{ background: 'var(--pitch-soft, #e4f1e6)', border: '1px solid rgba(31, 135, 94, 0.3)', borderRadius: 10, padding: '10px 14px', margin: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Zap size={16} style={{ color: 'var(--pitch)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--forest)' }}>
+                          Mã check-in: <strong style={{ fontSize: 16, letterSpacing: '0.08em', color: 'var(--forest)' }}>{booking.check_in_code}</strong>
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--soft)' }}>Đưa mã này cho chủ sân khi đến nhận sân (+10đ uy tín)</span>
+                    </div>
                   )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
                     <p className="form-help">

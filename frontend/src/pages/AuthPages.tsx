@@ -17,6 +17,13 @@ function GoogleButton() {
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.500 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.600 10.8l7.900-6.1z"/><path fill="#34A853" d="M24 48c6.500 0 11.9-2.1 15.900-5.800l-7.500-5.800c-2.1 1.400-4.800 2.300-8.400 2.300-6.300 0-11.600-4.100-13.500-9.800l-7.900 6.100C6.500 42.600 14.600 48 24 48z"/></svg>
       Tiếp tục với Google
     </a>
+    <small style={{ display: 'block', textAlign: 'center', margin: '6px 0 12px', fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+      Bằng việc tiếp tục với Google, bạn đồng ý với{' '}
+      <Link to="/dieu-khoan" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>Điều khoản</Link>
+      {' '}và{' '}
+      <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>Bảo mật</Link>
+      {' '}của SportHub.
+    </small>
     <div className="or-divider">hoặc</div>
   </>
 }
@@ -53,16 +60,64 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
   if (user) return <Navigate to={destination(user)} replace />
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError('')
+    if (!termsAccepted) {
+      setError('Bạn cần đồng ý với Điều khoản dịch vụ và Chính sách bảo mật để tiếp tục.')
+      setBusy(false)
+      return
+    }
     const values = Object.fromEntries(new FormData(event.currentTarget).entries())
+    values.terms_accepted = '1'
     try { const next = await register(values); navigate(destination(next)) }
     catch (reason) { setError(errorMessage(reason)) } finally { setBusy(false) }
   }
 
-  return <AuthShell title="Tạo tài khoản SportHub" copy="Bắt đầu hành trình thể thao của bạn."><form onSubmit={submit} className="form-stack"><GoogleButton /><div className="form-grid"><label><span>Họ và tên</span><input name="name" required autoComplete="name" placeholder="Nguyễn Văn A" /></label><label><span>Số điện thoại</span><input name="phone" type="tel" inputMode="numeric" required autoComplete="tel" placeholder="0901234567" pattern="[0-9]{10,11}" title="Số điện thoại gồm 10-11 chữ số" /></label></div><label><span>Email</span><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></label><label><span>Địa chỉ <small className="optional">(không bắt buộc)</small></span><input name="address" autoComplete="street-address" placeholder="Số nhà, đường, quận/huyện" /></label><div className="form-grid"><label><span>Mật khẩu</span><input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="Tối thiểu 8 ký tự" /></label><label><span>Xác nhận mật khẩu</span><input name="password_confirmation" type="password" required minLength={8} autoComplete="new-password" placeholder="Nhập lại mật khẩu" /></label></div>{error && <div className="notice notice--error">{error}</div>}<button disabled={busy} className="button button--brand button--block">{busy ? 'Đang tạo...' : 'Tạo tài khoản'} <ArrowRight size={16} /></button><p className="form-switch">Đã có tài khoản? <Link to="/login">Đăng nhập</Link></p></form></AuthShell>
+  return (
+    <AuthShell title="Tạo tài khoản SportHub" copy="Bắt đầu hành trình thể thao của bạn.">
+      <form onSubmit={submit} className="form-stack">
+        <GoogleButton />
+        <div className="form-grid">
+          <label><span>Họ và tên</span><input name="name" required autoComplete="name" placeholder="Nguyễn Văn A" /></label>
+          <label><span>Số điện thoại</span><input name="phone" type="tel" inputMode="numeric" required autoComplete="tel" placeholder="0901234567" pattern="[0-9]{10,11}" title="Số điện thoại gồm 10-11 chữ số" /></label>
+        </div>
+        <label><span>Email</span><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></label>
+        <label><span>Địa chỉ <small className="optional">(không bắt buộc)</small></span><input name="address" autoComplete="street-address" placeholder="Số nhà, đường, quận/huyện" /></label>
+        <div className="form-grid">
+          <label><span>Mật khẩu</span><input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="Tối thiểu 8 ký tự" /></label>
+          <label><span>Xác nhận mật khẩu</span><input name="password_confirmation" type="password" required minLength={8} autoComplete="new-password" placeholder="Nhập lại mật khẩu" /></label>
+        </div>
+        <label className="check-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, marginTop: 4 }}>
+          <input
+            name="terms_accepted"
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            style={{ marginTop: 2 }}
+          />
+          <span style={{ lineHeight: 1.4 }}>
+            Tôi đã đọc và đồng ý với{' '}
+            <Link to="/dieu-khoan" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+              Điều khoản dịch vụ
+            </Link>{' '}
+            và{' '}
+            <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+              Chính sách bảo mật
+            </Link>{' '}
+            của SportHub (theo Nghị định 13/2023/NĐ-CP).
+          </span>
+        </label>
+        {error && <div className="notice notice--error">{error}</div>}
+        <button disabled={busy} className="button button--brand button--block">
+          {busy ? 'Đang tạo...' : 'Tạo tài khoản'} <ArrowRight size={16} />
+        </button>
+        <p className="form-switch">Đã có tài khoản? <Link to="/login">Đăng nhập</Link></p>
+      </form>
+    </AuthShell>
+  )
 }
 
 export function ForgotPasswordPage() {

@@ -1,10 +1,13 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
-import { Building2, CalendarDays, LogOut, Menu, UserRound, X } from 'lucide-react'
+import { DemoNoticeBanner } from '../components/DemoNoticeBanner'
+import { CookieNotice } from '../components/CookieNotice'
+import { Building2, CalendarDays, LogOut, Menu, UserRound, X, Mail, Phone } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Brand } from '../components/Brand'
 import { useAuth } from '../context/auth-context'
+import { usePublicSettings } from '../hooks/usePublicSettings'
 import { useReveal } from '../hooks/useReveal'
 import { Avatar } from '../components/Avatar'
 
@@ -25,8 +28,11 @@ export function PublicLayout() {
   const workspace = isAdmin ? '/admin' : isApprovedOwner ? '/owner' : '/bookings'
   const workspaceLabel = isAdmin ? 'Quản trị' : isApprovedOwner ? 'Kênh chủ sân' : 'Lịch đặt của tôi'
 
+  const { data: settings } = usePublicSettings()
+
   return (
     <div className="app-shell">
+      <DemoNoticeBanner />
       <VerifyEmailBanner />
       <header className="topbar">
         <div className="shell topbar__inner">
@@ -162,10 +168,13 @@ export function PublicLayout() {
       </main>
 
       <footer className="footer">
-        <div className="shell footer__grid">
+        <div className="shell footer__grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 36 }}>
           <div className="reveal" style={{ '--i': 0 } as React.CSSProperties}>
             <Brand />
             <p>Nền tảng tìm và đặt sân thể thao nhanh chóng, minh bạch cho cộng đồng Việt Nam.</p>
+            <small style={{ color: 'var(--muted)', display: 'block', marginTop: 8 }}>
+              🎓 Bản demo đồ án công nghệ — Không phát sinh giao dịch thật.
+            </small>
           </div>
           <div className="reveal" style={{ '--i': 1 } as React.CSSProperties}>
             <strong>Khám phá</strong>
@@ -173,16 +182,42 @@ export function PublicLayout() {
             <Link to={user ? (isApprovedOwner ? '/owner' : '/become-owner') : '/register'}>
               {isApprovedOwner ? 'Quản lý sân của bạn' : 'Trở thành chủ sân'}
             </Link>
+            <Link to="/matches">Tìm đối & Ghép đội</Link>
             <a href="/#how-it-works">Quy trình đặt sân</a>
           </div>
           <div className="reveal" style={{ '--i': 2 } as React.CSSProperties}>
-            <strong>SportHub</strong>
-            <span>Hà Nội & TP. Hồ Chí Minh, Việt Nam</span>
-            <span>hotro@sporthub.vn</span>
-            <small>© {new Date().getFullYear()} SportHub Platform. All rights reserved.</small>
+            <strong>Chính sách & Quy định</strong>
+            <Link to="/dieu-khoan">Điều khoản sử dụng</Link>
+            <Link to="/chinh-sach-bao-mat">Chính sách bảo mật (NĐ 13/2023)</Link>
+            <Link to="/chinh-sach-huy-hoan">Chính sách hủy & hoàn cọc</Link>
+            <Link to="/quy-che-chu-san">Quy chế đối tác chủ sân</Link>
+          </div>
+          <div className="reveal" style={{ '--i': 3 } as React.CSSProperties}>
+            <strong>Hỗ trợ & Liên hệ</strong>
+            <Link to="/cau-hoi-thuong-gap">Câu hỏi thường gặp (FAQ)</Link>
+            <Link to="/gioi-thieu">Về chúng tôi</Link>
+            <Link to="/lien-he">Liên hệ hỗ trợ</Link>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+              <a
+                href={`mailto:${settings?.support_email ?? 'hotro@sporthub.vn'}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--lime)' }}
+              >
+                <Mail size={13} /> {settings?.support_email ?? 'hotro@sporthub.vn'}
+              </a>
+              <a
+                href={`tel:${settings?.support_hotline?.replace(/\s+/g, '') ?? '19006868'}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Phone size={13} /> Hotline: {settings?.support_hotline ?? '1900 6868'}
+              </a>
+            </div>
+            <small style={{ marginTop: 10, display: 'block' }}>
+              © {new Date().getFullYear()} SportHub Platform.
+            </small>
           </div>
         </div>
       </footer>
+      <CookieNotice />
     </div>
   )
 }

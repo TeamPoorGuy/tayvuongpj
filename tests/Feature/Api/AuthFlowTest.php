@@ -42,6 +42,7 @@ class AuthFlowTest extends TestCase
         $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173/'])->postJson('/api/v1/auth/register', [
             'name' => 'Khách Mới', 'email' => 'new@example.test', 'phone' => '0987654321',
             'password' => 'Password123!', 'password_confirmation' => 'Password123!',
+            'terms_accepted' => '1',
         ])->assertCreated()->assertJsonPath('data.email_verified', false);
 
         Notification::assertSentTo(User::where('email', 'new@example.test')->first(), VerifyEmailVi::class);

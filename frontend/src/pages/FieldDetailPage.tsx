@@ -29,6 +29,7 @@ import { addDays, formatDay, getLocalTodayString } from '../utils/date'
 import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
 import { Avatar } from '../components/Avatar'
 import { formatMoney } from '../utils/format'
+import { BookingConfirmModal } from '../components/BookingConfirmModal'
 
 export function FieldDetailPage() {
 
@@ -53,6 +54,7 @@ export function FieldDetailPage() {
   const [activeImg, setActiveImg] = useState(0)
   const [periodFilter, setPeriodFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all')
   const [selectedBookedSlot, setSelectedBookedSlot] = useState<TimeSlot | null>(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   const field = useQuery({
     queryKey: ['field', slug],
@@ -105,6 +107,7 @@ export function FieldDetailPage() {
         notes,
       }),
     onSuccess: () => {
+      setShowConfirmModal(false)
       pickSlot(null)
       setNotes('')
       success('Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.', 'Đã gửi yêu cầu')
@@ -627,7 +630,7 @@ export function FieldDetailPage() {
           ) : (
             <button
               disabled={!selectedSlot || booking.isPending}
-              onClick={() => booking.mutate()}
+              onClick={() => setShowConfirmModal(true)}
               className="button button--brand button--block button--lg"
             >
               <CalendarDays size={18} />{' '}
@@ -660,12 +663,26 @@ export function FieldDetailPage() {
           type="button"
           className="button button--brand"
           disabled={booking.isPending}
-          onClick={() => (selectedSlot && user?.role === 'customer' ? booking.mutate() : scrollToBooking())}
+          onClick={() => (selectedSlot && user?.role === 'customer' ? setShowConfirmModal(true) : scrollToBooking())}
         >
           <CalendarDays size={16} />{' '}
           {booking.isPending ? 'Đang gửi...' : selectedSlot && user?.role === 'customer' ? 'Gửi yêu cầu' : 'Chọn giờ'}
         </button>
       </div>
+
+      {showConfirmModal && selectedSlot && item && calculatedPrice && (
+        <BookingConfirmModal
+          isOpen={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          onConfirm={() => booking.mutate()}
+          field={item}
+          slot={selectedSlot}
+          date={date}
+          totalPrice={calculatedPrice.total}
+          notes={notes}
+          busy={booking.isPending}
+        />
+      )}
     </div>
   )
 }

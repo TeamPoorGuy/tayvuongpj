@@ -219,6 +219,14 @@ export function MatchesPage() {
           </div>
         </section>
 
+        {/* Safety Notice */}
+        <div className="notice notice--soft" style={{ margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ShieldCheck size={18} style={{ color: 'var(--pitch)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <strong>Lưu ý an toàn khi ghép đội:</strong> Khi giao lưu thể thao cùng người lạ, vui lòng kiểm tra điểm tin cậy (Trust Score), thống nhất chi phí chia tiền sân sòng phẳng tại sân và tự bảo quản tài sản cá nhân.
+          </span>
+        </div>
+
         {/* Filter Toolbar */}
         <div className="matches-filter-bar">
           <div className="filter-group">

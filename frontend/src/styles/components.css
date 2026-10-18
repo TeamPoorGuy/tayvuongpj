@@ -112,7 +112,7 @@ button.status { cursor: pointer; }
 .notice strong { font-weight: 700; }
 .notice--success { background: var(--pitch-soft); border-left-color: var(--pitch); color: var(--forest); }
 .notice--error { background: var(--danger-soft); border-left-color: var(--danger); color: #8f1d31; }
-.notice--warn { background: var(--warn-soft); border-left-color: var(--warn); color: #6b4700; }
+.notice--warn, .notice--warning { background: var(--warn-soft); border-left-color: var(--warn); color: #6b4700; }
 .notice--soft, .query-state { background: var(--surface); border-left-color: var(--forest); color: var(--soft); }
 .query-state--error { background: var(--danger-soft); border-left-color: var(--danger); color: #8f1d31; }
 .query-state { font-size: 14.5px; font-weight: 500; text-align: left; }

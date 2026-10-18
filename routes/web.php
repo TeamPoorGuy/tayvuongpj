@@ -45,8 +45,13 @@ Route::middleware('throttle:10,1')->prefix('auth/google')->group(function () use
             return $frontend('/login?error=disabled');
         }
 
+        $isNewUser = ! $user;
         $user ??= new User(['name' => $google->getName() ?: $google->getEmail(), 'email' => $google->getEmail()]);
-        $user->forceFill(['google_id' => $google->getId(), 'avatar' => $user->avatar ?? $google->getAvatar()]);
+        $fill = ['google_id' => $google->getId(), 'avatar' => $user->avatar ?? $google->getAvatar()];
+        if ($isNewUser || ! $user->terms_accepted_at) {
+            $fill['terms_accepted_at'] = now();
+        }
+        $user->forceFill($fill);
         if (! $user->hasVerifiedEmail()) {
             $user->markEmailAsVerified(); // save() nằm trong markEmailAsVerified
         }

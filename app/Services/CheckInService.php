@@ -46,6 +46,10 @@ class CheckInService
                 throw new DomainException('Đơn đặt sân này không còn hiệu lực để check-in.');
             }
 
+            if ($booking->payment_status !== null && $booking->payment_status !== 'paid') {
+                throw new DomainException('Đơn chưa hoàn tất thanh toán, không thể check-in.');
+            }
+
             // Chỉ check-in trong khoảng từ 60 phút trước giờ bắt đầu đến hết giờ kết thúc.
             if (now()->lt($booking->startsAt()->subMinutes(60))) {
                 throw new DomainException('Chưa đến giờ check-in. Có thể check-in từ '.$booking->startsAt()->subMinutes(60)->format('H:i d/m').'.');

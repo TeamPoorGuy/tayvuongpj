@@ -271,6 +271,7 @@ class LayeredApiTest extends TestCase
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'phone' => '0987654321',
+            'terms_accepted' => '1',
         ])->assertCreated()
             ->assertJsonPath('data.role', 'customer')
             ->assertJsonPath('data.field_owner_profile', null);
