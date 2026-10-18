@@ -160,6 +160,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         Route::get('/statements', [FieldOwner\StatementController::class, 'index']);
         Route::get('/statements/current-summary', [FieldOwner\StatementController::class, 'currentSummary']);
+        Route::get('/statements/{statement}/export-csv', [FieldOwner\StatementController::class, 'exportBookingsCsv']);
         Route::get('/statements/{statement}', [FieldOwner\StatementController::class, 'show']);
         Route::post('/statements/{statement}/report', [FieldOwner\StatementController::class, 'report'])->middleware('throttle:writes');
     });
@@ -195,7 +196,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/complaints', [Admin\ComplaintController::class, 'index']);
             Route::get('/complaints/{complaint}', [Admin\ComplaintController::class, 'show']);
             Route::patch('/complaints/{complaint}/handle', [Admin\ComplaintController::class, 'handle'])->middleware('throttle:writes');
+            Route::get('/statements/export-csv', [Admin\StatementController::class, 'exportCsv']);
             Route::get('/statements', [Admin\StatementController::class, 'index']);
+            Route::get('/statements/{statement}/export-csv', [Admin\StatementController::class, 'exportBookingsCsv']);
             Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
             Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');
             Route::post('/statements/{statement}/confirm', [Admin\StatementController::class, 'confirm'])->middleware('throttle:writes');

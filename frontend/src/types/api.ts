@@ -44,6 +44,7 @@ export interface Category {
   slug: string
   icon: string | null
   description: string | null
+  is_active: boolean
   field_types_count: number
 }
 

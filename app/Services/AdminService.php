@@ -198,6 +198,10 @@ class AdminService
             throw new ForbiddenException('Không thể khóa tài khoản quản trị viên.');
         }
 
+        if ($user->is_active && empty(trim((string) $reason))) {
+            throw new ConflictException('Vui lòng cung cấp lý do khi khóa tài khoản người dùng.');
+        }
+
         $user->forceFill(['is_active' => ! $user->is_active])->save();
         AdminLog::record('toggle_user', $user, [
             'is_active' => $user->is_active,
@@ -324,11 +328,18 @@ class AdminService
         return '%'.addcslashes($keyword, '%_\\').'%';
     }
 
-    public function fields(?string $status, ?string $keyword = null): LengthAwarePaginator
+    public function fields(?string $status, ?string $keyword = null, ?bool $isActive = null): LengthAwarePaginator
     {
         return SportsField::with(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage'])
             ->withRating()
-            ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($status, function ($query, $status) {
+                if ($status === 'inactive') {
+                    $query->where(fn ($q) => $q->where('status', 'inactive')->orWhere('is_active', false));
+                } else {
+                    $query->where('status', $status);
+                }
+            })
+            ->when($isActive !== null, fn ($query) => $query->where('is_active', $isActive))
             ->when($keyword, fn ($query) => $query->where(fn ($inner) => $inner
                 ->where('name', 'like', $this->like($keyword))
                 ->orWhere('address', 'like', $this->like($keyword))
@@ -557,9 +568,12 @@ class AdminService
         return $match;
     }
 
-    public function reviews(): LengthAwarePaginator
+    public function reviews(?int $rating = null): LengthAwarePaginator
     {
-        return Review::with(['user', 'sportsField'])->latest()->paginate(15);
+        return Review::with(['user', 'sportsField'])
+            ->when($rating, fn ($query) => $query->where('rating', $rating))
+            ->latest()
+            ->paginate(15);
     }
 
     public function toggleReview(Review $review): Review

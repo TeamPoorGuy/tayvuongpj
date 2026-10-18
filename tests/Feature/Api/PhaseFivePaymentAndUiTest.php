@@ -320,5 +320,30 @@ class PhaseFivePaymentAndUiTest extends TestCase
         $this->assertNull($bookingData['field']['owner']['business']['business_phone']);
         $this->assertSame('0987654321', $bookingData['field']['owner']['phone']);
     }
+
+    public function test_orphaned_proof_file_is_deleted_when_payment_report_fails(): void
+    {
+        Storage::fake('local');
+
+        // Set payment_due_at in the past so report throws ConflictException
+        $this->booking->update([
+            'payment_status' => 'awaiting',
+            'payment_due_at' => now()->subMinutes(10),
+        ]);
+
+        Sanctum::actingAs($this->customer);
+        $file = UploadedFile::fake()->image('expired_proof.jpg', 300, 300);
+
+        $res = $this->postJson("/api/v1/customer/bookings/{$this->booking->id}/payment", [
+            'option' => 'deposit',
+            'proof' => $file,
+        ]);
+
+        $res->assertStatus(409);
+
+        // Verify that no orphaned file remains in payment_proofs directory
+        $files = Storage::disk('local')->files('payment_proofs');
+        $this->assertEmpty($files, 'Expected orphaned payment proof to be deleted when report fails.');
+    }
 }
 

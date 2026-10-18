@@ -83,8 +83,15 @@ class PhaseZeroFoundationTest extends TestCase
 
         $adminService = app(AdminService::class);
 
-        // 1. Toggle user
-        $adminService->toggleUser($customer);
+        // 1. Toggle user (requires reason when locking)
+        try {
+            $adminService->toggleUser($customer);
+            $this->fail('Expected ConflictException when locking user without reason');
+        } catch (\App\Exceptions\ConflictException $e) {
+            $this->assertStringContainsString('lý do khi khóa', $e->getMessage());
+        }
+
+        $adminService->toggleUser($customer, 'Tài khoản có dấu hiệu vi phạm');
         $this->assertDatabaseHas('admin_logs', [
             'action' => 'toggle_user',
             'subject_type' => $customer->getMorphClass(),

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock,
   Coins,
+  Download,
   Eye,
   Plus,
   RotateCcw,
@@ -232,6 +233,15 @@ export function AdminStatementsPage() {
               <option value="waived">Miễn thu</option>
             </select>
           </div>
+          <a
+            href={`/api/v1/admin/statements/export-csv?period=${encodeURIComponent(periodFilter)}&status=${encodeURIComponent(statusFilter)}&keyword=${encodeURIComponent(debouncedSearch)}`}
+            className="button button--secondary"
+            title="Tải về file CSV toàn bộ bảng đối soát theo bộ lọc"
+            download
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', height: 40, padding: '0 14px', whiteSpace: 'nowrap' }}
+          >
+            <Download size={15} /> Xuất CSV
+          </a>
         </div>
 
         <QueryState
@@ -508,8 +518,18 @@ export function AdminStatementsPage() {
               </div>
             </div>
 
-            <h4>Danh sách đơn đặt sân tính phí ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
-            <div className="table-responsive" style={{ maxHeight: 300, overflowY: 'auto', marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
+              <h4 style={{ margin: 0 }}>Danh sách đơn đặt sân tính phí ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
+              <a
+                href={`/api/v1/admin/statements/${activeDetail.id}/export-csv`}
+                className="button button--tiny button--secondary"
+                download
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <Download size={13} /> Xuất CSV đơn
+              </a>
+            </div>
+            <div className="table-responsive" style={{ maxHeight: 300, overflowY: 'auto' }}>
               <table className="data-table data-table--compact">
                 <thead>
                   <tr>

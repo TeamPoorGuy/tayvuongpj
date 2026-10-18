@@ -280,4 +280,90 @@ class StatementService
             'has_overdue_debt' => $this->hasOverdueDebt($owner),
         ];
     }
+
+    public function exportStatementsCsv(?string $period = null, ?string $status = null, ?string $keyword = null): string
+    {
+        $query = OwnerStatement::query()
+            ->with(['ownerProfile.user', 'confirmedBy'])
+            ->when($period, fn ($q) => $q->where('period', $period))
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($keyword, function ($q) use ($keyword) {
+                $q->where(function ($sub) use ($keyword) {
+                    $sub->where('transfer_code', 'like', "%{$keyword}%")
+                        ->orWhereHas('ownerProfile', fn ($op) => $op->where('business_name', 'like', "%{$keyword}%")
+                            ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('email', 'like', "%{$keyword}%")
+                                ->orWhere('phone', 'like', "%{$keyword}%")));
+                });
+            })
+            ->orderByDesc('period')
+            ->orderByDesc('id');
+
+        $statements = $query->get();
+
+        $csv = "\xEF\xBB\xBF";
+        $csv .= "Mã đối soát,Kỳ đối soát,Tên cơ sở,Chủ tài khoản,Số điện thoại,Email,Số đơn,Tổng GMV (VND),Hoa hồng sàn (VND),Mã chuyển khoản,Hạn nộp,Trạng thái,Quá hạn,Ghi chú,Ngày tạo\n";
+
+        foreach ($statements as $st) {
+            $statusLabel = match ($st->status) {
+                'paid' => 'Đã thanh toán',
+                'reported' => 'Khách báo chuyển',
+                'waived' => 'Miễn thu',
+                default => 'Chờ nộp',
+            };
+
+            $line = [
+                $st->id,
+                $st->period,
+                '"'.str_replace('"', '""', (string) ($st->ownerProfile?->business_name ?? '—')).'"',
+                '"'.str_replace('"', '""', (string) ($st->ownerProfile?->user?->name ?? '—')).'"',
+                '"'.str_replace('"', '""', (string) ($st->ownerProfile?->business_phone ?? $st->ownerProfile?->user?->phone ?? '—')).'"',
+                '"'.str_replace('"', '""', (string) ($st->ownerProfile?->user?->email ?? '—')).'"',
+                $st->booking_count,
+                number_format((float) $st->gmv, 0, '', ''),
+                number_format((float) $st->commission_amount, 0, '', ''),
+                $st->transfer_code,
+                $st->due_at?->format('Y-m-d') ?? '—',
+                $statusLabel,
+                $st->is_overdue ? 'Có' : 'Không',
+                '"'.str_replace('"', '""', (string) ($st->note ?? '')).'"',
+                $st->created_at?->format('Y-m-d H:i:s') ?? '',
+            ];
+
+            $csv .= implode(',', $line)."\n";
+        }
+
+        return $csv;
+    }
+
+    public function exportStatementBookingsCsv(OwnerStatement $statement): string
+    {
+        $statement->load([
+            'ownerProfile.user',
+            'bookings' => fn ($q) => $q->with(['customer', 'sportsField', 'timeSlot'])->latest(),
+        ]);
+
+        $csv = "\xEF\xBB\xBF";
+        $csv .= "Mã đơn,Khách hàng,Số điện thoại,Sân thể thao,Ngày chơi,Khung giờ,Tổng tiền (VND),Hoa hồng %,Tiền hoa hồng (VND),Trạng thái đơn,Ngày tạo\n";
+
+        foreach ($statement->bookings as $b) {
+            $line = [
+                $b->id,
+                '"'.str_replace('"', '""', (string) ($b->customer?->name ?? '—')).'"',
+                '"'.str_replace('"', '""', (string) ($b->customer?->phone ?? '—')).'"',
+                '"'.str_replace('"', '""', (string) ($b->sportsField?->name ?? '—')).'"',
+                $b->booking_date?->format('Y-m-d') ?? '—',
+                ($b->timeSlot ? substr($b->timeSlot->start_time, 0, 5).' - '.substr($b->timeSlot->end_time, 0, 5) : '—'),
+                number_format((float) $b->total_price, 0, '', ''),
+                $b->commission_rate ?? 0,
+                number_format((float) ($b->commission_amount ?? 0), 0, '', ''),
+                $b->status instanceof BookingStatus ? $b->status->value : (string) $b->status,
+                $b->created_at?->format('Y-m-d H:i:s') ?? '',
+            ];
+
+            $csv .= implode(',', $line)."\n";
+        }
+
+        return $csv;
+    }
 }

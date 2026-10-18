@@ -22,7 +22,9 @@ class FieldController extends Controller
             'keyword' => ['nullable', 'string', 'max:100'],
         ]);
 
-        return FieldResource::collection($this->service->fields($request->input('status'), $request->input('keyword')));
+        $isActive = $request->has('is_active') ? $request->boolean('is_active') : null;
+
+        return FieldResource::collection($this->service->fields($request->input('status'), $request->input('keyword'), $isActive));
     }
 
     public function verify(VerifyRequest $request, SportsField $field): JsonResponse

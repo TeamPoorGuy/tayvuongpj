@@ -5,10 +5,12 @@ import {
   CalendarDays,
   CreditCard,
   Download,
+  Edit3,
   ExternalLink,
   Eye,
   FileText,
   FolderTree,
+  Phone,
   RotateCcw,
   Search,
   Trophy,
@@ -1039,9 +1041,10 @@ export function AdminFieldsPage() {
       />
       <div className="toolbar">
         <select value={status} onChange={(e) => handleStatusChange(e.target.value)}>
-          <option value="">Tất cả</option>
+          <option value="">Tất cả trạng thái</option>
           <option value="pending">Chờ duyệt</option>
-          <option value="approved">Đã duyệt</option>
+          <option value="approved">Đã duyệt (Hoạt động)</option>
+          <option value="inactive">Tạm ngưng / Inactive</option>
           <option value="rejected">Từ chối</option>
         </select>
         <label className="search-control">
@@ -1068,7 +1071,7 @@ export function AdminFieldsPage() {
             field.owner?.name,
             field.field_type?.name,
             formatMoney(field.price_per_hour),
-            <StatusBadge key="status" status={field.status} />,
+            <StatusBadge key="status" status={!field.is_active ? 'inactive' : field.status} />,
             field.status === 'pending' ? (
               <div key="action" className="row-actions">
                 <button
@@ -1545,7 +1548,8 @@ export function AdminBookingsPage() {
           >
             <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
               <div>Sân: <strong>{cancellingBooking.field?.name}</strong></div>
-              <div>Khách: <strong>{cancellingBooking.customer?.name}</strong> ({cancellingBooking.customer?.email})</div>
+              <div>Chủ sân: <strong>{cancellingBooking.field?.owner?.name ?? '—'}</strong> {cancellingBooking.field?.owner?.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>(<Phone size={12} style={{ color: 'var(--pitch)' }} /> <a href={`tel:${cancellingBooking.field?.owner?.phone}`} style={{ color: 'var(--pitch)', fontWeight: 600 }}>{cancellingBooking.field?.owner?.phone}</a>)</span>}</div>
+              <div>Khách: <strong>{cancellingBooking.customer?.name}</strong> ({cancellingBooking.customer?.phone || cancellingBooking.customer?.email})</div>
               <div>Ngày: <strong>{formatDate(cancellingBooking.booking_date)}</strong> ({cancellingBooking.time_slot?.start_time} – {cancellingBooking.time_slot?.end_time})</div>
               <div>Đã thanh toán: <strong>{formatMoney(cancellingBooking.payment?.amount ?? 0)}</strong></div>
             </div>
@@ -1659,12 +1663,13 @@ export function AdminReviewsPage() {
   const client = useQueryClient()
   const toast = useToast()
   const [page, setPage] = useState(1)
+  const [rating, setRating] = useState('')
   const [togglingReview, setTogglingReview] = useState<Review | null>(null)
 
   const reviews = useQuery({
-    queryKey: ['admin', 'reviews', page],
+    queryKey: ['admin', 'reviews', page, rating],
     queryFn: async () =>
-      (await api.get<Paginated<Review>>(`/admin/reviews?page=${page}`)).data,
+      (await api.get<Paginated<Review>>(`/admin/reviews?page=${page}${rating ? `&rating=${rating}` : ''}`)).data,
   })
 
   const toggle = useMutation({
@@ -1691,6 +1696,23 @@ export function AdminReviewsPage() {
         title="Đánh giá cộng đồng"
         copy="Lắng nghe phản hồi và kiểm soát nội dung hiển thị."
       />
+      <div className="toolbar" style={{ marginBottom: 20 }}>
+        <select
+          value={rating}
+          onChange={(e) => {
+            setRating(e.target.value)
+            setPage(1)
+          }}
+          aria-label="Lọc đánh giá theo số sao"
+        >
+          <option value="">Tất cả đánh giá (1 – 5 sao)</option>
+          <option value="5">5 sao (★★★★★)</option>
+          <option value="4">4 sao (★★★★☆)</option>
+          <option value="3">3 sao (★★★☆☆)</option>
+          <option value="2">2 sao (★★☆☆☆)</option>
+          <option value="1">1 sao (★☆☆☆☆)</option>
+        </select>
+      </div>
       <div className="review-grid">
         {reviews.data?.data.map((review) => (
           <article className="review-card" key={review.id}>
@@ -1748,10 +1770,44 @@ export function AdminReviewsPage() {
 export function AdminCategoriesPage() {
   const client = useQueryClient()
   const toast = useToast()
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editIcon, setEditIcon] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editIsActive, setEditIsActive] = useState(true)
+
   const categories = useQuery({
     queryKey: ['admin', 'categories'],
     queryFn: async () => (await api.get<{ data: Category[] }>('/admin/categories')).data.data,
   })
+
+  const openEditModal = (cat: Category) => {
+    setEditingCategory(cat)
+    setEditName(cat.name)
+    setEditIcon(cat.icon ?? '')
+    setEditDescription(cat.description ?? '')
+    setEditIsActive(cat.is_active)
+  }
+
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      api.put(`/admin/categories/${id}`, payload),
+    onSuccess: () => {
+      toast.success('Đã cập nhật danh mục thể thao.')
+      setEditingCategory(null)
+      void client.invalidateQueries({ queryKey: ['admin', 'categories'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể cập nhật danh mục')
+    },
+  })
+
+  const toggleCategoryActive = (cat: Category) => {
+    updateCategory.mutate({
+      id: cat.id,
+      payload: { is_active: !cat.is_active },
+    })
+  }
 
   const createCategory = useMutation({
     mutationFn: async (payload: Record<string, string>) => api.post('/admin/categories', payload),
@@ -1856,18 +1912,119 @@ export function AdminCategoriesPage() {
           </div>
           <div className="category-tree">
             {categories.data?.map((category) => (
-              <article key={category.id}>
-                <b>{category.icon}</b>
-                <div>
-                  <strong>{category.name}</strong>
-                  <p>{category.description}</p>
-                  <small>{category.field_types_count} loại sân</small>
+              <article key={category.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', opacity: category.is_active ? 1 : 0.65 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <b style={{ fontSize: 24 }}>{category.icon}</b>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <strong>{category.name}</strong>
+                      <span className={`status-pill ${category.is_active ? 'status-pill--confirmed' : 'status-pill--cancelled'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
+                        {category.is_active ? 'Đang bật' : 'Tạm tắt'}
+                      </span>
+                    </div>
+                    <p style={{ margin: '4px 0', fontSize: 13, color: 'var(--text-muted)' }}>{category.description || 'Chưa có mô tả'}</p>
+                    <small style={{ color: 'var(--text-muted)' }}>{category.field_types_count} loại sân</small>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 12, borderTop: '1px solid var(--line, #e2e8f0)', paddingTop: 10, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="button button--small button--ghost"
+                    onClick={() => openEditModal(category)}
+                  >
+                    <Edit3 size={13} /> Sửa
+                  </button>
+                  <button
+                    type="button"
+                    className={`button button--small ${category.is_active ? 'button--secondary' : 'button--brand'}`}
+                    onClick={() => toggleCategoryActive(category)}
+                    disabled={updateCategory.isPending}
+                  >
+                    {category.is_active ? 'Tắt' : 'Bật'}
+                  </button>
                 </div>
               </article>
             ))}
           </div>
         </section>
       </div>
+
+      <Modal
+        isOpen={Boolean(editingCategory)}
+        onClose={() => setEditingCategory(null)}
+        title={`Chỉnh sửa danh mục: ${editingCategory?.name}`}
+      >
+        {editingCategory && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              updateCategory.mutate({
+                id: editingCategory.id,
+                payload: {
+                  name: editName,
+                  icon: editIcon,
+                  description: editDescription,
+                  is_active: editIsActive,
+                },
+              })
+            }}
+            className="form-stack"
+            style={{ maxWidth: 440 }}
+          >
+            <label>
+              <span>Tên danh mục</span>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+                placeholder="Bóng đá, Cầu lông..."
+              />
+            </label>
+            <label>
+              <span>Biểu tượng (Icon / Emoji)</span>
+              <input
+                value={editIcon}
+                onChange={(e) => setEditIcon(e.target.value)}
+                placeholder="⚽, 🏸, 🎾..."
+              />
+            </label>
+            <label>
+              <span>Mô tả</span>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+                placeholder="Mô tả danh mục bộ môn..."
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={editIsActive}
+                onChange={(e) => setEditIsActive(e.target.checked)}
+              />
+              <span style={{ fontWeight: 600 }}>Cho phép hiển thị và đặt sân môn này</span>
+            </label>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setEditingCategory(null)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                className="button button--brand"
+                disabled={updateCategory.isPending || !editName.trim()}
+              >
+                {updateCategory.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   )
 }

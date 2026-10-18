@@ -63,6 +63,19 @@ class StatementController extends Controller
         ]);
     }
 
+    public function exportBookingsCsv(Request $request, OwnerStatement $statement): \Symfony\Component\HttpFoundation\Response
+    {
+        $profile = $request->user()->fieldOwnerProfile;
+        abort_unless($profile && $statement->owner_profile_id === $profile->id, 403, 'Bạn không có quyền xuất kỳ đối soát này.');
+
+        $csv = $this->statementService->exportStatementBookingsCsv($statement);
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="doi-soat-thang-'.$statement->period.'.csv"',
+        ]);
+    }
+
     public function report(Request $request, OwnerStatement $statement): JsonResponse
     {
         $request->validate([

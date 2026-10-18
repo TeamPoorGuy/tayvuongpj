@@ -5,6 +5,7 @@ import {
   Clock,
   Copy,
   CreditCard,
+  Download,
   FileText,
   Info,
   Receipt,
@@ -362,11 +363,20 @@ export function OwnerStatementsPage() {
               </div>
             )}
 
-            {/* Danh sách các đơn trong kỳ */}
             <div className="statement-bookings-list" style={{ marginTop: 16 }}>
-              <h4>Danh sách đơn đặt sân tính phí trong kỳ ({activeStatement.bookings?.length ?? activeStatement.booking_count} đơn)</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h4 style={{ margin: 0 }}>Danh sách đơn đặt sân tính phí trong kỳ ({activeStatement.bookings?.length ?? activeStatement.booking_count} đơn)</h4>
+                <a
+                  href={`/api/v1/field-owner/statements/${activeStatement.id}/export-csv`}
+                  className="button button--tiny button--secondary"
+                  download
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                  <Download size={13} /> Xuất CSV
+                </a>
+              </div>
               {activeStatement.bookings && activeStatement.bookings.length > 0 ? (
-                <div className="table-responsive" style={{ maxHeight: 250, overflowY: 'auto', marginTop: 8 }}>
+                <div className="table-responsive" style={{ maxHeight: 250, overflowY: 'auto' }}>
                   <table className="data-table data-table--compact">
                     <thead>
                       <tr>

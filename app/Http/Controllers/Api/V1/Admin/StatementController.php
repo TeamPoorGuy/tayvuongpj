@@ -16,6 +16,30 @@ class StatementController extends Controller
         private readonly StatementService $statementService
     ) {}
 
+    public function exportCsv(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $csv = $this->statementService->exportStatementsCsv(
+            $request->input('period'),
+            $request->input('status'),
+            $request->input('keyword')
+        );
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="doi-soat-'.now()->format('Ymd_His').'.csv"',
+        ]);
+    }
+
+    public function exportBookingsCsv(OwnerStatement $statement): \Symfony\Component\HttpFoundation\Response
+    {
+        $csv = $this->statementService->exportStatementBookingsCsv($statement);
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="chi-tiet-doi-soat-'.$statement->period.'-'.$statement->id.'.csv"',
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min(100, max(1, (int) $request->input('per_page', 15)));
