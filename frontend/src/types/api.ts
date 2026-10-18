@@ -113,6 +113,12 @@ export interface Booking {
   checked_in_at?: string | null
   payment?: BookingPayment
   refund?: BookingRefund | null
+  commission?: {
+    rate: number
+    amount: number
+    base: number
+    statement_id?: number | null
+  }
   bank?: { bank_name: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
@@ -140,6 +146,51 @@ export interface BookingPayment {
   deposit_percent: number
 }
 
+export interface OwnerStatement {
+  id: number
+  owner_profile_id: number
+  period: string
+  booking_count: number
+  gmv: number
+  commission_amount: number
+  status: 'unpaid' | 'reported' | 'paid' | 'waived'
+  due_at: string | null
+  is_overdue: boolean
+  transfer_code: string
+  reported_at: string | null
+  paid_at: string | null
+  note: string | null
+  platform_bank?: {
+    bank_name: string
+    account_number: string
+    account_holder: string
+  }
+  owner?: {
+    id: number
+    business_name: string
+    user_id: number
+    user_name: string
+    user_email: string
+    user_phone: string
+  }
+  confirmed_by?: {
+    id: number
+    name: string
+  }
+  bookings?: Booking[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CurrentStatementSummary {
+  period: string
+  booking_count: number
+  estimated_gmv: number
+  estimated_commission: number
+  commission_rate: number
+  has_overdue_debt: boolean
+}
+
 export interface HomeData {
   categories: Category[]
   featured_fields: SportsField[]
@@ -161,8 +212,15 @@ export interface OwnerDashboard {
   total_bookings: number
   pending_bookings: number
   total_revenue: number
+  total_gmv?: number
   current_month_bookings: number
   current_month_revenue: number
+  current_month_gmv?: number
+  current_month_collected?: number
+  current_month_commission?: number
+  current_month_net_revenue?: number
+  has_overdue_debt?: boolean
+  statement_summary?: CurrentStatementSummary
   most_booked_field: SportsField | null
   recent_bookings: Booking[]
 }
@@ -175,6 +233,9 @@ export interface AdminDashboard {
   pending_fields: number
   total_bookings: number
   total_revenue: number
+  total_gmv?: number
+  total_commission_collected?: number
+  total_commission_pending?: number
   most_booked_fields: SportsField[]
 }
 

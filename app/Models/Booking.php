@@ -37,6 +37,9 @@ class Booking extends Model
         'refund_status',
         'refund_amount',
         'refunded_at',
+        'commission_rate',
+        'commission_amount',
+        'statement_id',
     ];
 
     protected $casts = [
@@ -53,6 +56,8 @@ class Booking extends Model
         'paid_at' => 'datetime',
         'refund_amount' => 'decimal:2',
         'refunded_at' => 'datetime',
+        'commission_rate' => 'decimal:2',
+        'commission_amount' => 'decimal:2',
     ];
 
 
@@ -61,6 +66,9 @@ class Booking extends Model
         static::creating(function (Booking $booking) {
             if (empty($booking->check_in_code)) {
                 $booking->check_in_code = static::generateCheckInCode();
+            }
+            if ($booking->commission_rate === null) {
+                $booking->commission_rate = Settings::getInt('commission_percent', 8);
             }
         });
     }
@@ -88,6 +96,59 @@ class Booking extends Model
     public function review()
     {
         return $this->hasOne(Review::class);
+    }
+
+    public function statement()
+    {
+        return $this->belongsTo(OwnerStatement::class, 'statement_id');
+    }
+
+    /**
+     * Cơ sở tính hoa hồng cho nền tảng (Agoda model):
+     * - Hoàn thành và đã check-in: 100% total_price
+     * - No-show: payment_amount (chủ sân giữ tiền cọc)
+     * - Khách huỷ trễ (late cancel): payment_amount (chủ sân giữ tiền cọc)
+     * - Các trường hợp khác (hoàn tiền, từ chối, huỷ đúng hạn): 0
+     */
+    public function commissionBase(): float
+    {
+        if ($this->status === BookingStatus::Completed && $this->checked_in_at !== null) {
+            return (float) $this->total_price;
+        }
+
+        if ($this->no_show_at !== null) {
+            return (float) ($this->payment_amount ?? $this->depositAmount());
+        }
+
+        // Đơn huỷ mà chủ sân được giữ tiền (khách huỷ muộn / phạt cọc, không hoàn tiền)
+        if ($this->status === BookingStatus::Cancelled && $this->payment_status === 'paid' && in_array($this->refund_status, [null, 'waived'], true)) {
+            return (float) ($this->payment_amount ?? $this->depositAmount());
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Tính toán thuần túy hoa hồng (không ghi vào DB).
+     */
+    public function computeCommission(): float
+    {
+        $base = $this->commissionBase();
+        $rate = (float) ($this->commission_rate ?? Settings::getInt('commission_percent', 8));
+
+        return round($base * $rate / 100, 2);
+    }
+
+    /**
+     * Tính toán và lưu giá trị commission_amount cho booking.
+     */
+    public function calculateCommission(): float
+    {
+        $amount = $this->computeCommission();
+
+        $this->update(['commission_amount' => $amount]);
+
+        return $amount;
     }
 
     /**

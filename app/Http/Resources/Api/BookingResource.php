@@ -41,6 +41,12 @@ class BookingResource extends JsonResource
                 'amount' => (float) $this->refund_amount,
                 'refunded_at' => $this->refunded_at?->toISOString(),
             ] : null,
+            'commission' => [
+                'rate' => (float) ($this->commission_rate ?? Settings::getInt('commission_percent', 8)),
+                'amount' => $this->commission_amount !== null ? (float) $this->commission_amount : $this->computeCommission(),
+                'base' => $this->commissionBase(),
+                'statement_id' => $this->statement_id,
+            ],
 
             // Tài khoản nhận tiền: chỉ trả cho chính khách của đơn, sau khi chủ sân đã duyệt, ở endpoint chi tiết.
             'bank' => $this->when(

@@ -32,6 +32,8 @@ class AdminService
 {
     public function dashboard(): array
     {
+        $totalGmv = (float) Booking::whereIn('status', ['confirmed', 'completed'])->sum('total_price');
+
         return [
             'total_customers' => User::where('role', UserRole::Customer->value)->count(),
             'total_field_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Approved)->count(),
@@ -39,7 +41,10 @@ class AdminService
             'total_fields' => SportsField::count(),
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'total_bookings' => Booking::count(),
-            'total_revenue' => (float) Booking::whereIn('status', ['confirmed', 'completed'])->sum('total_price'),
+            'total_gmv' => $totalGmv,
+            'total_revenue' => $totalGmv,
+            'total_commission_collected' => (float) \App\Models\OwnerStatement::where('status', 'paid')->sum('commission_amount'),
+            'total_commission_pending' => (float) \App\Models\OwnerStatement::whereIn('status', ['unpaid', 'reported'])->sum('commission_amount'),
             'most_booked_fields' => SportsField::with(['primaryImage', 'fieldType.sportCategory'])->withRating()->withCount('bookings')->orderByDesc('bookings_count')->take(5)->get(),
         ];
     }

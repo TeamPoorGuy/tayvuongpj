@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   Building2,
   CalendarDays,
   ChartNoAxesCombined,
@@ -54,6 +55,22 @@ export function OwnerDashboardPage() {
         title="Nhịp vận hành hôm nay"
         copy="Theo dõi sân, lượt đặt và doanh thu trong một màn hình."
       />
+
+      {data?.has_overdue_debt && (
+        <div className="alert-banner alert-banner--danger" style={{ marginBottom: 20 }}>
+          <AlertTriangle size={20} />
+          <div>
+            <strong>Tài khoản đang có kỳ đối soát nợ phí quá hạn!</strong>
+            <p>
+              Bạn đang bị tạm dừng duyệt đơn đặt sân mới. Vui lòng thanh toán phí đối soát để tiếp tục nhận và duyệt đơn.{' '}
+              <Link to="/owner/statements" style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
+                Đến trang đối soát &rarr;
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="stats-grid">
         <Stat label="Tổng số sân" value={data?.total_fields ?? 0} />
         <Stat
@@ -63,11 +80,16 @@ export function OwnerDashboardPage() {
           to={data?.pending_bookings ? '/owner/bookings?status=pending' : undefined}
         />
         <Stat
-          label="Doanh thu tháng này"
-          value={formatMoney(data?.current_month_revenue ?? 0)}
-          note={`Tổng: ${formatMoney(data?.total_revenue ?? 0)}`}
+          label="Doanh thu thực nhận"
+          value={formatMoney(data?.current_month_net_revenue ?? data?.current_month_revenue ?? 0)}
+          note={`GMV: ${formatMoney(data?.current_month_gmv ?? data?.current_month_revenue ?? 0)}`}
         />
-        <Stat label="Đơn tháng này" value={data?.current_month_bookings ?? 0} />
+        <Stat
+          label="Phí sàn ước tính"
+          value={formatMoney(data?.current_month_commission ?? 0)}
+          note="Xem chi tiết đối soát"
+          to="/owner/statements"
+        />
       </div>
       <section className="data-panel">
         <div className="data-panel__head">

@@ -74,7 +74,19 @@ export function AdminDashboardPage() {
           note={`${data?.pending_fields ?? 0} chờ duyệt`}
           to="/admin/fields?status=pending"
         />
-        <Stat label="Doanh thu" value={formatMoney(data?.total_revenue ?? 0)} />
+        <Stat label="Tổng giá trị đơn (GMV)" value={formatMoney(data?.total_gmv ?? data?.total_revenue ?? 0)} />
+        <Stat
+          label="Hoa hồng đã thu"
+          value={formatMoney(data?.total_commission_collected ?? 0)}
+          note="Đã xác nhận thanh toán"
+          to="/admin/statements?status=paid"
+        />
+        <Stat
+          label="Hoa hồng chờ thu"
+          value={formatMoney(data?.total_commission_pending ?? 0)}
+          note="Cần đối soát"
+          to="/admin/statements"
+        />
       </div>
       <section className="data-panel">
         <div className="data-panel__head">

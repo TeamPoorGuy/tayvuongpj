@@ -22,9 +22,17 @@ use Illuminate\Support\Str;
  */
 class BookingPaymentService
 {
+    public function __construct(
+        private readonly StatementService $statementService = new StatementService(),
+    ) {}
+
     /** Chủ sân duyệt đơn: mở cửa sổ thanh toán cho khách. */
     public function approve(User $owner, Booking $booking): Booking
     {
+        if ($this->statementService->hasOverdueDebt($owner)) {
+            throw new ConflictException('Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
+        }
+
         $booking = $this->locked($booking, 'manage', $owner, function (Booking $booking) {
             if ($booking->status !== BookingStatus::Pending || $booking->payment_status !== null) {
                 throw new ConflictException('Đơn này đã được xử lý.');

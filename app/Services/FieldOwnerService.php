@@ -26,14 +26,37 @@ class FieldOwnerService
     public function dashboard(User $owner): array
     {
         $fieldIds = SportsField::withTrashed()->where('field_owner_id', $owner->id)->pluck('id');
+        $statementService = app(StatementService::class);
+        $monthSummary = $statementService->currentMonthSummary($owner);
+
+        $now = Carbon::now();
+        $totalGmv = (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->sum('total_price');
+        $currentMonthGmv = (float) Booking::whereIn('sports_field_id', $fieldIds)
+            ->whereIn('status', ['confirmed', 'completed'])
+            ->whereYear('booking_date', $now->year)
+            ->whereMonth('booking_date', $now->month)
+            ->sum('total_price');
+
+        $currentMonthPaid = (float) Booking::whereIn('sports_field_id', $fieldIds)
+            ->where('payment_status', 'paid')
+            ->whereYear('booking_date', $now->year)
+            ->whereMonth('booking_date', $now->month)
+            ->sum('payment_amount');
 
         return [
             'total_fields' => $fieldIds->count(),
             'total_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->count(),
             'pending_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->where('status', 'pending')->count(),
-            'total_revenue' => (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->sum('total_price'),
-            'current_month_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->count(),
-            'current_month_revenue' => (float) Booking::whereIn('sports_field_id', $fieldIds)->whereIn('status', ['confirmed', 'completed'])->whereYear('booking_date', Carbon::now()->year)->whereMonth('booking_date', Carbon::now()->month)->sum('total_price'),
+            'total_gmv' => $totalGmv,
+            'total_revenue' => $totalGmv, // Giữ để tương thích ngược frontend
+            'current_month_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->whereYear('booking_date', $now->year)->whereMonth('booking_date', $now->month)->count(),
+            'current_month_gmv' => $currentMonthGmv,
+            'current_month_revenue' => $currentMonthGmv, // Giữ để tương thích ngược frontend
+            'current_month_collected' => $currentMonthPaid,
+            'current_month_commission' => $monthSummary['estimated_commission'],
+            'current_month_net_revenue' => max(0.0, $currentMonthPaid - $monthSummary['estimated_commission']),
+            'has_overdue_debt' => $monthSummary['has_overdue_debt'],
+            'statement_summary' => $monthSummary,
             'most_booked_field' => SportsField::where('field_owner_id', $owner->id)->with(['primaryImage', 'fieldType.sportCategory'])->withRating()->withCount('bookings')->orderByDesc('bookings_count')->first(),
             // Dashboard summary only — deliberately omits 'review', unlike Booking::resourceRelations().
             'recent_bookings' => Booking::whereIn('sports_field_id', $fieldIds)->with(['sportsField.primaryImage', 'customer', 'timeSlot'])->latest()->take(5)->get(),
