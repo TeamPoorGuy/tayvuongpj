@@ -43,11 +43,19 @@ class BookingController extends Controller
 
     public function reportPayment(Request $request, Booking $booking, BookingPaymentService $payments): JsonResponse
     {
-        $option = $request->validate(['option' => ['required', 'in:deposit,full']])['option'];
+        $validated = $request->validate([
+            'option' => ['required', 'in:deposit,full'],
+            'proof' => ['nullable', 'file', 'image', 'max:5120'],
+        ]);
 
         return response()->json([
             'message' => 'Đã ghi nhận. Chủ sân sẽ đối chiếu và xác nhận đã nhận tiền.',
-            'data' => new BookingResource($payments->report($request->user(), $booking, $option)),
+            'data' => new BookingResource($payments->report(
+                $request->user(),
+                $booking,
+                $validated['option'],
+                $request->file('proof')
+            )),
         ]);
     }
 

@@ -33,6 +33,7 @@ class Booking extends Model
         'payment_code',
         'payment_due_at',
         'payment_reported_at',
+        'payment_proof_path',
         'paid_at',
         'refund_status',
         'refund_amount',
@@ -59,7 +60,6 @@ class Booking extends Model
         'commission_rate' => 'decimal:2',
         'commission_amount' => 'decimal:2',
     ];
-
 
     protected static function booted(): void
     {
@@ -163,7 +163,12 @@ class Booking extends Model
      */
     public static function resourceRelations(bool $withCustomer = false): array
     {
-        $relations = ['sportsField.primaryImage', 'timeSlot', 'review'];
+        $relations = [
+            'sportsField.primaryImage',
+            'sportsField.owner.fieldOwnerProfile',
+            'timeSlot',
+            'review',
+        ];
         if ($withCustomer) {
             $relations[] = 'customer';
         }
@@ -299,4 +304,3 @@ class Booking extends Model
         return $this;
     }
 }
-

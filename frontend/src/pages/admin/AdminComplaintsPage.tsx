@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { MessageSquare, Search } from 'lucide-react'
+import { Eye, MessageSquare, Search } from 'lucide-react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { Modal } from '../../components/Modal'
+import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { formatDate, formatMoney } from '../../utils/format'
@@ -37,6 +38,7 @@ export function AdminComplaintsPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [keyword, setKeyword] = useState('')
   const [activeComplaint, setActiveComplaint] = useState<Complaint | null>(null)
+  const [proofBookingId, setProofBookingId] = useState<number | null>(null)
 
   // Handle modal state
   const [handleStatus, setHandleStatus] = useState<'processing' | 'resolved' | 'rejected'>('resolved')
@@ -166,13 +168,22 @@ export function AdminComplaintsPage() {
                     <strong>Người gửi:</strong> {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
                   </span>
                   {c.booking && (
-                    <span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <strong>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
                       {c.booking.refund_status && (
                         <span style={{ marginLeft: 6, color: c.booking.refund_status === 'pending' ? 'var(--warn)' : 'var(--pitch)', fontWeight: 600 }}>
                           ({c.booking.refund_status === 'pending' ? 'Chờ hoàn cọc' : 'Đã hoàn'})
                         </span>
                       )}
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        style={{ padding: '2px 8px', fontSize: 11 }}
+                        onClick={() => setProofBookingId(c.booking!.id)}
+                        title="Xem ảnh biên lai chuyển khoản của đơn này"
+                      >
+                        <Eye size={12} /> Biên lai
+                      </button>
                     </span>
                   )}
                 </div>
@@ -248,6 +259,13 @@ export function AdminComplaintsPage() {
           </form>
         )}
       </Modal>
+
+      <PaymentProofModal
+        isOpen={!!proofBookingId}
+        onClose={() => setProofBookingId(null)}
+        proofUrl={proofBookingId ? `/api/v1/bookings/${proofBookingId}/payment-proof` : null}
+        title={`Biên lai đơn #BK-${proofBookingId ?? ''}`}
+      />
     </div>
   )
 }

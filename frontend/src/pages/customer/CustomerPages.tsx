@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
+  AlertTriangle,
   CalendarDays,
   CheckCircle2,
   CircleUserRound,
   Clock3,
   ListOrdered,
   MapPin,
+  Phone,
   ShieldCheck,
   Sparkles,
   Star,
@@ -21,6 +23,7 @@ import { errorMessage } from '../../api/errors'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
+import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
@@ -57,6 +60,59 @@ function OfferCountdown({ expiresAt }: { expiresAt: string }) {
   )
 }
 
+function StarRatingInput({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (val: number) => void
+}) {
+  const [hover, setHover] = useState<number | null>(null)
+  const current = hover ?? value
+  const labels: Record<number, string> = {
+    1: '1 sao - Rất tệ',
+    2: '2 sao - Tệ',
+    3: '3 sao - Bình thường',
+    4: '4 sao - Tốt',
+    5: '5 sao - Tuyệt vời',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '8px 0 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '4px 2px',
+              cursor: 'pointer',
+              color: star <= current ? '#f59e0b' : 'var(--border, #cbd5e1)',
+              transition: 'transform 0.15s ease',
+              display: 'inline-flex',
+            }}
+            onMouseEnter={() => setHover(star)}
+            onMouseLeave={() => setHover(null)}
+            onClick={() => onChange(star)}
+            aria-label={`${star} sao`}
+          >
+            <Star
+              size={28}
+              fill={star <= current ? 'currentColor' : 'none'}
+              strokeWidth={1.5}
+            />
+          </button>
+        ))}
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--pitch, #0b3025)', marginLeft: 8 }}>
+          {labels[current] ?? `${current} sao`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function CustomerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -64,8 +120,11 @@ export function CustomerBookingsPage() {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellingWaitlist, setCancellingWaitlist] = useState<{ id: number; isOffered: boolean } | null>(null)
   const [reviewing, setReviewing] = useState<Booking | null>(null)
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
+  const [reviewRating, setReviewRating] = useState(5)
   const [complaintBooking, setComplaintBooking] = useState<Booking | null>(null)
   const [complaintCategory, setComplaintCategory] = useState('refund_pending')
   const [complaintContent, setComplaintContent] = useState('')
@@ -74,6 +133,7 @@ export function CustomerBookingsPage() {
   const openReview = (booking: Booking) => {
     setReviewing(booking)
     setActiveReviewing(booking)
+    setReviewRating(5)
   }
 
   const openComplaint = (booking: Booking) => {
@@ -97,10 +157,12 @@ export function CustomerBookingsPage() {
   })
 
   const cancel = useMutation({
-    mutationFn: async (booking: Booking) => api.patch(`/customer/bookings/${booking.id}/cancel`),
-    onSuccess: (_, booking) => {
+    mutationFn: async ({ booking, cancelReason }: { booking: Booking; cancelReason?: string }) =>
+      api.patch(`/customer/bookings/${booking.id}/cancel`, { cancel_reason: cancelReason }),
+    onSuccess: (_, { booking }) => {
       toast.success(`Đã hủy lịch đặt sân #BK-${booking.id}.`)
       setCancellingBooking(null)
+      setCancelReason('')
       void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
     },
@@ -179,7 +241,7 @@ export function CustomerBookingsPage() {
     const data = new FormData(event.currentTarget)
     review.mutate({
       booking_id: reviewing.id,
-      rating: Number(data.get('rating')),
+      rating: reviewRating,
       comment: String(data.get('comment')),
     })
   }
@@ -509,7 +571,7 @@ export function CustomerBookingsPage() {
                         type="button"
                         className="button button--ghost button--danger"
                         disabled={cancelWaitlist.isPending}
-                        onClick={() => cancelWaitlist.mutate(item.id)}
+                        onClick={() => setCancellingWaitlist({ id: item.id, isOffered: true })}
                       >
                         <XCircle size={16} /> Bỏ lượt
                       </button>
@@ -521,7 +583,7 @@ export function CustomerBookingsPage() {
                       type="button"
                       className="button button--ghost button--small"
                       disabled={cancelWaitlist.isPending}
-                      onClick={() => cancelWaitlist.mutate(item.id)}
+                      onClick={() => setCancellingWaitlist({ id: item.id, isOffered: false })}
                     >
                       Hủy giữ chỗ
                     </button>
@@ -531,31 +593,38 @@ export function CustomerBookingsPage() {
             ))}
           </div>
 
-          {!waitlists.isPending && !waitlists.data?.data.length && (
+          {waitlists.isPending && (
+            <QueryState type="loading" message="Đang tải danh sách hàng đợi giữ chỗ..." />
+          )}
+
+          {waitlists.isError && (
+            <QueryState
+              type="error"
+              message={errorMessage(waitlists.error)}
+              onRetry={() => void waitlists.refetch()}
+            />
+          )}
+
+          {!waitlists.isPending && !waitlists.isError && !waitlists.data?.data.length && (
             <Empty text="Bạn chưa tham gia hàng đợi giữ chỗ nào. Khi xem chi tiết sân có khung giờ đã kín, hãy bấm vào khung giờ đó để tham gia hàng đợi." />
           )}
         </section>
       )}
 
+      {/* Modal Đánh giá sân */}
       <Modal isOpen={!!reviewing} onClose={() => setReviewing(null)} asForm onSubmit={submitReview}>
         <h2>Đánh giá {currentReview?.field?.name}</h2>
         <label>
-          <span>Số sao</span>
-          <select name="rating" defaultValue="5">
-            {[5, 4, 3, 2, 1].map((n) => (
-              <option value={n} key={n}>
-                {n} sao
-              </option>
-            ))}
-          </select>
+          <span>Đánh giá chất lượng</span>
+          <StarRatingInput value={reviewRating} onChange={setReviewRating} />
         </label>
         <label>
-          <span>Nội dung</span>
+          <span>Nội dung đánh giá</span>
           <textarea
             name="comment"
             required
             rows={3}
-            placeholder="Chia sẻ cảm nhận về chất lượng sân, dịch vụ..."
+            placeholder="Chia sẻ cảm nhận về chất lượng mặt sân, ánh sáng, dịch vụ..."
           />
         </label>
         <div className="modal__actions">
@@ -568,26 +637,117 @@ export function CustomerBookingsPage() {
         </div>
       </Modal>
 
-      <ConfirmModal
+      {/* Modal Huỷ đơn đặt sân khách hàng */}
+      <Modal
         isOpen={!!cancellingBooking}
-        title="Xác nhận hủy đặt sân"
-        message={`Bạn có chắc muốn hủy lịch đặt sân "${cancellingBooking?.field?.name}" ngày ${
-          cancellingBooking?.booking_date
-            ? formatDate(cancellingBooking.booking_date)
-            : ''
-        } (${cancellingBooking?.time_slot?.start_time} - ${cancellingBooking?.time_slot?.end_time})? ${
-          cancellingBooking?.cancel_penalty
-            ? 'Cảnh báo: Đang trong khung huỷ muộn (dưới 4 giờ trước giờ chơi), huỷ lúc này bạn sẽ KHÔNG được hoàn cọc và bị trừ 15 điểm uy tín.'
-            : 'Huỷ lúc này được hoàn tiền cọc và không bị trừ điểm uy tín.'
-        }`}
-        confirmText="Hủy lịch đặt"
-        cancelText="Giữ lại"
-        danger
-        busy={cancel.isPending}
-        onClose={() => setCancellingBooking(null)}
-        onConfirm={() => {
-          if (cancellingBooking) cancel.mutate(cancellingBooking)
+        onClose={() => {
+          setCancellingBooking(null)
+          setCancelReason('')
         }}
+        title={`Hủy đơn đặt sân #BK-${cancellingBooking?.id}`}
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (cancellingBooking) {
+            cancel.mutate({
+              booking: cancellingBooking,
+              cancelReason: cancelReason.trim() || undefined,
+            })
+          }
+        }}
+      >
+        {cancellingBooking && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14 }}>
+              Bạn đang yêu cầu hủy đơn đặt sân <strong>{cancellingBooking.field?.name}</strong> ngày{' '}
+              <strong>{formatDate(cancellingBooking.booking_date)}</strong> ({cancellingBooking.time_slot?.start_time} – {cancellingBooking.time_slot?.end_time}).
+            </p>
+
+            {(() => {
+              const ownerPhone =
+                cancellingBooking.field?.owner?.business?.business_phone ||
+                cancellingBooking.field?.owner?.phone
+              if (!ownerPhone) return null
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-sunken, #f8fafc)', fontSize: 13 }}>
+                  <Phone size={15} style={{ color: 'var(--pitch)' }} />
+                  <span>
+                    Hotline chủ sân: <a href={`tel:${ownerPhone}`} style={{ fontWeight: 700, color: 'var(--pitch)' }}>{ownerPhone}</a> (Liên hệ nếu bạn muốn dời lịch thay vì hủy đơn).
+                  </span>
+                </div>
+              )
+            })()}
+
+            {cancellingBooking.cancel_penalty ? (
+              <div className="notice notice--error" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>Cảnh báo hủy muộn:</strong> Đang trong khung giờ hủy muộn (dưới 4 tiếng trước giờ chơi). Hủy đơn lúc này bạn sẽ <strong>KHÔNG được hoàn tiền cọc</strong> và bị <strong>trừ 15 điểm uy tín</strong>.
+                </div>
+              </div>
+            ) : (
+              <div className="notice notice--success" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                <CheckCircle2 size={18} />
+                <div>
+                  <strong>Hủy trong thời hạn hợp lệ:</strong> Bạn được <strong>hoàn tiền cọc</strong> và <strong>không bị trừ điểm uy tín</strong>.
+                </div>
+              </div>
+            )}
+
+            <label style={{ margin: 0 }}>
+              <span>Lý do hủy đơn (tùy chọn)</span>
+              <textarea
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="VD: Có việc bận đột xuất, thời tiết không thuận lợi..."
+                maxLength={500}
+              />
+            </label>
+
+            <div className="modal__actions" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => {
+                  setCancellingBooking(null)
+                  setCancelReason('')
+                }}
+              >
+                Giữ lại đơn
+              </button>
+              <button
+                type="submit"
+                className="button button--danger"
+                disabled={cancel.isPending}
+              >
+                {cancel.isPending ? 'Đang hủy...' : 'Xác nhận hủy đặt sân'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirm modal for waitlist actions */}
+      <ConfirmModal
+        isOpen={!!cancellingWaitlist}
+        onClose={() => setCancellingWaitlist(null)}
+        onConfirm={() => {
+          if (cancellingWaitlist) {
+            cancelWaitlist.mutate(cancellingWaitlist.id)
+            setCancellingWaitlist(null)
+          }
+        }}
+        title={cancellingWaitlist?.isOffered ? 'Bỏ lượt nhận suất sân' : 'Hủy giữ chỗ trong hàng đợi'}
+        message={
+          cancellingWaitlist?.isOffered
+            ? 'Bạn có chắc chắn muốn bỏ lượt nhận suất sân này không? Suất sân sẽ được chuyển cho người tiếp theo có điểm uy tín cao nhất trong hàng đợi.'
+            : 'Bạn có chắc chắn muốn rời khỏi hàng đợi giữ chỗ của khung giờ này không?'
+        }
+        confirmText={cancellingWaitlist?.isOffered ? 'Bỏ lượt' : 'Hủy giữ chỗ'}
+        cancelText="Giữ lại"
+        danger={true}
+        busy={cancelWaitlist.isPending}
       />
 
       <Modal

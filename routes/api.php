@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\FieldSuggestionController;
 use App\Http\Controllers\Api\V1\MatchmakingController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\BookingProofController;
 use App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Api\V1\FieldOwner;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
+        Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/complaints', [Customer\ComplaintController::class, 'index']);
             Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');

@@ -20,6 +20,7 @@ import { errorMessage } from '../../api/errors'
 import { prepareFile } from '../../api/upload'
 import { useToast } from '../../components/Toast'
 import type { ApiEnvelope, OwnerProfile } from '../../types/api'
+import { VIETNAMESE_BANKS } from '../../utils/banks'
 import { PageTitle } from './CustomerPages'
 
 const STEPS = [
@@ -84,6 +85,7 @@ export function OwnerApplicationPage() {
     business_phone: '',
     description: '',
     bank_name: '',
+    bank_bin: '',
     bank_account_number: '',
     bank_account_holder: '',
     business_license: '',
@@ -112,6 +114,7 @@ export function OwnerApplicationPage() {
         business_phone: data.business_phone ?? prev.business_phone,
         description: data.description ?? prev.description,
         bank_name: data.bank_name ?? prev.bank_name,
+        bank_bin: data.bank_bin ?? prev.bank_bin,
         bank_account_number: data.bank_account_number ?? prev.bank_account_number,
         bank_account_holder: data.bank_account_holder ?? prev.bank_account_holder,
         business_license: data.business_license ?? prev.business_license,
@@ -249,7 +252,7 @@ export function OwnerApplicationPage() {
       }
     } else if (s === 3) {
       if (!formData.bank_name.trim()) {
-        newErrors.bank_name = 'Vui lòng nhập tên ngân hàng nhận thanh toán.'
+        newErrors.bank_name = 'Vui lòng chọn ngân hàng nhận thanh toán.'
       }
       if (!formData.bank_account_number.trim()) {
         newErrors.bank_account_number = 'Vui lòng nhập số tài khoản ngân hàng.'
@@ -330,6 +333,9 @@ export function OwnerApplicationPage() {
       fd.append('description', formData.description.trim())
     }
     fd.append('bank_name', formData.bank_name.trim())
+    if (formData.bank_bin) {
+      fd.append('bank_bin', formData.bank_bin.trim())
+    }
     fd.append('bank_account_number', formData.bank_account_number.trim())
     fd.append('bank_account_holder', formData.bank_account_holder.trim().toUpperCase())
     fd.append('business_license', formData.business_license.trim())
@@ -565,13 +571,34 @@ export function OwnerApplicationPage() {
                   <div className="form-grid">
                     <label>
                       <span>Ngân hàng thụ hưởng</span>
-                      <input
+                      <select
                         name="bank_name"
                         value={formData.bank_name}
-                        onChange={handleChange}
-                        placeholder="Vietcombank, MB Bank, Techcombank..."
+                        onChange={(e) => {
+                          const val = e.target.value
+                          const found = VIETNAMESE_BANKS.find((b) => b.short_name === val)
+                          setFormData((prev) => ({
+                            ...prev,
+                            bank_name: val,
+                            bank_bin: found?.bin ?? '',
+                          }))
+                          if (errors.bank_name) {
+                            setErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.bank_name
+                              return next
+                            })
+                          }
+                        }}
                         className={errors.bank_name ? 'input--invalid' : ''}
-                      />
+                      >
+                        <option value="">-- Chọn ngân hàng thụ hưởng --</option>
+                        {VIETNAMESE_BANKS.map((b) => (
+                          <option key={b.bin} value={b.short_name}>
+                            {b.short_name} – {b.name}
+                          </option>
+                        ))}
+                      </select>
                       {errors.bank_name && <span className="input-error">{errors.bank_name}</span>}
                     </label>
                     <label>

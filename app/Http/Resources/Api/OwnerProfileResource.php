@@ -20,6 +20,7 @@ class OwnerProfileResource extends JsonResource
             'description' => $this->description,
             'verification_status' => $this->verification_status,
             'bank_name' => $this->bank_name,
+            'bank_bin' => $this->bank_bin ?? \App\Support\Banks::guessBin($this->bank_name),
             'bank_account_number' => $this->bank_account_number,
             'bank_account_holder' => $this->bank_account_holder,
             'terms_version' => $this->terms_version,

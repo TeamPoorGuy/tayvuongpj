@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { useState, useMemo } from 'react'
+import axios from 'axios'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
 import { useAuth } from '../context/auth-context'
@@ -206,14 +207,49 @@ export function FieldDetailPage() {
     )
   }
 
+  if (field.isError) {
+    const isNotFound = axios.isAxiosError(field.error) && field.error.response?.status === 404
+    if (!isNotFound) {
+      return (
+        <div className="shell page-section">
+          <div className="empty-page">
+            <h1>Lỗi tải thông tin sân</h1>
+            <p>{errorMessage(field.error) || 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối mạng.'}</p>
+            <button
+              type="button"
+              className="button button--brand"
+              onClick={() => void field.refetch()}
+              style={{ marginTop: 16 }}
+            >
+              Thử lại
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="shell page-section">
+        <div className="empty-page">
+          <h1>Không tìm thấy sân</h1>
+          <p>Sân bạn đang tìm kiếm không tồn tại hoặc đã tạm dừng hoạt động.</p>
+          <Link to="/fields" className="button button--brand" style={{ marginTop: 16 }}>
+            Khám phá sân khác
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   if (!field.data || !item) {
     return (
-      <div className="empty-page">
-        <h1>Không tìm thấy sân</h1>
-        <p>Sân bạn đang tìm kiếm có thể đã tạm dừng hoặc đổi tên.</p>
-        <Link to="/fields" className="button button--brand" style={{ marginTop: 16 }}>
-          Khám phá sân khác
-        </Link>
+      <div className="shell page-section">
+        <div className="empty-page">
+          <h1>Không tìm thấy sân</h1>
+          <p>Sân bạn đang tìm kiếm có thể đã tạm dừng hoặc đổi tên.</p>
+          <Link to="/fields" className="button button--brand" style={{ marginTop: 16 }}>
+            Khám phá sân khác
+          </Link>
+        </div>
       </div>
     )
   }

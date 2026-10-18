@@ -35,11 +35,20 @@ const destination = (user: User) => {
     : '/bookings'
 }
 
+function sanitizeRedirect(target?: string | null): string | null {
+  if (!target) return null
+  if (target.startsWith('/') && !target.startsWith('//') && !target.includes('\\')) {
+    return target
+  }
+  return null
+}
+
 export function LoginPage() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [params] = useSearchParams()
+  const fromParam = sanitizeRedirect(params.get('from') || (location.state as { from?: string })?.from)
   const urlError = params.get('error') === 'disabled' ? 'Tài khoản của bạn đã bị khóa.' : params.get('error') ? 'Đăng nhập Google không thành công. Vui lòng thử lại.' : ''
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,20 +57,23 @@ export function LoginPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError('')
     const values = new FormData(event.currentTarget)
-    try { const next = await login({ email: String(values.get('email')), password: String(values.get('password')), remember: values.get('remember') === 'on' }); navigate((location.state as { from?: string })?.from ?? destination(next)) }
+    try { const next = await login({ email: String(values.get('email')), password: String(values.get('password')), remember: values.get('remember') === 'on' }); navigate(fromParam ?? destination(next)) }
     catch (reason) { setError(errorMessage(reason)) } finally { setBusy(false) }
   }
 
-  return <AuthShell title="Chào mừng trở lại" copy="Đăng nhập để quản lý lịch chơi và sân của bạn."><form onSubmit={submit} className="form-stack"><GoogleButton /><label><span>Email</span><div className="input-icon"><Mail /><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></div></label><label><span>Mật khẩu</span><div className="input-icon"><LockKeyhole /><input name="password" type="password" required autoComplete="current-password" placeholder="Nhập mật khẩu" /></div></label><div className="form-row-between"><label className="check-line"><input name="remember" type="checkbox" /> Ghi nhớ đăng nhập</label><Link className="form-link" to="/forgot-password">Quên mật khẩu?</Link></div>{(error || urlError) && <div className="notice notice--error">{error || urlError}</div>}<button disabled={busy} className="button button--brand button--block">{busy ? 'Đang đăng nhập...' : 'Đăng nhập'} <ArrowRight size={16} /></button><p className="form-switch">Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></p></form></AuthShell>
+  return <AuthShell title="Chào mừng trở lại" copy="Đăng nhập để quản lý lịch chơi và sân của bạn."><form onSubmit={submit} className="form-stack"><GoogleButton /><label><span>Email</span><div className="input-icon"><Mail /><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></div></label><label><span>Mật khẩu</span><div className="input-icon"><LockKeyhole /><input name="password" type="password" required autoComplete="current-password" placeholder="Nhập mật khẩu" /></div></label><div className="form-row-between"><label className="check-line"><input name="remember" type="checkbox" /> Ghi nhớ đăng nhập</label><Link className="form-link" to="/forgot-password">Quên mật khẩu?</Link></div>{(error || urlError) && <div className="notice notice--error">{error || urlError}</div>}<button disabled={busy} className="button button--brand button--block">{busy ? 'Đang đăng nhập...' : 'Đăng nhập'} <ArrowRight size={16} /></button><p className="form-switch">Chưa có tài khoản? <Link to={`/register${fromParam ? `?from=${encodeURIComponent(fromParam)}` : ''}`} state={{ from: fromParam }}>Đăng ký ngay</Link></p></form></AuthShell>
 }
 
 export function RegisterPage() {
   const { user, register } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [params] = useSearchParams()
+  const fromParam = sanitizeRedirect(params.get('from') || (location.state as { from?: string })?.from)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
-  if (user) return <Navigate to={destination(user)} replace />
+  if (user) return <Navigate to={fromParam ?? destination(user)} replace />
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError('')
@@ -72,7 +84,7 @@ export function RegisterPage() {
     }
     const values = Object.fromEntries(new FormData(event.currentTarget).entries())
     values.terms_accepted = '1'
-    try { const next = await register(values); navigate(destination(next)) }
+    try { const next = await register(values); navigate(fromParam ?? destination(next)) }
     catch (reason) { setError(errorMessage(reason)) } finally { setBusy(false) }
   }
 
@@ -114,7 +126,7 @@ export function RegisterPage() {
         <button disabled={busy} className="button button--brand button--block">
           {busy ? 'Đang tạo...' : 'Tạo tài khoản'} <ArrowRight size={16} />
         </button>
-        <p className="form-switch">Đã có tài khoản? <Link to="/login">Đăng nhập</Link></p>
+        <p className="form-switch">Đã có tài khoản? <Link to={`/login${fromParam ? `?from=${encodeURIComponent(fromParam)}` : ''}`} state={{ from: fromParam }}>Đăng nhập</Link></p>
       </form>
     </AuthShell>
   )

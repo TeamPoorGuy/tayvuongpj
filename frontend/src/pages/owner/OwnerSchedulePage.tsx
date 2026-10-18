@@ -8,6 +8,7 @@ import {
   Clock,
   Clock3,
   DollarSign,
+  Eye,
   Filter,
   Info,
   List,
@@ -21,9 +22,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
+import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { StatusBadge } from '../../components/StatusBadge'
 import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
+import { PaymentProofModal } from '../../components/PaymentProofModal'
+import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { getLocalTodayString } from '../../utils/date'
 import type { Booking, Paginated, SportsField } from '../../types/api'
@@ -91,6 +95,8 @@ export function OwnerSchedulePage() {
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [isRejecting, setIsRejecting] = useState(false)
+  const [showProof, setShowProof] = useState(false)
+  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
 
   // 1. Fetch Owner Fields
   const fieldsQuery = useQuery({
@@ -174,6 +180,23 @@ export function OwnerSchedulePage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
+    },
+  })
+
+  // 6. Record No-Show Mutation
+  const noShow = useMutation({
+    mutationFn: async (booking: Booking) =>
+      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
+    onSuccess: (res) => {
+      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
+      setNoShowingBooking(null)
+      setDetailBooking(null)
+      void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
     },
   })
 
@@ -385,6 +408,28 @@ export function OwnerSchedulePage() {
           <span>Khung giờ trống</span>
         </div>
       </div>
+
+      {(fieldsQuery.isPending || bookingsQuery.isPending) && (
+        <QueryState type="loading" message="Đang tải dữ liệu lịch đặt sân..." />
+      )}
+
+      {(fieldsQuery.isError || bookingsQuery.isError) && (
+        <QueryState
+          type="error"
+          message={errorMessage(fieldsQuery.error || bookingsQuery.error)}
+          onRetry={() => {
+            void fieldsQuery.refetch()
+            void bookingsQuery.refetch()
+          }}
+        />
+      )}
+
+      {!fieldsQuery.isPending && !fieldsQuery.isError && fields.length === 0 && (
+        <div className="notice notice--soft" style={{ margin: '20px 0' }}>
+          Bạn chưa có sân thể thao nào trong cơ sở.{' '}
+          <Link to="/owner/fields" style={{ textDecoration: 'underline', fontWeight: 600 }}>Tạo sân mới ngay</Link>
+        </div>
+      )}
 
       {/* MOBILE LIST VIEW (Auto on < 768px or toggle) */}
       <div className="mobile-schedule-wrap hide-on-desktop">
@@ -704,6 +749,16 @@ export function OwnerSchedulePage() {
                       ? 'Khách chuyển khoản cọc hoặc trả hết trước khi đơn được xác nhận'
                       : 'Duyệt đơn để khách chuyển khoản cọc hoặc trả hết'}
                 </small>
+                {detailBooking.payment?.proof_url && (
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    style={{ marginTop: 6 }}
+                    onClick={() => setShowProof(true)}
+                  >
+                    <Eye size={13} /> Xem biên lai chuyển khoản
+                  </button>
+                )}
               </div>
 
               <div className="detail-item">
@@ -800,16 +855,51 @@ export function OwnerSchedulePage() {
                           <UserCheck size={15} /> Khách đã đến (+10đ)
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="button button--brand"
-                        disabled={updateStatus.isPending}
-                        onClick={() =>
-                          updateStatus.mutate({ bookingId: detailBooking.id, status: 'completed' })
+                      {(() => {
+                        const matchEnded = (() => {
+                          if (!detailBooking.booking_date || !detailBooking.time_slot?.end_time) return false
+                          const matchEndTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.end_time}`).getTime()
+                          return !isNaN(matchEndTime) && matchEndTime <= Date.now()
+                        })()
+
+                        const matchStarted = (() => {
+                          if (!detailBooking.booking_date || !detailBooking.time_slot?.start_time) return false
+                          const matchStartTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.start_time}`).getTime()
+                          return !isNaN(matchStartTime) && matchStartTime <= Date.now()
+                        })()
+
+                        if (detailBooking.checked_in_at && matchEnded) {
+                          return (
+                            <button
+                              type="button"
+                              className="button button--brand"
+                              disabled={updateStatus.isPending}
+                              onClick={() =>
+                                updateStatus.mutate({ bookingId: detailBooking.id, status: 'completed' })
+                              }
+                            >
+                              Hoàn tất lượt chơi
+                            </button>
+                          )
                         }
-                      >
-                        Hoàn tất lượt chơi
-                      </button>
+
+                        if (!detailBooking.checked_in_at && matchStarted) {
+                          return (
+                            <button
+                              type="button"
+                              className="button button--ghost"
+                              style={{ color: '#b45309', borderColor: '#fde68a' }}
+                              disabled={noShow.isPending}
+                              onClick={() => setNoShowingBooking(detailBooking)}
+                              title="Ghi nhận khách không tới sân theo lịch"
+                            >
+                              Vắng mặt
+                            </button>
+                          )
+                        }
+
+                        return null
+                      })()}
                     </>
                   )}
                 </div>
@@ -818,6 +908,29 @@ export function OwnerSchedulePage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        isOpen={!!noShowingBooking}
+        title="Ghi nhận khách vắng mặt (No-show)"
+        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
+        confirmText="Xác nhận vắng mặt"
+        cancelText="Đóng"
+        danger
+        busy={noShow.isPending}
+        onClose={() => setNoShowingBooking(null)}
+        onConfirm={() => {
+          if (noShowingBooking) {
+            noShow.mutate(noShowingBooking)
+          }
+        }}
+      />
+
+      <PaymentProofModal
+        isOpen={showProof}
+        onClose={() => setShowProof(false)}
+        proofUrl={detailBooking?.payment?.proof_url}
+        title={`Biên lai đơn #BK-${detailBooking ? String(detailBooking.id).padStart(5, '0') : ''}`}
+      />
     </div>
   )
 }

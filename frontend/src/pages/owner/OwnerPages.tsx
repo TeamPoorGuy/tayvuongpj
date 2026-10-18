@@ -38,6 +38,7 @@ import type {
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { Avatar } from '../../components/Avatar'
+import { VIETNAMESE_BANKS } from '../../utils/banks'
 import { formatDate, formatMoney } from '../../utils/format'
 
 export function OwnerDashboardPage() {
@@ -46,6 +47,39 @@ export function OwnerDashboardPage() {
     queryKey: ['owner', 'dashboard'],
     queryFn: async () => (await api.get<ApiEnvelope<OwnerDashboard>>('/field-owner/dashboard')).data.data,
   })
+
+  if (dashboard.isPending) {
+    return (
+      <>
+        <PageTitle
+          icon={<ChartNoAxesCombined />}
+          kicker="Tổng quan"
+          title="Nhịp vận hành hôm nay"
+          copy="Theo dõi sân, lượt đặt và doanh thu trong một màn hình."
+        />
+        <QueryState type="loading" message="Đang tải dữ liệu tổng quan..." />
+      </>
+    )
+  }
+
+  if (dashboard.isError) {
+    return (
+      <>
+        <PageTitle
+          icon={<ChartNoAxesCombined />}
+          kicker="Tổng quan"
+          title="Nhịp vận hành hôm nay"
+          copy="Theo dõi sân, lượt đặt và doanh thu trong một màn hình."
+        />
+        <QueryState
+          type="error"
+          message={errorMessage(dashboard.error)}
+          onRetry={() => void dashboard.refetch()}
+        />
+      </>
+    )
+  }
+
   const data = dashboard.data
   return (
     <>
@@ -112,6 +146,7 @@ export function OwnerFieldsPage() {
   const [slotField, setSlotField] = useState<SportsField | null>(null)
   const [galleryField, setGalleryField] = useState<SportsField | null>(null)
   const [deletingField, setDeletingField] = useState<SportsField | null>(null)
+  const [togglingField, setTogglingField] = useState<SportsField | null>(null)
 
   const fields = useQuery({
     queryKey: ['owner', 'fields', page],
@@ -178,6 +213,16 @@ export function OwnerFieldsPage() {
         }
       />
       <section className="data-panel">
+        {fields.isPending && (
+          <QueryState type="loading" message="Đang tải danh sách sân của bạn..." />
+        )}
+        {fields.isError && (
+          <QueryState
+            type="error"
+            message={errorMessage(fields.error)}
+            onRetry={() => void fields.refetch()}
+          />
+        )}
         <div className="table-wrap">
           <table>
             <thead>
@@ -212,7 +257,7 @@ export function OwnerFieldsPage() {
                       role="switch"
                       aria-checked={field.is_active}
                       className="switch"
-                      onClick={() => toggle.mutate(field)}
+                      onClick={() => setTogglingField(field)}
                       disabled={toggle.isPending}
                       title="Bật/tắt nhận lịch đặt sân"
                     >
@@ -309,6 +354,27 @@ export function OwnerFieldsPage() {
         onClose={() => setDeletingField(null)}
         onConfirm={() => {
           if (deletingField) deleteField.mutate(deletingField)
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={!!togglingField}
+        title={togglingField?.is_active ? `Tạm ngưng nhận lịch sân "${togglingField?.name}"` : `Mở nhận lịch sân "${togglingField?.name}"`}
+        message={
+          togglingField?.is_active
+            ? 'Khách hàng sẽ không thể tìm thấy hoặc đặt lịch mới tại sân này khi đang tạm ngưng.'
+            : 'Khung giờ trống của sân này sẽ sẵn sàng để khách hàng tìm kiếm và đặt lịch.'
+        }
+        confirmText={togglingField?.is_active ? 'Tạm ngưng' : 'Mở nhận lịch'}
+        cancelText="Giữ nguyên"
+        danger={togglingField?.is_active}
+        busy={toggle.isPending}
+        onClose={() => setTogglingField(null)}
+        onConfirm={() => {
+          if (togglingField) {
+            toggle.mutate(togglingField)
+            setTogglingField(null)
+          }
         }}
       />
     </>
@@ -422,6 +488,7 @@ function SlotManagerModal({
   const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 90))
   const [slotPrice, setSlotPrice] = useState('')
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null)
+  const [togglingSlot, setTogglingSlot] = useState<TimeSlot | null>(null)
 
   const addSlot = useMutation({
     mutationFn: async (payload: { start_time: string; end_time: string; price_per_hour?: number | null }) =>
@@ -557,7 +624,7 @@ function SlotManagerModal({
                       <button
                         type="button"
                         className={`status ${slot.is_active ? 'status--approved' : 'status--inactive'}`}
-                        onClick={() => toggleSlot.mutate(slot)}
+                        onClick={() => setTogglingSlot(slot)}
                         title="Bấm để bật/tắt nhận khách khung giờ này"
                       >
                         {slot.is_active ? 'Hoạt động' : 'Tạm dừng'}
@@ -584,6 +651,27 @@ function SlotManagerModal({
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={!!togglingSlot}
+        title={togglingSlot?.is_active ? 'Tạm dừng khung giờ' : 'Mở hoạt động khung giờ'}
+        message={
+          togglingSlot?.is_active
+            ? `Bạn có chắc muốn tạm dừng khung giờ ${togglingSlot.start_time} – ${togglingSlot.end_time}? Khách hàng sẽ không thể đặt lịch vào khung giờ này trong những ngày tới.`
+            : `Mở hoạt động khung giờ ${togglingSlot?.start_time} – ${togglingSlot?.end_time}? Khung giờ này sẽ sẵn sàng để khách tìm kiếm và đặt lịch.`
+        }
+        confirmText={togglingSlot?.is_active ? 'Tạm dừng' : 'Mở hoạt động'}
+        cancelText="Giữ nguyên"
+        danger={togglingSlot?.is_active}
+        busy={toggleSlot.isPending}
+        onClose={() => setTogglingSlot(null)}
+        onConfirm={() => {
+          if (togglingSlot) {
+            toggleSlot.mutate(togglingSlot)
+            setTogglingSlot(null)
+          }
+        }}
+      />
 
       <ConfirmModal
         isOpen={!!deletingSlot}
@@ -822,6 +910,21 @@ export function OwnerBookingsPage() {
 
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [checkInInputCode, setCheckInInputCode] = useState('')
+  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
+
+  const noShow = useMutation({
+    mutationFn: async (booking: Booking) =>
+      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
+    onSuccess: (res) => {
+      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
+      setNoShowingBooking(null)
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
+    },
+  })
 
   const checkIn = useMutation({
     mutationFn: async (booking: Booking) =>
@@ -940,13 +1043,47 @@ export function OwnerBookingsPage() {
                         <UserCheck size={13} /> Khách đã đến
                       </button>
                     )}
-                    <button
-                      className="button button--dark button--small"
-                      onClick={() => update.mutate({ booking, status: 'completed' })}
-                      disabled={update.isPending}
-                    >
-                      Hoàn thành
-                    </button>
+                    {(() => {
+                      const matchEnded = (() => {
+                        if (!booking.booking_date || !booking.time_slot?.end_time) return false
+                        const matchEndTime = new Date(`${booking.booking_date}T${booking.time_slot.end_time}`).getTime()
+                        return !isNaN(matchEndTime) && matchEndTime <= Date.now()
+                      })()
+
+                      const matchStarted = (() => {
+                        if (!booking.booking_date || !booking.time_slot?.start_time) return false
+                        const matchStartTime = new Date(`${booking.booking_date}T${booking.time_slot.start_time}`).getTime()
+                        return !isNaN(matchStartTime) && matchStartTime <= Date.now()
+                      })()
+
+                      if (booking.checked_in_at && matchEnded) {
+                        return (
+                          <button
+                            className="button button--dark button--small"
+                            onClick={() => update.mutate({ booking, status: 'completed' })}
+                            disabled={update.isPending}
+                          >
+                            Hoàn thành
+                          </button>
+                        )
+                      }
+
+                      if (!booking.checked_in_at && matchStarted) {
+                        return (
+                          <button
+                            className="button button--ghost button--small"
+                            style={{ color: '#b45309', borderColor: '#fde68a' }}
+                            onClick={() => setNoShowingBooking(booking)}
+                            disabled={noShow.isPending}
+                            title="Ghi nhận khách không tới sân theo lịch"
+                          >
+                            Vắng mặt
+                          </button>
+                        )
+                      }
+
+                      return null
+                    })()}
                     <button
                       className="button button--danger button--small"
                       onClick={() => setRejectingBooking(booking)}
@@ -1064,6 +1201,22 @@ export function OwnerBookingsPage() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={!!noShowingBooking}
+        title="Ghi nhận khách vắng mặt (No-show)"
+        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
+        confirmText="Xác nhận vắng mặt"
+        cancelText="Đóng"
+        danger
+        busy={noShow.isPending}
+        onClose={() => setNoShowingBooking(null)}
+        onConfirm={() => {
+          if (noShowingBooking) {
+            noShow.mutate(noShowingBooking)
+          }
+        }}
+      />
     </>
   )
 }
@@ -1127,6 +1280,12 @@ export function OwnerProfilePage() {
     queryKey: ['owner', 'profile'],
     queryFn: async () => (await api.get<ApiEnvelope<OwnerProfile>>('/field-owner/profile')).data.data,
   })
+  const [selectedBank, setSelectedBank] = useState<string | null>(null)
+  const [selectedBin, setSelectedBin] = useState<string | null>(null)
+
+  const currentBank = selectedBank ?? profile.data?.bank_name ?? ''
+  const currentBin = selectedBin ?? profile.data?.bank_bin ?? ''
+
   const update = useMutation({
     mutationFn: async (payload: Record<string, string>) => api.put('/field-owner/profile', payload),
     onSuccess: () => {
@@ -1137,6 +1296,38 @@ export function OwnerProfilePage() {
       toast.error(errorMessage(err), 'Không thể lưu hồ sơ')
     },
   })
+
+  if (profile.isPending) {
+    return (
+      <>
+        <PageTitle
+          icon={<CircleUserRound />}
+          kicker="Đối tác"
+          title="Hồ sơ cơ sở"
+          copy="Thông tin dùng trong quá trình kiểm duyệt và liên hệ với khách hàng."
+        />
+        <QueryState type="loading" message="Đang tải thông tin hồ sơ cơ sở..." />
+      </>
+    )
+  }
+
+  if (profile.isError) {
+    return (
+      <>
+        <PageTitle
+          icon={<CircleUserRound />}
+          kicker="Đối tác"
+          title="Hồ sơ cơ sở"
+          copy="Thông tin dùng trong quá trình kiểm duyệt và liên hệ với khách hàng."
+        />
+        <QueryState
+          type="error"
+          message={errorMessage(profile.error)}
+          onRetry={() => void profile.refetch()}
+        />
+      </>
+    )
+  }
 
   return (
     <>
@@ -1193,8 +1384,25 @@ export function OwnerProfilePage() {
         </p>
         <div className="form-grid">
           <label>
-            <span>Ngân hàng</span>
-            <input name="bank_name" defaultValue={profile.data?.bank_name ?? ''} placeholder="Vietcombank, MB Bank..." />
+            <span>Ngân hàng thụ hưởng</span>
+            <select
+              name="bank_name"
+              value={currentBank}
+              onChange={(e) => {
+                const val = e.target.value
+                setSelectedBank(val)
+                const found = VIETNAMESE_BANKS.find((b) => b.short_name === val)
+                setSelectedBin(found?.bin ?? '')
+              }}
+            >
+              <option value="">-- Chọn ngân hàng thụ hưởng --</option>
+              {VIETNAMESE_BANKS.map((b) => (
+                <option key={b.bin} value={b.short_name}>
+                  {b.short_name} – {b.name}
+                </option>
+              ))}
+            </select>
+            <input type="hidden" name="bank_bin" value={currentBin} />
           </label>
           <label>
             <span>Số tài khoản</span>

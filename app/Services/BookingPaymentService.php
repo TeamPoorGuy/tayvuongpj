@@ -12,8 +12,10 @@ use App\Support\SafeMail;
 use App\Support\Settings;
 use Carbon\CarbonInterface;
 use Closure;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -23,7 +25,7 @@ use Illuminate\Support\Str;
 class BookingPaymentService
 {
     public function __construct(
-        private readonly StatementService $statementService = new StatementService(),
+        private readonly StatementService $statementService = new StatementService,
     ) {}
 
     /** Chủ sân duyệt đơn: mở cửa sổ thanh toán cho khách. */
@@ -60,23 +62,50 @@ class BookingPaymentService
     }
 
     /** Khách báo đã chuyển khoản (cọc hoặc trả hết). */
-    public function report(User $customer, Booking $booking, string $option): Booking
+    public function report(User $customer, Booking $booking, string $option, UploadedFile|string|null $proof = null): Booking
     {
-        $booking = $this->locked($booking, 'cancel', $customer, function (Booking $booking) use ($option) {
-            if ($booking->status !== BookingStatus::Pending || $booking->payment_status !== 'awaiting') {
-                throw new ConflictException('Đơn này hiện không ở bước chờ thanh toán.');
-            }
-            if ($booking->payment_due_at?->isPast()) {
-                throw new ConflictException('Đã quá hạn thanh toán của đơn này.');
-            }
+        $oldProofPath = null;
+        $newStoredPath = null;
 
-            $booking->update([
-                'payment_status' => 'reported',
-                'payment_option' => $option,
-                'payment_amount' => $option === 'full' ? $booking->total_price : $booking->depositAmount(),
-                'payment_reported_at' => now(),
-            ]);
-        });
+        try {
+            $booking = $this->locked($booking, 'cancel', $customer, function (Booking $booking) use ($option, $proof, &$oldProofPath, &$newStoredPath) {
+                if ($booking->status !== BookingStatus::Pending || $booking->payment_status !== 'awaiting') {
+                    throw new ConflictException('Đơn này hiện không ở bước chờ thanh toán.');
+                }
+                if ($booking->payment_due_at?->isPast()) {
+                    throw new ConflictException('Đã quá hạn thanh toán của đơn này.');
+                }
+
+                $proofPath = null;
+                if ($proof instanceof UploadedFile) {
+                    $proofPath = $proof->store('payment_proofs', 'local');
+                    $newStoredPath = $proofPath;
+                    $oldProofPath = $booking->payment_proof_path;
+                } elseif (is_string($proof)) {
+                    $proofPath = $proof;
+                    if ($booking->payment_proof_path && $booking->payment_proof_path !== $proof) {
+                        $oldProofPath = $booking->payment_proof_path;
+                    }
+                }
+
+                $booking->update([
+                    'payment_status' => 'reported',
+                    'payment_option' => $option,
+                    'payment_amount' => $option === 'full' ? $booking->total_price : $booking->depositAmount(),
+                    'payment_reported_at' => now(),
+                    'payment_proof_path' => $proofPath ?? $booking->payment_proof_path,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            if ($newStoredPath) {
+                Storage::disk('local')->delete($newStoredPath);
+            }
+            throw $e;
+        }
+
+        if ($oldProofPath) {
+            Storage::disk('local')->delete($oldProofPath);
+        }
 
         SafeMail::queue($booking->sportsField->owner->email, new BookingPaymentReported($booking));
 

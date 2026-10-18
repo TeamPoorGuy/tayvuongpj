@@ -27,6 +27,7 @@ export interface OwnerProfile {
   description: string | null
   verification_status: 'pending' | 'approved' | 'rejected' | 'suspended'
   bank_name?: string | null
+  bank_bin?: string | null
   bank_account_number?: string | null
   bank_account_holder?: string | null
   terms_version?: string | null
@@ -120,7 +121,7 @@ export interface Booking {
     base: number
     statement_id?: number | null
   }
-  bank?: { bank_name: string | null; account_number: string | null; account_holder: string | null }
+  bank?: { bank_name: string | null; bank_bin?: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
@@ -145,6 +146,7 @@ export interface BookingPayment {
   paid_at: string | null
   deposit_amount: number
   deposit_percent: number
+  proof_url?: string | null
 }
 
 export interface OwnerStatement {

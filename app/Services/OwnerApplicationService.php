@@ -43,6 +43,7 @@ class OwnerApplicationService
                 'business_license' => $data->businessLicense,
                 'description' => $data->description,
                 'bank_name' => $data->bankName,
+                'bank_bin' => $data->bankBin,
                 'bank_account_number' => $data->bankAccountNumber,
                 'bank_account_holder' => $data->bankAccountHolder,
                 'terms_version' => Settings::getString('owner_terms_version', '2026-10'),

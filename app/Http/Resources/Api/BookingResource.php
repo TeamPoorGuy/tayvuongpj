@@ -35,6 +35,7 @@ class BookingResource extends JsonResource
                 'paid_at' => $this->paid_at?->toISOString(),
                 'deposit_amount' => $this->depositAmount(),
                 'deposit_percent' => Settings::getInt('deposit_percent', 30),
+                'proof_url' => $this->payment_proof_path ? url("/api/v1/bookings/{$this->id}/payment-proof") : null,
             ],
             'refund' => $this->refund_status !== null ? [
                 'status' => $this->refund_status,
@@ -56,6 +57,7 @@ class BookingResource extends JsonResource
                     && $this->sportsField->relationLoaded('owner'),
                 fn () => [
                     'bank_name' => $this->sportsField->owner->fieldOwnerProfile?->bank_name,
+                    'bank_bin' => $this->sportsField->owner->fieldOwnerProfile?->bank_bin ?? \App\Support\Banks::guessBin($this->sportsField->owner->fieldOwnerProfile?->bank_name),
                     'account_number' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_number,
                     'account_holder' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_holder,
                 ]

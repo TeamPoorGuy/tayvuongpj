@@ -19,6 +19,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
+import { ConfirmModal } from '../components/ConfirmModal'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
 import { useToast } from '../components/Toast'
@@ -65,6 +66,7 @@ export function MatchesPage() {
   const [managingMatch, setManagingMatch] = useState<MatchRequest | null>(null)
   const [cancellingMatch, setCancellingMatch] = useState<MatchRequest | null>(null)
   const [matchCancelReason, setMatchCancelReason] = useState('')
+  const [leavingMatchId, setLeavingMatchId] = useState<number | null>(null)
 
   // Categories & Fields queries
   const categoriesQuery = useQuery({
@@ -468,9 +470,7 @@ export function MatchesPage() {
                           type="button"
                           className="button button--ghost button--small"
                           disabled={leaveMatch.isPending}
-                          onClick={() => {
-                            if (window.confirm('Bạn muốn rút khỏi trận đấu này?')) leaveMatch.mutate(match.id)
-                          }}
+                          onClick={() => setLeavingMatchId(match.id)}
                         >
                           Rút lui
                         </button>
@@ -759,6 +759,23 @@ export function MatchesPage() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={leavingMatchId !== null}
+        onClose={() => setLeavingMatchId(null)}
+        onConfirm={() => {
+          if (leavingMatchId !== null) {
+            leaveMatch.mutate(leavingMatchId)
+            setLeavingMatchId(null)
+          }
+        }}
+        title="Rút lui khỏi trận đấu"
+        message="Bạn có chắc chắn muốn rút lui khỏi trận giao lưu này không?"
+        confirmText="Rút lui"
+        cancelText="Ở lại"
+        danger
+        busy={leaveMatch.isPending}
+      />
     </div>
   )
 }

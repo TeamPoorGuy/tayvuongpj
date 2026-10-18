@@ -6,6 +6,7 @@ import { FieldsPage } from './pages/FieldsPage'
 import { FieldDetailPage } from './pages/FieldDetailPage'
 import { MatchesPage } from './pages/MatchesPage'
 import { EmailVerifiedPage, ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPages'
+import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { VerifyGate } from './components/VerifyGate'
 import { CustomerBookingsPage, CustomerProfilePage } from './pages/customer/CustomerPages'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="cau-hoi-thuong-gap" element={<FaqPage />} />
         <Route path="gioi-thieu" element={<AboutPage />} />
         <Route path="lien-he" element={<ContactPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />
@@ -90,8 +92,6 @@ export default function App() {
           <Route path="admin/logs" element={<AdminLogsPage />} />
         </Route>
       </Route>
-
-      <Route path="*" element={<div className="empty-page"><h1>404</h1><p>Trang bạn tìm không tồn tại.</p></div>} />
     </Routes>
     </VerifyGate>
   )

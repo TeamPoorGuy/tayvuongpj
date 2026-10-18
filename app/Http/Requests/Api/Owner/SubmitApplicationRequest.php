@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\Owner;
 
 use App\Models\OwnerDocument;
+use App\Support\Banks;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,6 +27,7 @@ class SubmitApplicationRequest extends FormRequest
             'business_license' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:2000'],
             'bank_name' => ['required', 'string', 'max:255'],
+            'bank_bin' => ['nullable', Rule::in(Banks::bins())],
             'bank_account_number' => ['required', 'regex:/^[0-9]{6,20}$/'],
             'bank_account_holder' => ['required', 'string', 'max:255'],
             'accept_terms' => ['accepted'],
