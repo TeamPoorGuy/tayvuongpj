@@ -326,7 +326,11 @@ class StatementService
         $bookings = Booking::whereIn('sports_field_id', $fieldIds)
             ->whereDate('booking_date', '>=', $startDate)
             ->whereDate('booking_date', '<=', $endDate)
-            ->whereIn('status', [BookingStatus::Completed->value, BookingStatus::Cancelled->value])
+            ->whereIn('status', [
+                BookingStatus::Confirmed->value,
+                BookingStatus::Completed->value,
+                BookingStatus::Cancelled->value,
+            ])
             ->get();
 
         $billableBookings = $bookings->filter(fn (Booking $b) => $b->commissionBase() > 0);
