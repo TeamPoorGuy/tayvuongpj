@@ -1,14 +1,18 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import {
   Activity,
+  AlertTriangle,
   Building2,
   CalendarDays,
   ChartNoAxesCombined,
   CircleUserRound,
+  Coins,
   FolderTree,
   LogOut,
   MessageSquareText,
+  Receipt,
   ShieldCheck,
+  Sliders,
   Trophy,
   UsersRound,
 } from 'lucide-react'
@@ -17,6 +21,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
+import { Avatar } from '../components/Avatar'
 
 const customerNav = [
   { to: '/bookings', label: 'Lịch chơi của tôi', icon: CalendarDays },
@@ -28,24 +33,52 @@ const ownerNav = [
   { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
+  { to: '/owner/statements', label: 'Đối soát & Phí sàn', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]
 
 const becomeOwnerNav = [{ to: '/become-owner', label: 'Đăng ký làm chủ sân', icon: Building2 }]
 
-const navigation = {
-  admin: [
-    { to: '/admin', label: 'Tổng quan', icon: ChartNoAxesCombined },
-    { to: '/admin/users', label: 'Người dùng', icon: UsersRound },
-    { to: '/admin/owners', label: 'Duyệt chủ sân', icon: ShieldCheck },
-    { to: '/admin/fields', label: 'Duyệt sân', icon: Building2 },
-    { to: '/admin/bookings', label: 'Giao dịch', icon: CalendarDays },
-    { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
-    { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquareText },
-    { to: '/admin/categories', label: 'Danh mục', icon: FolderTree },
-  ],
-}
+const adminGroups = [
+  {
+    title: 'Tổng quan',
+    items: [
+      { to: '/admin', label: 'Tổng quan', icon: ChartNoAxesCombined },
+    ],
+  },
+  {
+    title: 'Vận hành',
+    items: [
+      { to: '/admin/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
+      { to: '/admin/complaints', label: 'Khiếu nại', icon: AlertTriangle },
+      { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
+    ],
+  },
+  {
+    title: 'Đối tác',
+    items: [
+      { to: '/admin/owners', label: 'Duyệt chủ sân', icon: ShieldCheck },
+      { to: '/admin/fields', label: 'Duyệt sân', icon: Building2 },
+      { to: '/admin/statements', label: 'Đối soát tháng', icon: Coins },
+    ],
+  },
+  {
+    title: 'Cộng đồng',
+    items: [
+      { to: '/admin/users', label: 'Người dùng', icon: UsersRound },
+      { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquareText },
+    ],
+  },
+  {
+    title: 'Hệ thống',
+    items: [
+      { to: '/admin/categories', label: 'Danh mục', icon: FolderTree },
+      { to: '/admin/settings', label: 'Cấu hình sàn', icon: Sliders },
+      { to: '/admin/logs', label: 'Nhật ký admin', icon: Activity },
+    ],
+  },
+]
 
 export function DashboardLayout() {
   const { user, logout } = useAuth()
@@ -74,10 +107,8 @@ export function DashboardLayout() {
 
   if (!user) return null
 
-  // Determine navigation items
-  const items = isAdmin
-    ? navigation.admin
-    : isApprovedOwner
+  // Determine navigation items for non-admin
+  const items = isApprovedOwner
     ? activeMode === 'owner'
       ? ownerNav
       : customerNav
@@ -133,27 +164,54 @@ export function DashboardLayout() {
         )}
 
         <nav>
-          {items.map(({ to, label, icon: Icon }) => {
-            const isExact = to === '/admin' || to === '/owner' || to === '/bookings'
-            const isActive = isExact ? location.pathname === to : location.pathname.startsWith(to)
-            return (
-              <NavLink to={to} end={isExact} key={to}>
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active-indicator"
-                    className="sidebar__active-pill"
-                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <Icon />
-                <span>{label}</span>
-              </NavLink>
-            )
-          })}
+          {isAdmin ? (
+            adminGroups.map((group) => (
+              <div key={group.title} style={{ marginBottom: 10 }}>
+                <div style={{ padding: '6px 14px 2px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255, 255, 255, 0.45)' }}>
+                  {group.title}
+                </div>
+                {group.items.map(({ to, label, icon: Icon }) => {
+                  const isExact = to === '/admin'
+                  const isActive = isExact ? location.pathname === to : location.pathname.startsWith(to)
+                  return (
+                    <NavLink to={to} end={isExact} key={to}>
+                      {isActive && (
+                        <motion.div
+                          layoutId="sidebar-active-indicator"
+                          className="sidebar__active-pill"
+                          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                        />
+                      )}
+                      <Icon size={16} />
+                      <span>{label}</span>
+                    </NavLink>
+                  )
+                })}
+              </div>
+            ))
+          ) : (
+            items.map(({ to, label, icon: Icon }) => {
+              const isExact = to === '/owner' || to === '/bookings'
+              const isActive = isExact ? location.pathname === to : location.pathname.startsWith(to)
+              return (
+                <NavLink to={to} end={isExact} key={to}>
+                  {isActive && (
+                    <motion.div
+                      layoutId="sidebar-active-indicator"
+                      className="sidebar__active-pill"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </NavLink>
+              )
+            })
+          )}
         </nav>
 
         <div className="sidebar__user">
-          <div className="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
+          <Avatar name={user.name} src={user.avatar} />
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>

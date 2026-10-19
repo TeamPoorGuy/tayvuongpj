@@ -8,6 +8,7 @@ use App\Exceptions\ConflictException;
 use App\Models\FieldOwnerProfile;
 use App\Models\OwnerDocument;
 use App\Models\User;
+use App\Support\Settings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -42,10 +43,12 @@ class OwnerApplicationService
                 'business_license' => $data->businessLicense,
                 'description' => $data->description,
                 'bank_name' => $data->bankName,
+                'bank_bin' => $data->bankBin,
                 'bank_account_number' => $data->bankAccountNumber,
                 'bank_account_holder' => $data->bankAccountHolder,
-                'terms_version' => config('booking.owner_terms_version'),
+                'terms_version' => Settings::getString('owner_terms_version', '2026-10'),
                 'terms_accepted_at' => now(),
+
                 'terms_ip' => $data->ip,
                 'verification_status' => VerificationStatus::Pending,
                 'rejection_reason' => null,

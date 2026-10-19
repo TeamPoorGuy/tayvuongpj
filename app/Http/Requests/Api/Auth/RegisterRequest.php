@@ -20,6 +20,7 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'confirmed', Password::defaults()],
             'phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
             'address' => ['nullable', 'string', 'max:255'],
+            'terms_accepted' => ['required', 'accepted'],
         ];
     }
 }

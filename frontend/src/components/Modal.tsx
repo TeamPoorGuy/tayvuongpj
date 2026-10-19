@@ -28,7 +28,9 @@ export function Modal({
   const previousFocus = useRef<HTMLElement | null>(null)
   // onClose thường là closure inline; giữ trong ref để effect không chạy lại (và giật focus) mỗi lần cha re-render.
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   // Close on Escape key press
   useEffect(() => {

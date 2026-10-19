@@ -7,15 +7,18 @@ use App\Http\Resources\Api\ReviewResource;
 use App\Models\Review;
 use App\Services\AdminService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ReviewController extends Controller
 {
     public function __construct(private readonly AdminService $service) {}
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return ReviewResource::collection($this->service->reviews());
+        $rating = $request->filled('rating') ? (int) $request->input('rating') : null;
+
+        return ReviewResource::collection($this->service->reviews($rating));
     }
 
     public function toggle(Review $review): JsonResponse

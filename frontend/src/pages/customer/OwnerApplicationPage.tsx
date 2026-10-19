@@ -6,22 +6,21 @@ import {
   Building2,
   CheckCircle2,
   CreditCard,
-  ExternalLink,
   FileCheck2,
-  FileText,
   Send,
   ShieldAlert,
   ShieldCheck,
   Store,
-  Trash2,
   UserCheck,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
+import { prepareFile } from '../../api/upload'
 import { useToast } from '../../components/Toast'
 import type { ApiEnvelope, OwnerProfile } from '../../types/api'
+import { VIETNAMESE_BANKS } from '../../utils/banks'
 import { PageTitle } from './CustomerPages'
 
 const STEPS = [
@@ -63,174 +62,6 @@ function ApplicationTimeline({ status }: { status?: OwnerProfile['verification_s
   )
 }
 
-function DocumentInputWithPreview({
-  label,
-  name,
-  file,
-  existingDoc,
-  error,
-  onChange,
-  required = false,
-}: {
-  label: string
-  name: string
-  file?: File | null
-  existingDoc?: { id: number; type: string; original_name: string; url: string }
-  error?: string
-  onChange: (file: File | null) => void
-  required?: boolean
-}) {
-  const isImage = file?.type.startsWith('image/')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (file && isImage) {
-      const url = URL.createObjectURL(file)
-      setPreviewUrl(url)
-      return () => URL.revokeObjectURL(url)
-    }
-    setPreviewUrl(null)
-  }, [file, isImage])
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: 'block', marginBottom: 6 }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>
-          {label} {required && <strong style={{ color: '#c92a43' }}>*</strong>}
-        </span>
-      </label>
-
-      {file ? (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '10px 14px',
-            background: 'var(--panel-subtle, #f8fafc)',
-            border: '1px solid var(--line, #e2e8f0)',
-            borderRadius: 8,
-          }}
-        >
-          {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt="Xem trước"
-              style={{
-                width: 56,
-                height: 56,
-                objectFit: 'cover',
-                borderRadius: 6,
-                border: '1px solid #cbd5e1',
-                flexShrink: 0,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                background: '#e2e8f0',
-                borderRadius: 6,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <FileText size={24} style={{ color: '#475569' }} />
-            </div>
-          )}
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--ink, #0f172a)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {file.name}
-            </div>
-            <small style={{ color: 'var(--soft, #64748b)' }}>
-              {(file.size / (1024 * 1024)).toFixed(2)} MB · {file.type || 'Tệp đính kèm'}
-            </small>
-          </div>
-
-          <button
-            type="button"
-            className="button button--ghost button--small button--danger"
-            onClick={() => onChange(null)}
-            title="Huỷ chọn tệp này"
-            style={{ flexShrink: 0 }}
-          >
-            <Trash2 size={14} /> Xoá
-          </button>
-        </div>
-      ) : (
-        <div>
-          {existingDoc && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 12px',
-                marginBottom: 8,
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: 6,
-                fontSize: 12,
-              }}
-            >
-              <span style={{ color: '#166534' }}>
-                ✓ Đã có tệp trước đó: <strong>{existingDoc.original_name}</strong>
-              </span>
-              <a
-                href={existingDoc.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: '#15803d',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  textDecoration: 'underline',
-                }}
-              >
-                <ExternalLink size={12} /> Xem tệp
-              </a>
-            </div>
-          )}
-
-          <input
-            type="file"
-            name={name}
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            onChange={(e) => {
-              const selected = e.target.files?.[0] ?? null
-              if (selected && selected.size > 10 * 1024 * 1024) {
-                alert('Tệp bạn chọn vượt quá 10MB. Vui lòng chọn ảnh hoặc PDF dưới 10MB.')
-                e.target.value = ''
-                return
-              }
-              onChange(selected)
-            }}
-            className={error ? 'input--invalid' : ''}
-            style={{ width: '100%' }}
-          />
-        </div>
-      )}
-
-      {error && <span className="input-error">{error}</span>}
-    </div>
-  )
-}
-
 export function OwnerApplicationPage() {
   const client = useQueryClient()
   const { success, error } = useToast()
@@ -254,6 +85,7 @@ export function OwnerApplicationPage() {
     business_phone: '',
     description: '',
     bank_name: '',
+    bank_bin: '',
     bank_account_number: '',
     bank_account_holder: '',
     business_license: '',
@@ -282,6 +114,7 @@ export function OwnerApplicationPage() {
         business_phone: data.business_phone ?? prev.business_phone,
         description: data.description ?? prev.description,
         bank_name: data.bank_name ?? prev.bank_name,
+        bank_bin: data.bank_bin ?? prev.bank_bin,
         bank_account_number: data.bank_account_number ?? prev.bank_account_number,
         bank_account_holder: data.bank_account_holder ?? prev.bank_account_holder,
         business_license: data.business_license ?? prev.business_license,
@@ -352,24 +185,45 @@ export function OwnerApplicationPage() {
     }
   }
 
-  const handleFileChange = (type: 'business_license' | 'land_right' | 'id_front' | 'id_back', file: File | null) => {
-    if (file && file.size > 10 * 1024 * 1024) {
-      setErrors((prev) => ({
-        ...prev,
-        [`documents.${type}`]: 'Tệp vượt quá kích thước cho phép (tối đa 10MB).',
-      }))
-      return
-    }
-    setFiles((prev) => ({ ...prev, [type]: file }))
+  const handleFileChange = async (
+    type: 'business_license' | 'land_right' | 'id_front' | 'id_back',
+    file: File | null,
+  ): Promise<boolean> => {
     const errorKey = `documents.${type}`
-    if (errors[errorKey]) {
+    const setFileError = (message?: string) =>
       setErrors((prev) => {
         const next = { ...prev }
-        delete next[errorKey]
+        if (message) next[errorKey] = message
+        else delete next[errorKey]
         return next
       })
+
+    if (!file) {
+      setFiles((prev) => ({ ...prev, [type]: null }))
+      setFileError()
+      return true
+    }
+
+    // Kiểm tra định dạng/dung lượng và nén ảnh lớn ngay khi chọn, báo lỗi rõ cho đúng ô tải lên.
+    try {
+      const prepared = await prepareFile(file)
+      setFiles((prev) => ({ ...prev, [type]: prepared }))
+      setFileError()
+      return true
+    } catch (reason) {
+      setFiles((prev) => ({ ...prev, [type]: null }))
+      setFileError(errorMessage(reason))
+      return false
     }
   }
+
+  // Tệp bị từ chối thì xoá luôn khỏi ô chọn để không hiển thị như đã tải lên.
+  const onFileChange =
+    (type: 'business_license' | 'land_right' | 'id_front' | 'id_back') =>
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.currentTarget
+      if (!(await handleFileChange(type, input.files?.[0] ?? null))) input.value = ''
+    }
 
   // Validate a specific step
   const validateStep = (s: number): boolean => {
@@ -398,7 +252,7 @@ export function OwnerApplicationPage() {
       }
     } else if (s === 3) {
       if (!formData.bank_name.trim()) {
-        newErrors.bank_name = 'Vui lòng nhập tên ngân hàng nhận thanh toán.'
+        newErrors.bank_name = 'Vui lòng chọn ngân hàng nhận thanh toán.'
       }
       if (!formData.bank_account_number.trim()) {
         newErrors.bank_account_number = 'Vui lòng nhập số tài khoản ngân hàng.'
@@ -479,6 +333,9 @@ export function OwnerApplicationPage() {
       fd.append('description', formData.description.trim())
     }
     fd.append('bank_name', formData.bank_name.trim())
+    if (formData.bank_bin) {
+      fd.append('bank_bin', formData.bank_bin.trim())
+    }
     fd.append('bank_account_number', formData.bank_account_number.trim())
     fd.append('bank_account_holder', formData.bank_account_holder.trim().toUpperCase())
     fd.append('business_license', formData.business_license.trim())
@@ -538,40 +395,6 @@ export function OwnerApplicationPage() {
         <div className="notice notice--soft">
           <FileCheck2 size={18} /> Hồ sơ đang trong hàng đợi xét duyệt bởi ban quản trị. Kết quả sẽ được gửi
           qua email và thông báo tại đây.
-        </div>
-      )}
-
-      {data && (status === 'pending' || status === 'approved') && data.documents && data.documents.length > 0 && (
-        <div className="panel" style={{ marginTop: 16 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FileText size={16} /> Giấy tờ & Tài liệu đã đính kèm trong hồ sơ ({data.documents.length})
-          </h3>
-          <div className="doc-cards-grid">
-            {data.documents.map((doc) => {
-              const label =
-                ({
-                  id_front: 'CCCD mặt trước',
-                  id_back: 'CCCD mặt sau',
-                  business_license: 'Giấy phép kinh doanh',
-                  land_right: 'Quyền sử dụng sân / đất',
-                } as Record<string, string>)[doc.type] ?? doc.type
-              return (
-                <div key={doc.id} className="doc-card">
-                  <span className="badge badge--soft">{label}</span>
-                  <small style={{ wordBreak: 'break-all' }}>{doc.original_name}</small>
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="button button--ghost button--small"
-                    style={{ textDecoration: 'none', justifyContent: 'center' }}
-                  >
-                    <ExternalLink size={13} /> Mở xem tài liệu
-                  </a>
-                </div>
-              )
-            })}
-          </div>
         </div>
       )}
 
@@ -657,7 +480,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Cơ sở <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -728,7 +551,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Tài khoản & GPKD <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -748,13 +571,34 @@ export function OwnerApplicationPage() {
                   <div className="form-grid">
                     <label>
                       <span>Ngân hàng thụ hưởng</span>
-                      <input
+                      <select
                         name="bank_name"
                         value={formData.bank_name}
-                        onChange={handleChange}
-                        placeholder="Vietcombank, MB Bank, Techcombank..."
+                        onChange={(e) => {
+                          const val = e.target.value
+                          const found = VIETNAMESE_BANKS.find((b) => b.short_name === val)
+                          setFormData((prev) => ({
+                            ...prev,
+                            bank_name: val,
+                            bank_bin: found?.bin ?? '',
+                          }))
+                          if (errors.bank_name) {
+                            setErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.bank_name
+                              return next
+                            })
+                          }
+                        }}
                         className={errors.bank_name ? 'input--invalid' : ''}
-                      />
+                      >
+                        <option value="">-- Chọn ngân hàng thụ hưởng --</option>
+                        {VIETNAMESE_BANKS.map((b) => (
+                          <option key={b.bin} value={b.short_name}>
+                            {b.short_name} – {b.name}
+                          </option>
+                        ))}
+                      </select>
                       {errors.bank_name && <span className="input-error">{errors.bank_name}</span>}
                     </label>
                     <label>
@@ -815,23 +659,33 @@ export function OwnerApplicationPage() {
                     />
                     {errors.business_license && <span className="input-error">{errors.business_license}</span>}
                   </label>
-                  <DocumentInputWithPreview
-                    label="Giấy phép kinh doanh (GPKD / MST)"
-                    name="documents[business_license]"
-                    file={files.business_license}
-                    existingDoc={data?.documents?.find((d) => d.type === 'business_license')}
-                    error={errors['documents.business_license']}
-                    onChange={(f) => handleFileChange('business_license', f)}
-                    required
-                  />
-                  <DocumentInputWithPreview
-                    label="Giấy tờ quyền sử dụng sân / Hợp đồng thuê mặt bằng (không bắt buộc)"
-                    name="documents[land_right]"
-                    file={files.land_right}
-                    existingDoc={data?.documents?.find((d) => d.type === 'land_right')}
-                    error={errors['documents.land_right']}
-                    onChange={(f) => handleFileChange('land_right', f)}
-                  />
+                  <label>
+                    <span>
+                      Ảnh chụp hoặc PDF Giấy phép kinh doanh
+                      {data?.documents?.some((d) => d.type === 'business_license')
+                        ? ' (đã có tệp tải lên trước đó, chọn tệp mới nếu muốn thay)'
+                        : ''}
+                    </span>
+                    <input
+                      name="documents[business_license]"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('business_license')}
+                      className={errors['documents.business_license'] ? 'input--invalid' : ''}
+                    />
+                    {errors['documents.business_license'] && (
+                      <span className="input-error">{errors['documents.business_license']}</span>
+                    )}
+                  </label>
+                  <label>
+                    <span>Giấy tờ quyền sử dụng sân / Hợp đồng thuê mặt bằng (không bắt buộc)</span>
+                    <input
+                      name="documents[land_right]"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('land_right')}
+                    />
+                  </label>
                 </div>
 
                 <div className="wizard-actions">
@@ -847,7 +701,7 @@ export function OwnerApplicationPage() {
                     className="button button--brand"
                     onClick={handleNext}
                   >
-                    Tiếp tục: Xác thực & Điều khoản <ArrowRight size={16} />
+                    Tiếp tục <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -861,24 +715,38 @@ export function OwnerApplicationPage() {
 
                 {/* ID Cards Upload */}
                 <div className="form-grid">
-                  <DocumentInputWithPreview
-                    label="Mặt trước Căn cước công dân"
-                    name="documents[id_front]"
-                    file={files.id_front}
-                    existingDoc={data?.documents?.find((d) => d.type === 'id_front')}
-                    error={errors['documents.id_front']}
-                    onChange={(f) => handleFileChange('id_front', f)}
-                    required
-                  />
-                  <DocumentInputWithPreview
-                    label="Mặt sau Căn cước công dân"
-                    name="documents[id_back]"
-                    file={files.id_back}
-                    existingDoc={data?.documents?.find((d) => d.type === 'id_back')}
-                    error={errors['documents.id_back']}
-                    onChange={(f) => handleFileChange('id_back', f)}
-                    required
-                  />
+                  <label>
+                    <span>
+                      Mặt trước CCCD
+                      {data?.documents?.some((d) => d.type === 'id_front') ? ' (đã có tệp trước đó)' : ''}
+                    </span>
+                    <input
+                      name="documents[id_front]"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('id_front')}
+                      className={errors['documents.id_front'] ? 'input--invalid' : ''}
+                    />
+                    {errors['documents.id_front'] && (
+                      <span className="input-error">{errors['documents.id_front']}</span>
+                    )}
+                  </label>
+                  <label>
+                    <span>
+                      Mặt sau CCCD
+                      {data?.documents?.some((d) => d.type === 'id_back') ? ' (đã có tệp trước đó)' : ''}
+                    </span>
+                    <input
+                      name="documents[id_back]"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={onFileChange('id_back')}
+                      className={errors['documents.id_back'] ? 'input--invalid' : ''}
+                    />
+                    {errors['documents.id_back'] && (
+                      <span className="input-error">{errors['documents.id_back']}</span>
+                    )}
+                  </label>
                 </div>
 
                 {/* Quick Summary Review */}
@@ -917,9 +785,18 @@ export function OwnerApplicationPage() {
                       style={{ marginTop: 3 }}
                     />
                     <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--soft)' }}>
-                      Tôi cam kết toàn bộ thông tin kê khai là chính xác, đồng ý với Quy chế hoạt động, Chính
-                      sách huỷ/hoàn và xử lý tranh chấp của SportHub, và đồng ý để SportHub xử lý dữ liệu cá nhân
-                      theo Nghị định 13/2023/NĐ-CP.
+                      Tôi cam kết toàn bộ thông tin kê khai là chính xác, đồng ý với{' '}
+                      <Link to="/quy-che-chu-san" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Quy chế đối tác chủ sân
+                      </Link>
+                      ,{' '}
+                      <Link to="/chinh-sach-huy-hoan" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Chính sách huỷ/hoàn
+                      </Link>
+                      {' '}và xử lý tranh chấp của SportHub, và đồng ý để SportHub xử lý dữ liệu cá nhân theo{' '}
+                      <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
+                        Nghị định 13/2023/NĐ-CP
+                      </Link>.
                     </span>
                   </label>
                   {errors.accept_terms && (
@@ -946,7 +823,7 @@ export function OwnerApplicationPage() {
                     disabled={submit.isPending}
                     className="button button--brand button--lg"
                   >
-                    <Send size={16} /> {submit.isPending ? 'Đang gửi hồ sơ...' : 'Xác nhận & Nộp hồ sơ xét duyệt'}
+                    <Send size={16} /> {submit.isPending ? 'Đang gửi...' : 'Nộp hồ sơ'}
                   </button>
                 </div>
               </div>

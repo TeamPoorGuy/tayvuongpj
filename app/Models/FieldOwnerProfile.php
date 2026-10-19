@@ -22,6 +22,7 @@ class FieldOwnerProfile extends Model
         'verification_status',
         'owner_id_hash',
         'bank_name',
+        'bank_bin',
         'bank_account_number',
         'bank_account_holder',
         'terms_version',

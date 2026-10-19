@@ -1,0 +1,429 @@
+/*
+ * SportHub design system v2 — nạp SAU index.css nên thắng các định nghĩa cũ cùng độ ưu tiên.
+ * Luật chung:
+ *  - Chữ: Barlow Condensed cho tiêu đề + số liệu, Barlow cho mọi thứ còn lại. Nội dung ≥ 13px.
+ *  - Màu: chỉ dùng token ở :root (index.css). Chip/badge là màu đặc, nền nhạt chỉ cho khối lớn.
+ *  - Bo góc: chip 8 / nút + input 12 / thẻ + modal 18.
+ *  - Nút không bao giờ xuống dòng: nhãn ≤ 3 từ, `white-space: nowrap`.
+ */
+
+/* ---------- Nền tảng chữ ---------- */
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+button, input, select, textarea { font-family: inherit; }
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; line-height: 1.12; }
+.hero h1, .hero__spotlight h2, .section-heading h2, .field-card h3, .page-heading h1, .detail-head h1,
+.auth-story h1, .auth-heading h2, .workspace-title h1, .matches-hero__content h1, .modal__title, .modal__card h2,
+.panel-form h2, .content-card h2, .booking-card h2, .data-panel__head h2, .match-card__title, .booking-item__top h3 {
+  font-family: var(--font-display); font-weight: 700; letter-spacing: 0;
+}
+.hero h1 { font-size: clamp(54px, 7vw, 92px); line-height: 1; font-weight: 800; }
+.section-heading h2 { font-size: clamp(34px, 4vw, 52px); }
+.page-heading h1, .detail-head h1, .workspace-title h1 { font-size: clamp(36px, 4vw, 56px); line-height: 1.02; }
+.field-card h3 { font-size: 21px; line-height: 1.15; }
+.match-card__title, .booking-item__top h3 { font-size: 21px; line-height: 1.15; }
+.brand strong { font-family: var(--font-display); font-size: 24px; font-weight: 800; letter-spacing: .01em; text-transform: uppercase; }
+.brand small { font-size: 11px; }
+
+/* Số liệu và giá tiền: chữ hẹp, đều nét để cột số thẳng hàng */
+.stat > strong, .field-card__footer strong, .booking-item__footer > strong, .booking-price strong,
+.price-breakdown__total strong, .payment-rows__amount, .spotlight__top strong, .slot-item__time strong {
+  font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+.stat > strong { font-size: 36px; line-height: 1; }
+.field-card__footer strong { font-size: 24px; }
+.booking-item__footer > strong { font-size: 24px; color: var(--forest); }
+.booking-price strong { font-size: 30px; }
+
+/* ---------- Nút ---------- */
+.button {
+  min-height: 44px; padding: 0 20px; border: 1.5px solid transparent; border-radius: var(--r-md);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 15px; font-weight: 600; letter-spacing: .01em; line-height: 1; white-space: nowrap;
+  box-shadow: none; transform: none;
+  transition: background-color .15s var(--ease-out), border-color .15s var(--ease-out), color .15s var(--ease-out), transform .1s var(--ease-out);
+}
+.button:hover { transform: none; }
+.button:active { transform: scale(.98); }
+.button:focus-visible, .period-tabs button:focus-visible, .tab-pill:focus-visible, .slot-chip:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+.button svg { width: 18px; height: 18px; flex: none; }
+.button--brand { background: var(--lime); border-color: var(--lime); color: var(--ink); box-shadow: none; }
+.button--brand:hover { background: var(--lime-deep); border-color: var(--lime-deep); box-shadow: none; }
+.button--dark { background: var(--forest); border-color: var(--forest); color: #fff; }
+.button--dark:hover { background: var(--forest-2); border-color: var(--forest-2); }
+.button--ghost, .button--secondary { background: #fff; border-color: var(--line-strong); color: var(--ink); }
+.button--ghost:hover, .button--secondary:hover { background: var(--surface); border-color: var(--ink); }
+.button--danger { background: #fff; border-color: var(--danger); color: var(--danger); }
+.button--danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.button--danger-ghost { background: transparent; border-color: transparent; color: var(--danger); }
+.button--danger-ghost:hover { background: var(--danger-soft); }
+.button--small { min-height: 36px; padding: 0 14px; font-size: 14px; border-radius: var(--r-md); }
+.button--lg, .button--large { min-height: 52px; padding: 0 26px; font-size: 17px; }
+.button--block { width: 100%; }
+.button--icon { width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: var(--r-md); }
+.button:disabled, .button[disabled] { background: #e6e9e3; border-color: #e6e9e3; color: #8f9b93; cursor: not-allowed; transform: none; box-shadow: none; }
+.button:disabled:hover { background: #e6e9e3; border-color: #e6e9e3; color: #8f9b93; }
+.actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.table-wrap .button, .row-actions .button, .review-card > .button { min-height: 36px; padding: 0 14px; font-size: 14px; }
+.row-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+.table-wrap td:has(> .row-actions) { width: 1%; white-space: nowrap; }
+
+/* ---------- Chip trạng thái và badge: màu đặc, chữ rõ ---------- */
+.status {
+  width: max-content; max-width: 100%; padding: 5px 11px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1.5px solid transparent; border-radius: var(--r-sm); font-size: 13px; font-weight: 700; line-height: 1.2;
+  letter-spacing: .01em; white-space: nowrap;
+}
+.status i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status--approved, .status--confirmed, .status--completed { background: var(--forest); color: #fff; }
+.status--approved i, .status--confirmed i, .status--completed i { background: var(--lime); }
+.status--pending, .status--awaiting { background: var(--warn); color: var(--ink); }
+.status--reported { background: #fff; border-color: var(--forest); color: var(--forest); }
+.status--rejected, .status--cancelled { background: var(--danger); color: #fff; }
+.status--inactive, .status--suspended { background: #fff; border-color: var(--line-strong); color: var(--muted); }
+button.status { cursor: pointer; }
+
+.badge {
+  padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-sm);
+  font-size: 12.5px; font-weight: 700; letter-spacing: .02em; text-transform: none; line-height: 1.2; white-space: nowrap;
+}
+.badge--soft { background: var(--surface); color: var(--ink); }
+.badge--success { background: var(--forest); color: #fff; }
+.badge--warning { background: var(--warn); color: var(--ink); }
+.badge--danger { background: var(--danger); color: #fff; }
+.badge--brand { background: var(--lime); color: var(--ink); }
+.badge--hot { background: var(--ink); color: var(--lime); }
+
+.pill { padding: 6px 12px; border-radius: var(--r-sm); font-size: 12.5px; font-weight: 700; letter-spacing: .02em; }
+.pill--dark { color: var(--lime); background: var(--forest); }
+.match-sport-badge { padding: 4px 10px; border-radius: var(--r-sm); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--forest); color: var(--lime); }
+.match-skill-badge { padding: 4px 10px; border-radius: var(--r-sm); font-size: 12.5px; font-weight: 600; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.countdown-chip { border-radius: var(--r-sm); font-weight: 700; white-space: nowrap; }
+
+/* Công tắc mở/đóng sân */
+.switch { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--ink); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.switch__track { width: 42px; height: 24px; padding: 3px; display: inline-flex; border-radius: 999px; background: var(--line-strong); transition: background-color .15s var(--ease-out); }
+.switch__knob { width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .15s var(--ease-out); }
+.switch[aria-checked='true'] .switch__track { background: var(--forest); }
+.switch[aria-checked='true'] .switch__knob { transform: translateX(18px); background: var(--lime); }
+.switch:focus-visible { outline: 2px solid var(--forest); outline-offset: 3px; border-radius: var(--r-sm); }
+
+/* ---------- Thông báo ---------- */
+.notice { padding: 14px 16px; border-radius: var(--r-md); border-left: 4px solid var(--line-strong); font-size: 14.5px; font-weight: 500; line-height: 1.5; }
+.notice strong { font-weight: 700; }
+.notice--success { background: var(--pitch-soft); border-left-color: var(--pitch); color: var(--forest); }
+.notice--error { background: var(--danger-soft); border-left-color: var(--danger); color: #8f1d31; }
+.notice--warn, .notice--warning { background: var(--warn-soft); border-left-color: var(--warn); color: #6b4700; }
+.notice--soft, .query-state { background: var(--surface); border-left-color: var(--forest); color: var(--soft); }
+.query-state--error { background: var(--danger-soft); border-left-color: var(--danger); color: #8f1d31; }
+.query-state { font-size: 14.5px; font-weight: 500; text-align: left; }
+
+/* ---------- Thẻ: cùng bo góc, cùng viền, một kiểu hover ---------- */
+.field-card, .category-card, .match-card, .booking-item, .stat, .review-card, .content-card, .booking-card,
+.panel-form, .data-panel, .empty-panel, .wizard-card, .payment-card {
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: #fff; box-shadow: var(--shadow-card);
+}
+.field-card:hover, .category-card:hover, .match-card:hover, .booking-item:hover, .stat:hover, .review-card:hover {
+  transform: none; border-color: var(--forest); box-shadow: var(--shadow-card);
+}
+.field-card__image { height: 210px; }
+.field-card:hover img { transform: none; }
+.field-card__body, .match-card, .booking-item__body, .review-card, .stat, .content-card { padding: 22px; }
+.field-card p, .booking-meta { font-size: 14px; }
+.field-card__footer small { font-size: 12px; letter-spacing: .06em; }
+.field-card__footer strong span { font-size: 14px; font-family: var(--font-body); }
+.rating { font-size: 14px; font-weight: 700; }
+.category-card strong { font-size: 16px; }
+.category-card small { font-size: 13px; }
+.stat > span, .data-panel__head span, .kicker, .eyebrow { font-size: 12px; letter-spacing: .1em; }
+.stat > small { font-size: 13px; }
+.review-card p, .booking-meta, .form-help, .stat__link { font-size: 14px; }
+.review-card small, .booking-item__top small { font-size: 13px; }
+
+/* ---------- Bộ lọc, tab, chip ---------- */
+.period-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 999px; background: var(--surface); }
+.period-tabs button { padding: 8px 6px; justify-content: center; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.period-tabs button.active { background: var(--forest); color: #fff; box-shadow: none; }
+.tab-pill { padding: 9px 18px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.tab-pill:hover { background: var(--surface); border-color: var(--forest); color: var(--forest); }
+.tab-pill.active { background: var(--forest); border-color: var(--forest); color: #fff; }
+.tab-pill__count { font-size: 12.5px; }
+.toolbar, .filter-bar { border-radius: var(--r-lg); }
+
+/* Đầu bảng chọn giờ: tiêu đề + bộ đếm một hàng, bộ lọc xuống hàng riêng chiếm trọn chiều ngang */
+.slot-picker-head { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 14px; }
+.slot-picker-title-col { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.slot-picker-title-col .field-label { font-size: 15px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.slot-availability-pill { margin: 0; padding: 4px 10px; border-radius: var(--r-sm); background: var(--forest); color: var(--lime); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.slot-availability-pill strong { color: #fff; }
+
+.slot-chip { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 10px 8px; font-family: var(--font-display); font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.slot-chip:hover:not(:disabled) { border-color: var(--forest); transform: none; }
+.slot-chip.selected { background: var(--forest); border-color: var(--forest); box-shadow: none; }
+.slot-chip small { font-family: var(--font-body); font-size: 11.5px; font-weight: 700; letter-spacing: .04em; }
+.slot-chip--booked, .slot-chip--past { background: var(--surface); opacity: 1; color: #8f9b93; }
+.slot-chip--booked small, .slot-chip--past small { color: #8f9b93; }
+.slot-badge--booked { color: #8a5a00 !important; }
+.slot-badge--past { color: #8f9b93 !important; }
+.slot-badge--avail { color: var(--pitch) !important; }
+.day-strip button { border-radius: var(--r-md); border-width: 1.5px; }
+.day-strip button strong { font-size: 13px; }
+.day-strip button small { font-size: 12px; }
+.day-strip button:hover { border-color: var(--forest); }
+.slot-grid button { border-radius: var(--r-md); font-size: 14px; }
+
+/* ---------- Form ---------- */
+.filter-bar input, .filter-bar select, .toolbar input, .toolbar select, .panel-form input, .panel-form select,
+.panel-form textarea, .modal__card input, .modal__card select, .modal__card textarea, .booking-card input,
+.booking-card textarea, .form-stack label input, .form-stack label select {
+  min-height: 46px; padding: 10px 14px; border: 1.5px solid var(--line-strong); border-radius: var(--r-md);
+  font-size: 15px; background: #fff;
+}
+.filter-bar input:focus, .filter-bar select:focus, .panel-form input:focus, .panel-form select:focus, .panel-form textarea:focus,
+.modal__card input:focus, .modal__card select:focus, .modal__card textarea:focus, .booking-card input:focus,
+.booking-card textarea:focus, .form-stack label input:focus, .form-stack label select:focus {
+  border-color: var(--forest); box-shadow: 0 0 0 3px rgba(11, 48, 37, .12);
+}
+.booking-card label > span, .field-label, .panel-form label > span, .modal__card label > span, .form-stack label > span { font-size: 14px; font-weight: 600; color: var(--ink); }
+.search-control { border-width: 1.5px; border-color: var(--line-strong); border-radius: var(--r-md); }
+.input-icon { border-width: 1.5px; border-color: var(--line-strong); border-radius: var(--r-md); }
+.input--invalid { border-color: var(--danger) !important; }
+.input-error { color: var(--danger); font-size: 13px; font-weight: 600; }
+
+/* ---------- Bảng ---------- */
+.table-wrap th { padding: 12px 18px; background: var(--surface); color: var(--soft); font-size: 12px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
+.table-wrap td { padding: 14px 18px; border-top: 1px solid var(--line); color: var(--ink); font-size: 14.5px; }
+.table-wrap td small { font-size: 13px; color: var(--muted); }
+.table-wrap tbody tr:hover td { background: #fafbf7; }
+
+/* ---------- Thanh bên và thanh trên cùng ---------- */
+.topbar { background: var(--paper); backdrop-filter: none; border-bottom: 1px solid var(--line); }
+.topbar__inner { min-height: 68px; }
+.topnav a { padding: 10px 14px; border-radius: var(--r-md); font-size: 15px; font-weight: 600; color: var(--soft); }
+.topnav a.active, .topnav a:hover { background: var(--surface); color: var(--forest); }
+.dashboard { background: var(--surface); }
+.sidebar, .dashboard--admin .sidebar { background: var(--forest); }
+.sidebar nav a { padding: 12px 14px; border-radius: var(--r-md); font-size: 15px; font-weight: 600; color: #b8cabf; }
+.sidebar nav a.active, .sidebar nav a:hover, .dashboard--admin .sidebar nav a.active { color: var(--lime); background: rgba(185, 239, 82, .1); }
+.sidebar__active-pill, .dashboard--admin .sidebar__active-pill { border-radius: var(--r-md); background: rgba(185, 239, 82, .12); border-left: 3px solid var(--lime); }
+.sidebar__user strong { font-size: 15px; }
+.sidebar__user small { font-size: 12.5px; }
+.sidebar > button { margin: 0 12px 14px; min-height: 44px; padding: 0 14px; display: flex; align-items: center; gap: 10px; border: 1.5px solid rgba(255, 255, 255, .16); border-radius: var(--r-md); background: transparent; color: #d7e3db; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.sidebar > button:hover { border-color: var(--lime); color: var(--lime); }
+.avatar { border-radius: var(--r-md); background: var(--forest-2); }
+
+/* ---------- Modal, toast ---------- */
+.modal__card { border-radius: var(--r-lg); }
+.modal__title { font-size: 26px; }
+.toast-item { border-radius: var(--r-md); background: #fff; backdrop-filter: none; }
+
+/* ---------- Thẻ giao dịch ---------- */
+.payment-option { border-radius: var(--r-md); }
+.payment-option.is-active { border-color: var(--forest); background: var(--pitch-soft); }
+.payment-option strong { font-family: var(--font-display); font-size: 26px; }
+.payment-rows { border-radius: var(--r-md); }
+.payment-rows dd { font-size: 15px; }
+.payment-rows dd.payment-rows__amount { color: var(--forest); font-size: 26px; }
+
+/* Cuộn tới đâu hiện tới đó vẫn giữ, nhưng người dùng giảm chuyển động thì tắt hẳn */
+@media (prefers-reduced-motion: reduce) {
+  .button, .slot-chip, .switch__track, .switch__knob { transition: none; }
+}
+
+/* ---------- Cỡ chữ phụ: không nhỏ hơn 13px ---------- */
+.feature-list span, .booking-guarantee, .booking-price span, .form-help, .optional, .field-picker__item small,
+.field-picker__selected small, .day-strip button small, .schedule-rules-banner, .detail-item__label, .mobile-booking-card__id {
+  font-size: 13px;
+}
+.feature-list span { border-radius: var(--r-sm); background: var(--surface); color: var(--forest); font-weight: 600; }
+.booking-price span { font-weight: 600; }
+.owner-info-strip small, .review small, .review p { font-size: 14px; }
+.section-heading > a { font-size: 15px; font-weight: 600; }
+.hero__proof { font-size: 14px; }
+.hero__copy > p { font-size: 18px; }
+.hero-search { border-radius: var(--r-lg); }
+.hero-search input { font-size: 16px; }
+.hero__spotlight { border-radius: var(--r-lg); }
+.category-card > span { font-size: 30px; }
+
+/* Lưới chọn giờ ở hộp đặt sân */
+.slot-grid button {
+  padding: 10px 6px; border: 1.5px solid var(--line-strong); border-radius: var(--r-md); background: #fff; color: var(--ink);
+  font-family: var(--font-display); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.slot-grid button small, .slot-grid button span { font-family: var(--font-body); }
+.slot-grid button:hover:not(:disabled) { border-color: var(--forest); }
+.slot-grid button.selected { background: var(--forest); border-color: var(--forest); color: #fff; }
+.slot-grid button:disabled { background: var(--surface); border-color: var(--line); color: #8f9b93; }
+
+/* ---------- Tiêu đề trang, thống kê, bảng xếp hạng ---------- */
+.workspace-title { margin-bottom: 28px; gap: 16px; align-items: center; }
+.workspace-title__icon { width: 56px; height: 56px; border-radius: var(--r-md); background: var(--forest); color: var(--lime); }
+.workspace-title__icon svg { width: 26px; }
+.workspace-title span { font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--pitch); }
+.workspace-title h1 { margin: 2px 0 4px; font-size: 40px; line-height: 1.05; }
+.workspace-title p { font-size: 15px; color: var(--soft); }
+.stat { justify-content: flex-start; gap: 6px; min-height: 132px; }
+.stat > strong { margin-top: 6px; }
+.stat > small, .stat__link { margin-top: auto; padding-top: 6px; font-size: 14px; font-weight: 600; }
+.stat__link { color: var(--pitch); }
+.data-panel__head { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.data-panel__body { padding: 20px 24px; }
+
+/* 3-column statistics grid */
+.stats-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+@media (max-width: 900px) { .stats-grid-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .stats-grid-3 { grid-template-columns: 1fr; } }
+
+/* Stat card box */
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(11, 48, 37, 0.04);
+  min-height: 110px;
+}
+.stat-card__label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  display: block;
+}
+.stat-card__val {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.15;
+  display: block;
+  font-family: var(--font-display);
+  margin-top: 4px;
+}
+.stat-card__note {
+  font-size: 13px;
+  color: var(--muted);
+  display: block;
+  margin-top: auto;
+  padding-top: 6px;
+  line-height: 1.4;
+}
+.stat-card--highlight {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.stat-card--highlight .stat-card__val {
+  color: var(--pitch);
+}
+.data-panel__head h2 { font-size: 22px; margin-top: 4px; }
+.ranking article { padding: 14px 16px; border-radius: var(--r-md); }
+.ranking article > b { border-radius: var(--r-md); background: var(--forest); color: var(--lime); font-family: var(--font-display); font-size: 17px; }
+.ranking article strong { font-size: 16px; font-weight: 600; }
+.ranking article small { font-size: 13.5px; }
+.ranking article > span, .ranking article > em { font-size: 14px; font-weight: 700; }
+.sidebar__brand strong { font-family: var(--font-display); font-size: 22px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.sidebar__brand small { font-size: 11.5px; letter-spacing: .08em; }
+.sidebar__brand > span { border-radius: var(--r-md); }
+.dashboard__top strong { font-size: 17px; }
+.dashboard__top span { font-size: 12px; letter-spacing: .08em; }
+
+/* ---------- Tìm đối & ghép đội ---------- */
+.match-card { gap: 16px; padding: 22px; }
+.match-card__header { gap: 10px; flex-wrap: wrap; }
+.match-card__meta { font-size: 14.5px; }
+.match-card__desc { font-size: 14.5px; }
+.match-slots-progress { background: var(--surface); border-color: var(--line); border-radius: var(--r-md); }
+.match-slots-progress__text { font-size: 14px; }
+.match-slots-bar { background: #fff; border: 1px solid var(--line); }
+.match-slots-bar__fill { background: var(--lime-deep); }
+.match-slots-rem { font-size: 13.5px; }
+.match-card__host { flex-wrap: wrap; gap: 8px 12px; padding-top: 14px; }
+.host-avatar { width: 40px; height: 40px; border-radius: var(--r-md); font-family: var(--font-display); font-size: 20px; }
+.host-name { font-size: 15px; }
+.host-trust { font-size: 13px; color: var(--pitch); white-space: nowrap; }
+.host-contact { flex-basis: 100%; font-size: 13.5px; }
+.match-card__footer { justify-content: stretch; }
+.match-card__footer > div, .match-card__footer > .button { width: 100%; }
+.match-card__footer .button { width: 100%; }
+.match-card__footer .actions-row { justify-content: flex-end; }
+
+/* Thanh lọc: mọi ô cùng cao, cùng viền */
+.filter-bar, .toolbar { padding: 12px 14px; gap: 10px; align-items: center; }
+.filter-dropdowns { flex-wrap: wrap; }
+.filter-item { padding: 0; background: none; border: 0; }
+.filter-item select, .filter-bar input[type='date'], .toolbar input[type='date'] {
+  min-height: 44px; padding: 0 14px; border: 1.5px solid var(--line-strong); border-radius: var(--r-md);
+  background: #fff; font-size: 15px; font-weight: 500; color: var(--ink);
+}
+.filter-item select:focus, .filter-bar input[type='date']:focus { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(11, 48, 37, .12); outline: 0; }
+
+/* Ô tìm kiếm: viền nằm ở khung ngoài, input bên trong không viền riêng */
+.search-control { min-height: 46px; background: #fff; }
+.filter-bar .search-control input, .toolbar .search-control input, .search-control input {
+  border: 0; box-shadow: none; min-height: 42px; padding-left: 0; background: transparent; border-radius: 0;
+}
+.search-control:focus-within { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(11, 48, 37, .12); }
+.page-heading p, .detail-head p { font-size: 16px; color: var(--soft); }
+.results-meta, .filter-count { font-size: 14px; }
+
+/* Lịch chủ sân và các khối phụ */
+.schedule-rules-banner { border-radius: var(--r-md); border-color: var(--line); background: var(--pitch-soft); }
+.schedule-rules-banner strong { display: inline; }
+.schedule-rules-banner p, .schedule-rules-banner div { font-size: 14px; line-height: 1.6; }
+.legend-item { font-size: 13.5px; }
+.toolbar > .button:last-child:not(:only-child) { margin-left: auto; }
+
+/* Điện thoại: thanh bên gọn lại, nút đăng xuất đã có trên thanh trên cùng */
+@media (max-width: 780px) {
+  .sidebar > button { display: none; }
+  .workspace-title h1 { font-size: 32px; }
+  .stat > strong { font-size: 30px; }
+}
+
+/* Dải lợi ích và chân trang */
+.benefits { background: var(--forest); }
+.benefits article strong { font-family: var(--font-display); font-size: 21px; font-weight: 700; }
+.benefits article p { font-size: 14.5px; line-height: 1.5; }
+.footer { background: var(--ink); }
+.footer__grid > div { font-size: 14.5px; }
+.footer__grid > div > strong { font-size: 13px; letter-spacing: .1em; }
+
+/* Đăng nhập / đăng ký */
+.auth-heading h2 { font-size: 40px; line-height: 1.05; }
+.auth-heading p, .form-switch, .or-divider { font-size: 15px; }
+.google-btn { min-height: 48px; border-radius: var(--r-md); font-size: 15px; font-weight: 600; }
+.form-link { font-size: 14.5px; font-weight: 600; color: var(--pitch); }
+.auth-story span { font-size: 12px; }
+.auth-story p { font-size: 16px; }
+
+/* Chữ phụ còn sót dưới 12px */
+.spotlight__top span, .detail-rating span, .wizard-step__text small, .mobile-booking-card__field span,
+.profile-status span, .mobile-empty-slot small, .empty-slot-block small, .slot-chip small, .slot-badge--past,
+.slot-badge--booked, .slot-badge--avail, .small-note {
+  font-size: 12.5px;
+}
+.wizard-step__text small { letter-spacing: .06em; text-transform: uppercase; }
+.wizard-step__text strong { font-size: 15px; }
+.profile-status { font-size: 14px; }
+
+.payment-rows dt { font-size: 13.5px; }
+.payment-option small { font-size: 13px; }
+.payment-card .form-help, .payment-card .check-line { font-size: 14px; }
+
+/* Giữ lại các chỉnh riêng cho điện thoại mà lớp cũ định làm nhưng bị ghi đè từ trước */
+@media (max-width: 640px) {
+  .hero h1 { font-size: clamp(44px, 12.5vw, 54px); }
+  .stat { min-height: 100px; padding: 14px; }
+  .stat > strong { margin-top: 4px; font-size: 28px; }
+  .workspace-title { align-items: flex-start; flex-wrap: wrap; }
+  .workspace-title h1 { font-size: 30px; }
+  .modal__card { border-radius: var(--r-lg); }
+  .wizard-step__text strong { font-size: 14px; }
+}
+@media (max-width: 780px) {
+  .sidebar nav a { flex: none; padding: 10px 14px; font-size: 14px; border-radius: var(--r-md); white-space: nowrap; }
+}

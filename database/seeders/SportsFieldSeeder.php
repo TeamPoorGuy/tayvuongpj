@@ -210,24 +210,6 @@ class SportsFieldSeeder extends Seeder
                 'is_active' => true,
                 'rejection_reason' => null,
                 'images' => [
-                    'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format&fit=crop&w=800&q=80'
-                ]
-            ],
-
-            // --- Owner 5 (Chủ sân bị Admin khóa tài khoản) ---
-            [
-                'owner_id' => $owner5->id,
-                'type_id' => $types['f7']->id,
-                'name' => 'Sân Bóng Động Lực Mỹ Đình',
-                'address' => '15 Đường Phạm Hùng, Nam Từ Liêm, Hà Nội',
-                'latitude' => 21.02850000,
-                'longitude' => 105.77500000,
-                'description' => 'Sân bóng nằm trong khuôn viên khu thể thao Mỹ Đình.',
-                'price' => 600000,
-                'status' => 'approved',
-                'is_active' => true,
-                'rejection_reason' => null,
-                'images' => [
                     'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=80'
                 ]
             ],

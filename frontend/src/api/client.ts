@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { prepareFormData } from './upload'
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api/v1',
@@ -21,6 +22,7 @@ export function resetCsrf(): void {
 }
 
 api.interceptors.request.use(async (config) => {
+  if (config.data instanceof FormData) config.data = await prepareFormData(config.data)
   if (!csrfPrimed && config.method && MUTATING_METHODS.has(config.method)) {
     await initializeCsrf()
     csrfPrimed = true

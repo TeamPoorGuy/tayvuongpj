@@ -19,14 +19,15 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
+import { ConfirmModal } from '../components/ConfirmModal'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/auth-context'
 import type { ApiEnvelope, Category, MatchParticipant, MatchRequest, Paginated, SportsField, TimeSlot } from '../types/api'
 import { formatDay, getLocalTodayString } from '../utils/date'
+import { formatMoney } from '../utils/format'
 
-const currency = new Intl.NumberFormat('vi-VN')
 
 const matchStatusLabels: Record<string, string> = {
   open: 'Đang mở',
@@ -66,6 +67,7 @@ export function MatchesPage() {
   const [managingMatch, setManagingMatch] = useState<MatchRequest | null>(null)
   const [cancellingMatch, setCancellingMatch] = useState<MatchRequest | null>(null)
   const [matchCancelReason, setMatchCancelReason] = useState('')
+  const [leavingMatchId, setLeavingMatchId] = useState<number | null>(null)
 
   // Categories & Fields queries
   const categoriesQuery = useQuery({
@@ -220,6 +222,14 @@ export function MatchesPage() {
           </div>
         </section>
 
+        {/* Safety Notice */}
+        <div className="notice notice--soft" style={{ margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ShieldCheck size={18} style={{ color: 'var(--pitch)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <strong>Lưu ý an toàn khi ghép đội:</strong> Khi giao lưu thể thao cùng người lạ, vui lòng kiểm tra điểm tin cậy (Trust Score), thống nhất chi phí chia tiền sân sòng phẳng tại sân và tự bảo quản tài sản cá nhân.
+          </span>
+        </div>
+
         {/* Filter Toolbar */}
         <div className="matches-filter-bar">
           <div className="filter-group">
@@ -340,9 +350,9 @@ export function MatchesPage() {
                   </div>
                   <div>
                     {match.status === 'open' ? (
-                      <span className="badge badge--success">🟢 Đang mở</span>
+                      <span className="badge badge--success">Đang mở</span>
                     ) : match.status === 'full' ? (
-                      <span className="badge badge--warning">🔒 Đã đủ</span>
+                      <span className="badge badge--warning">Đã đủ</span>
                     ) : match.status === 'completed' ? (
                       <span className="badge badge--soft">Đã kết thúc</span>
                     ) : (
@@ -381,7 +391,7 @@ export function MatchesPage() {
                     to={`/fields/${match.sports_field.slug}?date=${match.play_date}&start=${match.start_time}`}
                     title={`Mở sân với ngày ${formatDay(match.play_date)}, khung ${match.start_time} – ${match.end_time}`}
                   >
-                    Xem sân & đặt khung giờ này
+                    Đặt sân này
                   </Link>
                 )}
 
@@ -461,9 +471,7 @@ export function MatchesPage() {
                           type="button"
                           className="button button--ghost button--small"
                           disabled={leaveMatch.isPending}
-                          onClick={() => {
-                            if (window.confirm('Bạn muốn rút khỏi trận đấu này?')) leaveMatch.mutate(match.id)
-                          }}
+                          onClick={() => setLeavingMatchId(match.id)}
                         >
                           Rút lui
                         </button>
@@ -475,7 +483,7 @@ export function MatchesPage() {
                       className="button button--brand button--small"
                       onClick={() => handleJoinClick(match)}
                     >
-                      <UserPlus size={15} /> Xin tham gia kèo
+                      <UserPlus size={15} /> Xin tham gia
                     </button>
                   ) : (
                     <button type="button" className="button button--ghost button--small" disabled>
@@ -752,6 +760,23 @@ export function MatchesPage() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={leavingMatchId !== null}
+        onClose={() => setLeavingMatchId(null)}
+        onConfirm={() => {
+          if (leavingMatchId !== null) {
+            leaveMatch.mutate(leavingMatchId)
+            setLeavingMatchId(null)
+          }
+        }}
+        title="Rút lui khỏi trận đấu"
+        message="Bạn có chắc chắn muốn rút lui khỏi trận giao lưu này không?"
+        confirmText="Rút lui"
+        cancelText="Ở lại"
+        danger
+        busy={leaveMatch.isPending}
+      />
     </div>
   )
 }
@@ -883,7 +908,7 @@ function CreateMatchModal({
             <div>
               <strong>{field.name}</strong>
               <small>
-                <MapPin size={12} /> {field.address} · {currency.format(field.price_per_hour)}đ/giờ
+                <MapPin size={12} /> {field.address} · {formatMoney(field.price_per_hour)}/giờ
               </small>
             </div>
             <button
@@ -922,7 +947,7 @@ function CreateMatchModal({
                 >
                   <strong>{item.name}</strong>
                   <small>
-                    {item.address} · {currency.format(item.price_per_hour)}đ/giờ
+                    {item.address} · {formatMoney(item.price_per_hour)}/giờ
                   </small>
                 </button>
               ))}
@@ -1046,7 +1071,7 @@ function CreateMatchModal({
           Hủy
         </button>
         <button type="submit" disabled={busy || !startTime || !!timeError} className="button button--brand">
-          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ để đăng' : 'Đăng phòng tìm đối'}
+          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ' : 'Đăng phòng'}
         </button>
       </div>
     </Modal>

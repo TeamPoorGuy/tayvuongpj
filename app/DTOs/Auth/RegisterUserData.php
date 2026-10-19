@@ -12,6 +12,7 @@ readonly class RegisterUserData
         public string $password,
         public string $phone,
         public ?string $address,
+        public ?bool $termsAccepted = null,
     ) {}
 
     public static function fromRequest(RegisterRequest $request): self
@@ -22,6 +23,7 @@ readonly class RegisterUserData
             password: $request->string('password')->toString(),
             phone: $request->string('phone')->toString(),
             address: $request->input('address'),
+            termsAccepted: $request->boolean('terms_accepted'),
         );
     }
 }

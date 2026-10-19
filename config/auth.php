@@ -114,4 +114,11 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    | Bắt buộc xác thực email trước khi đặt sân / đăng ký chủ sân.
+    | Mặc định chỉ bật khi có mail thật (MAIL_MAILER khác "log"): với "log" không ai nhận được
+    | email nên bắt xác thực chỉ khiến người dùng mới bị kẹt. Đặt REQUIRE_EMAIL_VERIFICATION để ép.
+    */
+    'require_email_verification' => (bool) env('REQUIRE_EMAIL_VERIFICATION', env('MAIL_MAILER', 'log') !== 'log'),
+
 ];

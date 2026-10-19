@@ -104,6 +104,11 @@ class MatchmakingService
                 throw new ConflictException('Trận đấu này đã đủ người hoặc đã đóng.');
             }
 
+            // Lệnh đóng trận quá giờ chỉ chạy mỗi giờ một lần nên phải tự kiểm tra ở đây.
+            if (Carbon::parse($match->play_date->toDateString().' '.$match->end_time)->isPast()) {
+                throw new ConflictException('Trận đấu này đã kết thúc.');
+            }
+
             $existing = MatchParticipant::where('match_request_id', $matchId)
                 ->where('user_id', $user->id)
                 ->first();

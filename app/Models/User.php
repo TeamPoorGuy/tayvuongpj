@@ -28,6 +28,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'phone',
         'avatar',
         'address',
+        'terms_accepted_at',
     ];
 
     // role / is_active are privileged: set via forceFill only, never mass-assigned.
@@ -54,6 +55,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'is_active' => 'boolean',
             'trust_score' => 'integer',
+            'terms_accepted_at' => 'datetime',
         ];
     }
 

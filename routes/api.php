@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\FieldSuggestionController;
 use App\Http\Controllers\Api\V1\MatchmakingController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\BookingProofController;
 use App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Api\V1\FieldOwner;
 use Illuminate\Support\Facades\Route;
@@ -39,13 +41,25 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
     Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);
+    Route::get('/settings/public', [SettingController::class, 'publicSettings']);
     Route::get('/matches', [MatchmakingController::class, 'index']);
     Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
 
+
+    Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
+
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
+        Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
+            Route::get('/complaints', [Customer\ComplaintController::class, 'index']);
+            Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/bookings/recurring', [Customer\BookingController::class, 'storeRecurring'])->middleware(['verified', 'throttle:writes']);
+            Route::post('/bookings/recurring/{groupId}/cancel', [Customer\BookingController::class, 'cancelRecurring'])->middleware('throttle:writes');
+            Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
+            Route::post('/bookings/{booking}/payment', [Customer\BookingController::class, 'reportPayment'])->middleware(['verified', 'throttle:writes']);
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
@@ -112,6 +126,11 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::put('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'update']);
         Route::delete('/fields/{field}/slots/{slot}', [FieldOwner\SlotController::class, 'destroy']);
 
+        // Phase 6: Field closures / holidays
+        Route::get('/fields/{field}/closures', [FieldOwner\FieldClosureController::class, 'index']);
+        Route::post('/fields/{field}/closures', [FieldOwner\FieldClosureController::class, 'store'])->middleware('throttle:writes');
+        Route::delete('/fields/{field}/closures/{closure}', [FieldOwner\FieldClosureController::class, 'destroy'])->middleware('throttle:writes');
+
         Route::patch(
             '/fields/{field}/toggle',
             [FieldOwner\FieldController::class, 'toggle']
@@ -122,6 +141,12 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             [FieldOwner\BookingController::class, 'index']
         );
 
+        Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
+        Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
+        Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
+        Route::patch('/bookings/recurring/{groupId}/approve', [FieldOwner\BookingController::class, 'approveRecurring'])->middleware('throttle:writes');
+        Route::patch('/bookings/recurring/{groupId}/reject', [FieldOwner\BookingController::class, 'rejectRecurring'])->middleware('throttle:writes');
+
         Route::patch(
             '/bookings/{booking}/status',
             [FieldOwner\BookingController::class, 'updateStatus']
@@ -131,19 +156,33 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             '/reviews',
             [FieldOwner\ReviewController::class, 'index']
         );
+        Route::patch('/reviews/{review}/reply', [FieldOwner\ReviewController::class, 'reply'])->middleware('throttle:writes');
+
+        Route::get('/statements', [FieldOwner\StatementController::class, 'index']);
+        Route::get('/statements/current-summary', [FieldOwner\StatementController::class, 'currentSummary']);
+        Route::get('/statements/{statement}/export-csv', [FieldOwner\StatementController::class, 'exportBookingsCsv']);
+        Route::get('/statements/{statement}', [FieldOwner\StatementController::class, 'show']);
+        Route::post('/statements/{statement}/report', [FieldOwner\StatementController::class, 'report'])->middleware('throttle:writes');
     });
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
             Route::get('/users', [Admin\UserController::class, 'index']);
+            Route::get('/users/{user}/detail', [Admin\UserController::class, 'detail']);
             Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);
             Route::patch('/users/{user}/toggle', [Admin\UserController::class, 'toggle']);
+            Route::get('/settings', [Admin\SettingController::class, 'index']);
+            Route::put('/settings', [Admin\SettingController::class, 'update'])->middleware('throttle:writes');
+            Route::get('/logs', [Admin\LogController::class, 'index']);
             Route::get('/field-owners', [Admin\FieldOwnerController::class, 'index']);
             Route::get('/field-owners/{profile}/documents/{document}', [Admin\FieldOwnerController::class, 'document']);
             Route::patch('/field-owners/{profile}/verify', [Admin\FieldOwnerController::class, 'verify']);
             Route::get('/fields', [Admin\FieldController::class, 'index']);
             Route::patch('/fields/{field}/verify', [Admin\FieldController::class, 'verify']);
             Route::get('/bookings', [Admin\BookingController::class, 'index']);
+            Route::get('/bookings/export-csv', [Admin\BookingController::class, 'exportCsv']);
+            Route::post('/bookings/{booking}/cancel', [Admin\BookingController::class, 'cancel'])->middleware('throttle:writes');
+            Route::patch('/bookings/{booking}/refund', [Admin\BookingController::class, 'updateRefund'])->middleware('throttle:writes');
             Route::get('/matches', [Admin\MatchController::class, 'index']);
             Route::delete('/matches/{id}', [Admin\MatchController::class, 'cancel']);
             Route::get('/reviews', [Admin\ReviewController::class, 'index']);
@@ -153,6 +192,18 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::post('/field-types', [Admin\CategoryController::class, 'storeFieldType']);
             Route::put('/categories/{category}', [Admin\CategoryController::class, 'updateCategory']);
             Route::put('/field-types/{fieldType}', [Admin\CategoryController::class, 'updateFieldType']);
+
+            Route::get('/complaints', [Admin\ComplaintController::class, 'index']);
+            Route::get('/complaints/{complaint}', [Admin\ComplaintController::class, 'show']);
+            Route::patch('/complaints/{complaint}/handle', [Admin\ComplaintController::class, 'handle'])->middleware('throttle:writes');
+            Route::get('/statements/export-csv', [Admin\StatementController::class, 'exportCsv']);
+            Route::get('/statements', [Admin\StatementController::class, 'index']);
+            Route::get('/statements/{statement}/export-csv', [Admin\StatementController::class, 'exportBookingsCsv']);
+            Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
+            Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');
+            Route::post('/statements/{statement}/confirm', [Admin\StatementController::class, 'confirm'])->middleware('throttle:writes');
+            Route::post('/statements/{statement}/reject-report', [Admin\StatementController::class, 'rejectReport'])->middleware('throttle:writes');
+            Route::post('/statements/{statement}/waive', [Admin\StatementController::class, 'waive'])->middleware('throttle:writes');
         });
     });
 });

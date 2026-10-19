@@ -47,9 +47,14 @@ class CatalogController extends Controller
 
     public function availableSlots(AvailableSlotsRequest $request, SportsField $field): JsonResponse
     {
+        $date = $request->string('date')->toString();
+        $closure = $field->closureOn($date);
+
         return response()->json(['data' => [
-            'date' => $request->string('date')->toString(),
-            'slots' => $this->catalogService->availableSlots($field, $request->string('date')->toString()),
+            'date' => $date,
+            'is_closed' => $closure !== null,
+            'closure_reason' => $closure?->reason,
+            'slots' => $this->catalogService->availableSlots($field, $date),
         ]]);
     }
 }

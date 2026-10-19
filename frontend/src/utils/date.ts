@@ -1,3 +1,5 @@
+import { formatDate } from './format'
+
 /**
  * Trả về chuỗi ngày YYYY-MM-DD theo múi giờ địa phương (Việt Nam UTC+7)
  * Giải quyết triệt để lỗi lệch múi giờ của toISOString() trước 7h sáng.
@@ -18,7 +20,7 @@ export function formatDay(dateStr: string): string {
   today.setHours(0, 0, 0, 0)
   const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000)
   const label = diff === 0 ? 'Hôm nay' : diff === 1 ? 'Ngày mai' : ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()]
-  return `${label} · ${date.toLocaleDateString('vi-VN')}`
+  return `${label} · ${formatDate(date)}`
 }
 
 /** Cộng n ngày vào 'YYYY-MM-DD' theo giờ địa phương. */

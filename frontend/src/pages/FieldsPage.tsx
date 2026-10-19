@@ -12,8 +12,10 @@ import { FieldCard } from '../components/FieldCard'
 import { Pagination } from '../components/Pagination'
 import { useReveal } from '../hooks/useReveal'
 import type { Category, FieldType, Paginated, SportsField } from '../types/api'
+import { formatMoney } from '../utils/format'
 
 export function FieldsPage() {
+
   const [params, setParams] = useSearchParams()
   const query = params.toString()
 
@@ -207,12 +209,13 @@ export function FieldsPage() {
           )}
           {activeMaxPrice && (
             <span className="filter-chip">
-              ≤ {new Intl.NumberFormat('vi-VN').format(Number(activeMaxPrice))}đ
+              ≤ {formatMoney(activeMaxPrice)}
               <button type="button" onClick={() => update('max_price', '')}>
                 <X size={12} />
               </button>
             </span>
           )}
+
         </div>
       )}
 

@@ -66,7 +66,7 @@ class CatalogService
     {
         return SportsField::approved()
             ->where('slug', $slug)
-            ->with(['images', 'primaryImage', 'fieldType.sportCategory', 'owner.fieldOwnerProfile', 'timeSlots', 'reviews' => fn ($q) => $q->where('is_visible', true)->with('user')])
+            ->with(['images', 'primaryImage', 'fieldType.sportCategory', 'owner.fieldOwnerProfile', 'timeSlots', 'closures', 'reviews' => fn ($q) => $q->where('is_visible', true)->with('user')])
             ->firstOrFail();
     }
 
@@ -77,6 +77,8 @@ class CatalogService
             404,
             'Không tìm thấy sân đang hoạt động.'
         );
+
+        $isClosed = $field->isClosedOn($date);
 
         $bookedSlotIds = Booking::query()
             ->where('sports_field_id', $field->id)
@@ -96,8 +98,8 @@ class CatalogService
             'id' => $slot->id,
             'start_time' => substr($slot->start_time, 0, 5),
             'end_time' => substr($slot->end_time, 0, 5),
-            'is_booked' => $bookedSlotIds->contains($slot->id),
-            'is_held' => ! $bookedSlotIds->contains($slot->id) && $heldSlotIds->contains($slot->id),
+            'is_booked' => $isClosed || $bookedSlotIds->contains($slot->id),
+            'is_held' => ! $isClosed && ! $bookedSlotIds->contains($slot->id) && $heldSlotIds->contains($slot->id),
             'is_past' => Carbon::parse($date.' '.$slot->start_time)->isPast(),
             'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
         ])->all();

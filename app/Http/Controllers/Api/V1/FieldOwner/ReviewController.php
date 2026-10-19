@@ -16,4 +16,21 @@ class ReviewController extends Controller
     {
         return ReviewResource::collection($this->service->reviews($request->user()));
     }
+
+    public function reply(Request $request, \App\Models\Review $review): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'reply' => ['required', 'string', 'max:1000'],
+        ], [
+            'reply.required' => 'Vui lòng nhập nội dung phản hồi.',
+            'reply.max' => 'Nội dung phản hồi không được quá 1000 ký tự.',
+        ]);
+
+        $updated = $this->service->replyReview($request->user(), $review, $validated['reply']);
+
+        return response()->json([
+            'message' => 'Đã gửi phản hồi đánh giá.',
+            'data' => new ReviewResource($updated),
+        ]);
+    }
 }

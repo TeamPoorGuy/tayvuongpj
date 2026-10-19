@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FieldStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -26,6 +27,7 @@ class SportsField extends Model
     ];
 
     protected $casts = [
+        'status' => FieldStatus::class,
         'price_per_hour' => 'decimal:2',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
@@ -60,6 +62,31 @@ class SportsField extends Model
     public function bookings()
     {
         return $this->hasMany(Booking::class);
+    }
+
+    public function closures()
+    {
+        return $this->hasMany(FieldClosure::class)->orderBy('start_date', 'asc');
+    }
+
+    public function isClosedOn(string|\Carbon\CarbonInterface $date): bool
+    {
+        $d = is_string($date) ? $date : $date->toDateString();
+
+        return $this->closures()
+            ->where('start_date', '<=', $d)
+            ->where('end_date', '>=', $d)
+            ->exists();
+    }
+
+    public function closureOn(string|\Carbon\CarbonInterface $date): ?FieldClosure
+    {
+        $d = is_string($date) ? $date : $date->toDateString();
+
+        return $this->closures()
+            ->where('start_date', '<=', $d)
+            ->where('end_date', '>=', $d)
+            ->first();
     }
 
     public function reviews()

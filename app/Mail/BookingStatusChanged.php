@@ -18,7 +18,8 @@ class BookingStatusChanged extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        $label = match ($this->booking->status->value) {
+        $label = match ($this->booking->payment_status === 'awaiting' ? 'awaiting' : $this->booking->status->value) {
+            'awaiting' => 'chờ bạn thanh toán',
             'confirmed' => 'đã được xác nhận',
             'rejected' => 'bị từ chối',
             'cancelled' => 'đã bị huỷ',

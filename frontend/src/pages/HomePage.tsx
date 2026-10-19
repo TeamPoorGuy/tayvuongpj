@@ -49,7 +49,7 @@ export function HomePage() {
       <section className="section shell">
         <div className="section-heading reveal"><div><span className="kicker">Chọn môn yêu thích</span><h2>Mỗi ngày một trận mới.</h2></div><Link to="/fields">Xem tất cả <ArrowRight size={16} /></Link></div>
         {isPending && <div className="loading-grid">{Array.from({ length: 5 }).map((_, index) => <span key={index} className="skeleton-shimmer" />)}</div>}
-        {isError && <div className="notice notice--error">Không thể tải danh mục. Hãy kiểm tra API Laravel.</div>}
+        {isError && <div className="notice notice--error">Không thể tải danh mục môn thể thao. Vui lòng thử lại sau.</div>}
         <div className="category-grid">
           {data?.categories.map((category, index) => (
             <Link to={`/fields?category=${category.slug}`} className="category-card reveal" style={{ '--i': index } as React.CSSProperties} key={category.id}>

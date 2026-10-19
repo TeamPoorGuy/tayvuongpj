@@ -33,3 +33,19 @@ Artisan::command('matches:close-past', function () {
 })->purpose('Đóng các trận đấu tìm đối đã qua ngày');
 
 Schedule::command('matches:close-past')->hourly()->withoutOverlapping();
+
+Artisan::command('statements:generate {period?}', function (\App\Services\StatementService $statementService) {
+    $period = $this->argument('period') ?? now()->subMonth()->format('Y-m');
+    $this->info("Đang sinh bảng đối soát hoa hồng cho kỳ: {$period}...");
+    $statements = $statementService->generate($period);
+    $this->info("Đã sinh/cập nhật bảng đối soát cho ".count($statements)." chủ sân.");
+})->purpose('Sinh bảng đối soát hoa hồng hàng tháng cho các chủ sân');
+
+Schedule::command('statements:generate')->monthlyOn(1, '01:00')->withoutOverlapping();
+
+Artisan::command('statements:remind', function (\App\Services\StatementService $statementService) {
+    $count = $statementService->sendDueReminders();
+    $this->info("Đã gửi {$count} mail nhắc nộp phí đối soát.");
+})->purpose('Nhắc chủ sân nộp phí đối soát sắp đến hạn hoặc quá hạn');
+
+Schedule::command('statements:remind')->dailyAt('08:00')->withoutOverlapping();

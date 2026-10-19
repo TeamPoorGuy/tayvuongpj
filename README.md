@@ -10,7 +10,7 @@ Hệ thống trung gian kết nối khách hàng có nhu cầu thể thao với 
 - **Tài khoản**: Đăng ký, đăng nhập, đổi mật khẩu, xem và cập nhật hồ sơ cá nhân, đổi ảnh đại diện.
 - **Tìm kiếm & Lọc**: Tìm sân theo tên/địa chỉ, lọc theo danh mục thể thao (Bóng đá, Cầu lông, Tennis, Bóng rổ, Bóng chuyền), lọc theo loại sân, khoảng giá thuê.
 - **Kiểm tra khung giờ realtime (AJAX)**: Chọn ngày để xem các khung giờ còn trống trực tiếp mà không cần reload trang.
-- **Đặt sân & Thanh toán**: Xác nhận thông tin, xem tổng số tiền và gửi yêu cầu đặt sân.
+- **Đặt sân & Thanh toán**: Gửi yêu cầu đặt sân; sau khi chủ sân duyệt, khách chuyển khoản **đặt cọc 30% hoặc trả hết** vào tài khoản chủ sân theo đúng số tiền và nội dung (mã riêng của đơn) trong 2 giờ, bấm "Tôi đã chuyển khoản"; chủ sân đối chiếu và bấm "Đã nhận tiền" thì đơn mới được xác nhận. Mức cọc và hạn chuyển chỉnh bằng `BOOKING_DEPOSIT_PERCENT`, `BOOKING_PAYMENT_WINDOW_HOURS`.
 - **Lịch sử & Đánh giá**: Theo dõi trạng thái đơn hàng (Chờ xác nhận, Đã xác nhận, Đã hoàn thành, Đã hủy/Từ chối), hủy đơn khi đủ điều kiện, đánh giá số sao (1-5⭐) và viết bình luận sau khi sử dụng sân.
 
 ### 2. 🏢 Chủ Sân (Field Owner)
@@ -88,6 +88,19 @@ npm install                      # công cụ chạy song song (concurrently)
 npm --prefix frontend install
 ```
 
+### Cập nhật sau khi `git pull`
+
+Git chỉ chứa mã nguồn và file migration, không chứa dữ liệu DB. Mỗi lần kéo code mới về, chạy thêm:
+
+```bash
+composer install
+php artisan migrate               # tạo bảng/cột mới (settings, admin_logs, cột thanh toán...), giữ nguyên dữ liệu cũ
+npm --prefix frontend install
+```
+
+Nếu muốn làm lại DB demo từ đầu: `php artisan migrate:fresh --seed` (xoá toàn bộ dữ liệu hiện có).
+Không sửa các file migration đã đẩy lên git; khi cần đổi cấu trúc bảng hãy tạo migration mới.
+
 ### 3. Chạy hệ thống
 
 ```bash
@@ -103,10 +116,12 @@ Lệnh này chạy cùng lúc 4 tiến trình:
 | schedule | `php artisan schedule:work` | `bookings:sync` (15 phút), `waitlist:expire` (mỗi phút), `matches:close-past` (mỗi giờ) |
 | frontend | `npm --prefix frontend run dev` | Giao diện: http://127.0.0.1:5173 |
 
+Backend chạy bằng `php -S` với `upload_max_filesize=20M`/`post_max_size=40M` (xem script `dev:api`), nên không phụ thuộc `php.ini` của từng máy khi tải ảnh. Nếu tự chạy `php artisan serve` thì mặc định PHP chỉ cho 2MB/tệp, 8MB/request; giao diện đã tự nén ảnh lớn trước khi gửi.
+
 Thiếu `queue` thì mail không được gửi; thiếu `schedule` thì đơn quá hạn không tự đóng, no-show không bị phạt, lời mời waitlist không hết hạn.
 
 ### 4. Cấu hình tuỳ chọn
-- **Mail**: mặc định `MAIL_MAILER=log` (xem `storage/logs`). Dùng Mailpit/ServBay bằng cách đổi `MAIL_*` trong `.env`.
+- **Mail**: mặc định `MAIL_MAILER=log` (xem `storage/logs`); ở chế độ này **không bắt xác thực email** để tài khoản mới đặt sân được ngay. Dùng mail thật (Mailpit/SMTP) thì tự bật bắt buộc xác thực, hoặc ép bằng `REQUIRE_EMAIL_VERIFICATION=true`. Dùng Mailpit/ServBay bằng cách đổi `MAIL_*` trong `.env`.
 - **Đăng nhập Google**: điền `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` trong `.env`. Không commit file `client_secret*.json`.
 - **Chạy test**: `php artisan test` (dùng SQLite in-memory, không đụng DB local).
 

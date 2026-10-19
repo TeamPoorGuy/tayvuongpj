@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Api\Profile;
 
+use App\Support\Banks;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateOwnerProfileRequest extends FormRequest
 {
@@ -18,6 +20,11 @@ class UpdateOwnerProfileRequest extends FormRequest
             'business_address' => ['required', 'string', 'max:255'],
             'business_phone' => ['required', 'string', 'max:20'],
             'description' => ['nullable', 'string'],
+            // Tài khoản nhận tiền chuyển khoản của khách; bắt buộc để đối soát và thanh toán.
+            'bank_name' => ['required', 'string', 'max:255'],
+            'bank_bin' => ['nullable', Rule::in(Banks::bins())],
+            'bank_account_number' => ['required', 'regex:/^[0-9]{6,20}$/'],
+            'bank_account_holder' => ['required', 'string', 'max:255'],
         ];
     }
 }

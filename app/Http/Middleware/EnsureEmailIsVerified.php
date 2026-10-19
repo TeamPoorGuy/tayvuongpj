@@ -11,7 +11,7 @@ class EnsureEmailIsVerified
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user()?->hasVerifiedEmail()) {
+        if (config('auth.require_email_verification') && ! $request->user()?->hasVerifiedEmail()) {
             return new JsonResponse([
                 'message' => 'Vui lòng xác thực email trước khi thực hiện thao tác này.',
                 'code' => 'EMAIL_NOT_VERIFIED',

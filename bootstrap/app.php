@@ -44,6 +44,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Lỗi nghiệp vụ (đơn đã đóng, khung giờ đã kín...) là phản hồi bình thường, không phải sự cố: đừng ghi vào laravel.log.
+        $exceptions->dontReport(\App\Exceptions\DomainException::class);
+
         $exceptions->render(function (\App\Exceptions\DomainException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
@@ -64,6 +67,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 'message' => 'Dữ liệu gửi lên chưa hợp lệ.',
                 'errors' => $exception->errors(),
             ], 422);
+        });
+
+        // Body vượt post_max_size của PHP: trả JSON tiếng Việt thay vì trang lỗi tiếng Anh.
+        $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => 'Dung lượng tệp tải lên vượt giới hạn của máy chủ. Hãy chọn tệp nhỏ hơn hoặc ít tệp hơn.',
+            ], 413);
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request) {

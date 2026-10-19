@@ -311,25 +311,7 @@ export function FieldMap({ field }: FieldMapProps) {
             <div className="fallback-inner">
               <MapPin size={36} />
               <h4>Vị trí: {field.address}</h4>
-              <p>Tọa độ GPS chi tiết đang được cập nhật. Bạn có thể mở trực tiếp ứng dụng bản đồ để tìm đường đến sân.</p>
-              <div className="directions-btn-group">
-                <a
-                  href={googleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--brand button--small"
-                >
-                  <Navigation size={14} /> Chỉ đường Google Maps <ExternalLink size={12} />
-                </a>
-                <a
-                  href={appleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--ghost button--small"
-                >
-                  <Navigation size={14} /> Apple Maps <ExternalLink size={12} />
-                </a>
-              </div>
+              <p>Tọa độ GPS chi tiết đang được cập nhật. Hãy dùng nút chỉ đường bên dưới để mở ứng dụng bản đồ.</p>
             </div>
           </div>
         )}

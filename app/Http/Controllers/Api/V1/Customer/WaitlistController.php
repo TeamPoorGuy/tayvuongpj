@@ -49,7 +49,7 @@ class WaitlistController extends Controller
         $booking = $this->service->acceptOffer($request->user(), $id);
 
         return response()->json([
-            'message' => 'Xác nhận giữ chỗ thành công! Đơn đặt sân đã được kích hoạt.',
+            'message' => 'Đã nhận suất sân! Đơn đặt sân đang chờ chủ sân duyệt, sau đó bạn chuyển khoản cọc hoặc trả hết để giữ sân.',
             'data' => new BookingResource($booking),
         ], 201);
     }
