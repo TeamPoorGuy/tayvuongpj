@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\ForbiddenException;
+use App\Mail\StatementReminder;
 use App\Models\AdminLog;
 use App\Models\Booking;
 use App\Models\FieldOwnerProfile;
 use App\Models\OwnerStatement;
 use App\Models\SportsField;
 use App\Models\User;
+use App\Support\SafeMail;
 use App\Support\Settings;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -113,9 +115,77 @@ class StatementService
             });
 
             $createdStatements[] = $statement;
+
+            if ($statement->wasRecentlyCreated && $statement->status === 'unpaid') {
+                $this->remind($statement, 'issued');
+            }
         }
 
         return $createdStatements;
+    }
+
+    /**
+     * Gửi mail nhắc nợ phí đối soát cho chủ sân. Chạy hằng ngày: nhắc khi còn 2 ngày,
+     * rồi khi quá hạn ngày 1, 4, 7... (lặp mỗi 3 ngày, không cần cột lưu lần nhắc).
+     */
+    public function sendDueReminders(): int
+    {
+        $sent = 0;
+
+        OwnerStatement::with('ownerProfile.user')
+            ->where('status', 'unpaid')
+            ->where('commission_amount', '>', 0)
+            ->whereNotNull('due_at')
+            ->each(function (OwnerStatement $statement) use (&$sent) {
+                $left = (int) today()->diffInDays($statement->due_at->copy()->startOfDay(), false);
+
+                $kind = match (true) {
+                    $left === 2 => 'due_soon',
+                    $left < 0 && abs($left) % 3 === 1 => 'overdue',
+                    default => null,
+                };
+
+                if ($kind) {
+                    $this->remind($statement, $kind);
+                    $sent++;
+                }
+            });
+
+        return $sent;
+    }
+
+    private function remind(OwnerStatement $statement, string $kind): void
+    {
+        SafeMail::queue(
+            $statement->ownerProfile?->user?->email,
+            new StatementReminder($statement, $kind),
+        );
+    }
+
+    /**
+     * Tổng phí hoa hồng đã thu / chưa thu (chờ nộp + đã báo chuyển, chờ duyệt). Bỏ qua kỳ miễn thu.
+     *
+     * @return array{unpaid_amount: float, unpaid_count: int, paid_amount: float, paid_count: int}
+     */
+    public function totals(?int $ownerProfileId = null): array
+    {
+        $rows = OwnerStatement::query()
+            ->when($ownerProfileId, fn ($q) => $q->where('owner_profile_id', $ownerProfileId))
+            ->where('commission_amount', '>', 0)
+            ->whereIn('status', ['unpaid', 'reported', 'paid'])
+            ->selectRaw('status, COUNT(*) as n, SUM(commission_amount) as amount')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        $sum = fn (array $statuses, string $col) => collect($statuses)->sum(fn ($s) => $rows[$s]->{$col} ?? 0);
+
+        return [
+            'unpaid_amount' => (float) $sum(['unpaid', 'reported'], 'amount'),
+            'unpaid_count' => (int) $sum(['unpaid', 'reported'], 'n'),
+            'paid_amount' => (float) $sum(['paid'], 'amount'),
+            'paid_count' => (int) $sum(['paid'], 'n'),
+        ];
     }
 
     /**

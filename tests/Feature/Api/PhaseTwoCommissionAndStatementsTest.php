@@ -721,4 +721,80 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         $resAfter->assertOk()
             ->assertJsonPath('data.commission.amount', 24000);
     }
+
+    private function makeStatement(string $period, string $status, float $commission, $dueAt): OwnerStatement
+    {
+        return OwnerStatement::create([
+            'owner_profile_id' => $this->owner->fieldOwnerProfile->id,
+            'period' => $period,
+            'booking_count' => 2,
+            'gmv' => $commission * 10,
+            'commission_amount' => $commission,
+            'status' => $status,
+            'due_at' => $dueAt,
+            'transfer_code' => 'ST'.str_replace('-', '', $period).'P1TEST',
+        ]);
+    }
+
+    public function test_statement_list_returns_paid_and_unpaid_totals_and_qr_for_unpaid_only(): void
+    {
+        $this->makeStatement('2026-05', 'paid', 100000, now()->subDays(40));
+        $this->makeStatement('2026-06', 'reported', 50000, now()->subDays(10));
+        $unpaid = $this->makeStatement('2026-07', 'unpaid', 70000, now()->addDays(3));
+        $this->makeStatement('2026-08', 'waived', 90000, now()->addDays(3));
+
+        Sanctum::actingAs($this->owner);
+        $response = $this->getJson('/api/v1/field-owner/statements')->assertOk();
+
+        $this->assertEquals(100000, $response->json('meta.totals.paid_amount'));
+        $this->assertEquals(1, $response->json('meta.totals.paid_count'));
+        $this->assertEquals(120000, $response->json('meta.totals.unpaid_amount'));
+        $this->assertEquals(2, $response->json('meta.totals.unpaid_count'));
+
+        $byId = collect($response->json('data'))->keyBy('id');
+        $qr = $byId[$unpaid->id]['platform_bank']['qr_url'];
+        $this->assertStringContainsString('amount=70000', $qr);
+        $this->assertStringContainsString('addInfo='.$unpaid->transfer_code, $qr);
+        $this->assertNull($byId[$unpaid->id - 1]['platform_bank']['qr_url']);
+
+        Sanctum::actingAs($this->admin);
+        $this->getJson('/api/v1/admin/statements')->assertOk()
+            ->assertJsonPath('meta.totals.unpaid_count', 2)
+            ->assertJsonPath('meta.totals.paid_count', 1);
+    }
+
+    public function test_statement_reminders_are_sent_on_issue_due_soon_and_overdue_days_only(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $service = app(StatementService::class);
+
+        // Sinh kỳ mới có phí -> mail "issued" (sinh lại không gửi thêm)
+        Booking::create([
+            'user_id' => $this->customer->id,
+            'sports_field_id' => $this->field->id,
+            'time_slot_id' => $this->slot->id,
+            'booking_date' => now()->subMonth()->startOfMonth()->addDays(3)->toDateString(),
+            'status' => BookingStatus::Completed->value,
+            'total_price' => 300000,
+            'payment_status' => 'paid',
+            'payment_amount' => 300000,
+            'checked_in_at' => now()->subMonth()->startOfMonth()->addDays(3),
+        ]);
+        $period = now()->subMonth()->format('Y-m');
+        $service->generate($period, $this->owner->fieldOwnerProfile->id);
+        $service->generate($period, $this->owner->fieldOwnerProfile->id);
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\StatementReminder::class, 1);
+
+        OwnerStatement::query()->delete();
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $this->makeStatement('2026-01', 'unpaid', 10000, now()->addDays(2)->endOfDay());   // còn 2 ngày -> gửi
+        $this->makeStatement('2026-02', 'unpaid', 10000, now()->addDays(5)->endOfDay());   // còn 5 ngày -> không
+        $this->makeStatement('2026-03', 'unpaid', 10000, now()->subDays(1)->endOfDay());   // quá hạn 1 ngày -> gửi
+        $this->makeStatement('2026-04', 'unpaid', 10000, now()->subDays(2)->endOfDay());   // quá hạn 2 ngày -> không
+        $this->makeStatement('2026-05', 'reported', 10000, now()->addDays(2)->endOfDay()); // đã báo chuyển -> không
+
+        $this->assertSame(2, $service->sendDueReminders());
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\StatementReminder::class, 2);
+    }
 }

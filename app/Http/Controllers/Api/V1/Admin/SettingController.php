@@ -33,6 +33,7 @@ class SettingController extends Controller
             'max_pending_bookings' => ['nullable', 'integer', 'between:1,20'],
             'max_advance_days' => ['nullable', 'integer', 'between:1,365'],
             'platform_bank_name' => ['nullable', 'string', 'max:100'],
+            'platform_bank_code' => ['nullable', 'string', 'max:20'],
             'platform_bank_account' => ['nullable', 'string', 'max:50'],
             'platform_bank_holder' => ['nullable', 'string', 'max:100'],
             'support_email' => ['nullable', 'email', 'max:100'],

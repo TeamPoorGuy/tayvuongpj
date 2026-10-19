@@ -43,3 +43,9 @@ Artisan::command('statements:generate {period?}', function (\App\Services\Statem
 
 Schedule::command('statements:generate')->monthlyOn(1, '01:00')->withoutOverlapping();
 
+Artisan::command('statements:remind', function (\App\Services\StatementService $statementService) {
+    $count = $statementService->sendDueReminders();
+    $this->info("Đã gửi {$count} mail nhắc nộp phí đối soát.");
+})->purpose('Nhắc chủ sân nộp phí đối soát sắp đến hạn hoặc quá hạn');
+
+Schedule::command('statements:remind')->dailyAt('08:00')->withoutOverlapping();

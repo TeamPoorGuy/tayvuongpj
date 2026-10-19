@@ -32,6 +32,7 @@ class OwnerStatementResource extends JsonResource
                 'bank_name' => Settings::getString('platform_bank_name', 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)'),
                 'account_number' => Settings::getString('platform_bank_account', '1234567890'),
                 'account_holder' => Settings::getString('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM'),
+                'qr_url' => $this->qrUrl(),
             ],
             'owner' => $this->whenLoaded('ownerProfile', fn () => [
                 'id' => $this->ownerProfile->id,
@@ -49,5 +50,22 @@ class OwnerStatementResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
+    }
+
+    /** Ảnh VietQR điền sẵn số tiền + nội dung chuyển khoản; null khi không còn gì phải nộp. */
+    private function qrUrl(): ?string
+    {
+        if ($this->status !== 'unpaid' || (float) $this->commission_amount <= 0) {
+            return null;
+        }
+
+        $bank = Settings::getString('platform_bank_code', 'VCB');
+        $account = Settings::getString('platform_bank_account', '1234567890');
+
+        return "https://img.vietqr.io/image/{$bank}-{$account}-compact2.png?".http_build_query([
+            'amount' => (int) $this->commission_amount,
+            'addInfo' => $this->transfer_code,
+            'accountName' => Settings::getString('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM'),
+        ]);
     }
 }

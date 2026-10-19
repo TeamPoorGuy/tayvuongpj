@@ -37,6 +37,7 @@ class StatementController extends Controller
                 'last_page' => $statements->lastPage(),
                 'per_page' => $statements->perPage(),
                 'total' => $statements->total(),
+                'totals' => $this->statementService->totals($profile->id),
             ],
         ]);
     }
