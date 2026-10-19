@@ -162,7 +162,7 @@ export function DashboardLayout() {
         <button
           onClick={async () => {
             await logout()
-            navigate('/')
+            navigate('/', { replace: true })
           }}
         >
           <LogOut /> Đăng xuất
@@ -192,7 +192,7 @@ export function DashboardLayout() {
               className="button button--ghost button--small mobile-logout-btn"
               onClick={async () => {
                 await logout()
-                navigate('/')
+                navigate('/', { replace: true })
               }}
               title="Đăng xuất"
               aria-label="Đăng xuất"

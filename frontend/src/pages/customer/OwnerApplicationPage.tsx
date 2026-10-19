@@ -6,11 +6,14 @@ import {
   Building2,
   CheckCircle2,
   CreditCard,
+  ExternalLink,
   FileCheck2,
+  FileText,
   Send,
   ShieldAlert,
   ShieldCheck,
   Store,
+  Trash2,
   UserCheck,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -57,6 +60,174 @@ function ApplicationTimeline({ status }: { status?: OwnerProfile['verification_s
         )
       })}
     </section>
+  )
+}
+
+function DocumentInputWithPreview({
+  label,
+  name,
+  file,
+  existingDoc,
+  error,
+  onChange,
+  required = false,
+}: {
+  label: string
+  name: string
+  file?: File | null
+  existingDoc?: { id: number; type: string; original_name: string; url: string }
+  error?: string
+  onChange: (file: File | null) => void
+  required?: boolean
+}) {
+  const isImage = file?.type.startsWith('image/')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (file && isImage) {
+      const url = URL.createObjectURL(file)
+      setPreviewUrl(url)
+      return () => URL.revokeObjectURL(url)
+    }
+    setPreviewUrl(null)
+  }, [file, isImage])
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: 'block', marginBottom: 6 }}>
+        <span style={{ fontWeight: 600, fontSize: 13 }}>
+          {label} {required && <strong style={{ color: '#c92a43' }}>*</strong>}
+        </span>
+      </label>
+
+      {file ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '10px 14px',
+            background: 'var(--panel-subtle, #f8fafc)',
+            border: '1px solid var(--line, #e2e8f0)',
+            borderRadius: 8,
+          }}
+        >
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Xem trước"
+              style={{
+                width: 56,
+                height: 56,
+                objectFit: 'cover',
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                background: '#e2e8f0',
+                borderRadius: 6,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <FileText size={24} style={{ color: '#475569' }} />
+            </div>
+          )}
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--ink, #0f172a)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {file.name}
+            </div>
+            <small style={{ color: 'var(--soft, #64748b)' }}>
+              {(file.size / (1024 * 1024)).toFixed(2)} MB · {file.type || 'Tệp đính kèm'}
+            </small>
+          </div>
+
+          <button
+            type="button"
+            className="button button--ghost button--small button--danger"
+            onClick={() => onChange(null)}
+            title="Huỷ chọn tệp này"
+            style={{ flexShrink: 0 }}
+          >
+            <Trash2 size={14} /> Xoá
+          </button>
+        </div>
+      ) : (
+        <div>
+          {existingDoc && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                marginBottom: 8,
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: '#166534' }}>
+                ✓ Đã có tệp trước đó: <strong>{existingDoc.original_name}</strong>
+              </span>
+              <a
+                href={existingDoc.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: '#15803d',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  textDecoration: 'underline',
+                }}
+              >
+                <ExternalLink size={12} /> Xem tệp
+              </a>
+            </div>
+          )}
+
+          <input
+            type="file"
+            name={name}
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null
+              if (selected && selected.size > 10 * 1024 * 1024) {
+                alert('Tệp bạn chọn vượt quá 10MB. Vui lòng chọn ảnh hoặc PDF dưới 10MB.')
+                e.target.value = ''
+                return
+              }
+              onChange(selected)
+            }}
+            className={error ? 'input--invalid' : ''}
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
+
+      {error && <span className="input-error">{error}</span>}
+    </div>
   )
 }
 
@@ -182,6 +353,13 @@ export function OwnerApplicationPage() {
   }
 
   const handleFileChange = (type: 'business_license' | 'land_right' | 'id_front' | 'id_back', file: File | null) => {
+    if (file && file.size > 10 * 1024 * 1024) {
+      setErrors((prev) => ({
+        ...prev,
+        [`documents.${type}`]: 'Tệp vượt quá kích thước cho phép (tối đa 10MB).',
+      }))
+      return
+    }
     setFiles((prev) => ({ ...prev, [type]: file }))
     const errorKey = `documents.${type}`
     if (errors[errorKey]) {
@@ -360,6 +538,40 @@ export function OwnerApplicationPage() {
         <div className="notice notice--soft">
           <FileCheck2 size={18} /> Hồ sơ đang trong hàng đợi xét duyệt bởi ban quản trị. Kết quả sẽ được gửi
           qua email và thông báo tại đây.
+        </div>
+      )}
+
+      {data && (status === 'pending' || status === 'approved') && data.documents && data.documents.length > 0 && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FileText size={16} /> Giấy tờ & Tài liệu đã đính kèm trong hồ sơ ({data.documents.length})
+          </h3>
+          <div className="doc-cards-grid">
+            {data.documents.map((doc) => {
+              const label =
+                ({
+                  id_front: 'CCCD mặt trước',
+                  id_back: 'CCCD mặt sau',
+                  business_license: 'Giấy phép kinh doanh',
+                  land_right: 'Quyền sử dụng sân / đất',
+                } as Record<string, string>)[doc.type] ?? doc.type
+              return (
+                <div key={doc.id} className="doc-card">
+                  <span className="badge badge--soft">{label}</span>
+                  <small style={{ wordBreak: 'break-all' }}>{doc.original_name}</small>
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="button button--ghost button--small"
+                    style={{ textDecoration: 'none', justifyContent: 'center' }}
+                  >
+                    <ExternalLink size={13} /> Mở xem tài liệu
+                  </a>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -603,35 +815,23 @@ export function OwnerApplicationPage() {
                     />
                     {errors.business_license && <span className="input-error">{errors.business_license}</span>}
                   </label>
-                  <label>
-                    <span>
-                      Ảnh chụp hoặc PDF Giấy phép kinh doanh
-                      {data?.documents?.some((d) => d.type === 'business_license')
-                        ? ' (đã có tệp tải lên trước đó, chọn tệp mới nếu muốn thay)'
-                        : ''}
-                    </span>
-                    <input
-                      name="documents[business_license]"
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) =>
-                        handleFileChange('business_license', e.target.files?.[0] ?? null)
-                      }
-                      className={errors['documents.business_license'] ? 'input--invalid' : ''}
-                    />
-                    {errors['documents.business_license'] && (
-                      <span className="input-error">{errors['documents.business_license']}</span>
-                    )}
-                  </label>
-                  <label>
-                    <span>Giấy tờ quyền sử dụng sân / Hợp đồng thuê mặt bằng (không bắt buộc)</span>
-                    <input
-                      name="documents[land_right]"
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('land_right', e.target.files?.[0] ?? null)}
-                    />
-                  </label>
+                  <DocumentInputWithPreview
+                    label="Giấy phép kinh doanh (GPKD / MST)"
+                    name="documents[business_license]"
+                    file={files.business_license}
+                    existingDoc={data?.documents?.find((d) => d.type === 'business_license')}
+                    error={errors['documents.business_license']}
+                    onChange={(f) => handleFileChange('business_license', f)}
+                    required
+                  />
+                  <DocumentInputWithPreview
+                    label="Giấy tờ quyền sử dụng sân / Hợp đồng thuê mặt bằng (không bắt buộc)"
+                    name="documents[land_right]"
+                    file={files.land_right}
+                    existingDoc={data?.documents?.find((d) => d.type === 'land_right')}
+                    error={errors['documents.land_right']}
+                    onChange={(f) => handleFileChange('land_right', f)}
+                  />
                 </div>
 
                 <div className="wizard-actions">
@@ -661,38 +861,24 @@ export function OwnerApplicationPage() {
 
                 {/* ID Cards Upload */}
                 <div className="form-grid">
-                  <label>
-                    <span>
-                      Mặt trước CCCD
-                      {data?.documents?.some((d) => d.type === 'id_front') ? ' (đã có tệp trước đó)' : ''}
-                    </span>
-                    <input
-                      name="documents[id_front]"
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('id_front', e.target.files?.[0] ?? null)}
-                      className={errors['documents.id_front'] ? 'input--invalid' : ''}
-                    />
-                    {errors['documents.id_front'] && (
-                      <span className="input-error">{errors['documents.id_front']}</span>
-                    )}
-                  </label>
-                  <label>
-                    <span>
-                      Mặt sau CCCD
-                      {data?.documents?.some((d) => d.type === 'id_back') ? ' (đã có tệp trước đó)' : ''}
-                    </span>
-                    <input
-                      name="documents[id_back]"
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleFileChange('id_back', e.target.files?.[0] ?? null)}
-                      className={errors['documents.id_back'] ? 'input--invalid' : ''}
-                    />
-                    {errors['documents.id_back'] && (
-                      <span className="input-error">{errors['documents.id_back']}</span>
-                    )}
-                  </label>
+                  <DocumentInputWithPreview
+                    label="Mặt trước Căn cước công dân"
+                    name="documents[id_front]"
+                    file={files.id_front}
+                    existingDoc={data?.documents?.find((d) => d.type === 'id_front')}
+                    error={errors['documents.id_front']}
+                    onChange={(f) => handleFileChange('id_front', f)}
+                    required
+                  />
+                  <DocumentInputWithPreview
+                    label="Mặt sau Căn cước công dân"
+                    name="documents[id_back]"
+                    file={files.id_back}
+                    existingDoc={data?.documents?.find((d) => d.type === 'id_back')}
+                    error={errors['documents.id_back']}
+                    onChange={(f) => handleFileChange('id_back', f)}
+                    required
+                  />
                 </div>
 
                 {/* Quick Summary Review */}

@@ -20,7 +20,7 @@ class AuthService
         }
 
         $request->session()->regenerate();
-        $user = $request->user();
+        $user = Auth::user();
 
         if (! $user->is_active) {
             Auth::logout();
@@ -50,6 +50,15 @@ class AuthService
 
     public function logout(Request $request): void
     {
+        try {
+            $token = $request->user()?->currentAccessToken();
+            if ($token && method_exists($token, 'delete')) {
+                $token->delete();
+            }
+        } catch (\Throwable) {
+            // Không để lỗi xóa token cản trở việc đăng xuất session
+        }
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

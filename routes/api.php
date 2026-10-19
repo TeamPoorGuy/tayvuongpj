@@ -20,10 +20,10 @@ Route::get('/', fn () => response()->json([
 
 Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::prefix('auth')->group(function () {
-        Route::post('/login', [AuthController::class, 'login'])->middleware(['guest', 'throttle:login']);
-        Route::post('/register', [AuthController::class, 'register'])->middleware(['guest', 'throttle:register']);
-        Route::post('/forgot-password', [PasswordResetController::class, 'forgot'])->middleware(['guest', 'throttle:forgot']);
-        Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware(['guest', 'throttle:forgot']);
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+        Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
+        Route::post('/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:forgot');
+        Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:forgot');
         Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:verification');
             Route::get('/me', [AuthController::class, 'me'])

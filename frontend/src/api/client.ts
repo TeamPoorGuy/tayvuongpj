@@ -16,6 +16,10 @@ export async function initializeCsrf(): Promise<void> {
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 let csrfPrimed = false
 
+export function resetCsrf(): void {
+  csrfPrimed = false
+}
+
 api.interceptors.request.use(async (config) => {
   if (!csrfPrimed && config.method && MUTATING_METHODS.has(config.method)) {
     await initializeCsrf()

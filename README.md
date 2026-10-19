@@ -116,17 +116,22 @@ Thiếu `queue` thì mail không được gửi; thiếu `schedule` thì đơn q
 
 Tất cả tài khoản mẫu có mật khẩu chung là: **`password`**
 
-| Vai trò | Email đăng nhập | Mật khẩu | Mô tả & Quyền hạn |
+| Vai trò | Email đăng nhập | Mật khẩu | Kịch bản kiểm thử & Mô tả |
 |---|---|---|---|
-| **System Admin** | `admin@sportfield.com` | `password` | Quản trị viên tối cao: Kiểm duyệt sân, kiểm duyệt chủ sân, khóa user, quản lý danh mục |
-| **Field Owner 1** | `owner1@sportfield.com` | `password` | Chủ sân CLB Thể Thao Tây Vương (Sân bóng đá, cầu lông, tennis) |
-| **Field Owner 2** | `owner2@sportfield.com` | `password` | Chủ sân Khu Phức Hợp Sao Mai (Bóng rổ, bóng chuyền) |
-| **Field Owner 3** | `owner3@sportfield.com` | `password` | Chủ sân Cầu Giấy Pro (Tài khoản đang chờ Admin duyệt) |
-| **Customer 1** | `customer@sportfield.com` | `password` | Khách hàng Lê Văn Khách |
-| **Customer 2** | `customer2@sportfield.com` | `password` | Khách hàng Phạm Hoàng Nam |
-| **Customer 3** | `customer3@sportfield.com` | `password` | Khách hàng Vũ Thị Hương |
-| **Customer 4** | `customer4@sportfield.com` | `password` | Khách hàng Đặng Anh Khoa |
-| **Customer 5** | `customer5@sportfield.com` | `password` | Khách hàng Ngô Bảo Long |
+| **System Admin** | `admin@sportfield.com` | `password` | Quản trị viên tối cao: Kiểm duyệt sân, duyệt chủ sân, khóa user, xem thống kê |
+| **Admin 2 (Mod)** | `admin2@sportfield.com` | `password` | Quản trị viên kiểm duyệt phụ |
+| **Chủ sân 1 (Approved)** | `owner1@sportfield.com` | `password` | CLB Tây Vương: 6 sân (bóng đá 5/7/11, tennis, cầu lông), nhiều đơn confirmed/pending |
+| **Chủ sân 2 (Approved)** | `owner2@sportfield.com` | `password` | KPH Sao Mai: sân bóng rổ, bóng chuyền, 1 sân bóng đá bị từ chối |
+| **Chủ sân 3 (Pending)** | `owner3@sportfield.com` | `password` | Sân Cầu Lông & Pickleball Cầu Giấy: Chờ Admin duyệt hồ sơ & duyệt sân |
+| **Chủ sân 4 (Rejected)** | `owner4@sportfield.com` | `password` | Tổ hợp Hà Đông: Bị từ chối duyệt (xem lý do từ chối & nộp lại hồ sơ) |
+| **Chủ sân 5 (Bị khóa)** | `owner5@sportfield.com` | `password` | Tài khoản chủ sân bị Admin khóa (`is_active = false`) |
+| **Khách hàng 1** | `customer@sportfield.com` | `password` | Lê Văn Khách: Đặt sân nhiều, có đơn hoàn thành & review |
+| **Khách hàng 2** | `customer2@sportfield.com` | `password` | Phạm Hoàng Nam: Điểm uy tín 110, host phòng ghép đội & nhận slot waitlist |
+| **Khách hàng 3** | `customer3@sportfield.com` | `password` | Vũ Thị Hương: Điểm uy tín 95, đang chờ hàng đợi waitlist slot sân |
+| **Khách hàng 4** | `customer4@sportfield.com` | `password` | Đặng Anh Khoa: Điểm uy tín 65 (có lịch sử bị phạt no-show & huỷ sát giờ) |
+| **Khách hàng 5** | `customer5@sportfield.com` | `password` | Ngô Bảo Long: Khách hàng thường |
+| **Khách hàng 6 (Bị khóa)** | `customer6@sportfield.com` | `password` | Đỗ Mỹ Linh: Tài khoản khách hàng bị Admin khóa |
+| **Khách hàng 7-10** | `customer7@sportfield.com` -> `10` | `password` | Tham gia giao lưu các phòng ghép đội tìm đối thủ |
 
 ---
 

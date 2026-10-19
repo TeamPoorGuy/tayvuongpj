@@ -59,7 +59,7 @@ export function PublicLayout() {
                   type="button"
                   className="button button--icon button--ghost"
                   title="Đăng xuất"
-                  onClick={async () => { await logout(); navigate('/') }}
+                  onClick={async () => { await logout(); navigate('/', { replace: true }) }}
                 >
                   <LogOut size={15} />
                 </button>
@@ -124,7 +124,7 @@ export function PublicLayout() {
                       )}
                       <button
                         className="button button--ghost button--block"
-                        onClick={async () => { setMobileOpen(false); await logout(); navigate('/') }}
+                        onClick={async () => { setMobileOpen(false); await logout(); navigate('/', { replace: true }) }}
                       >
                         <LogOut size={16} /> Đăng xuất
                       </button>

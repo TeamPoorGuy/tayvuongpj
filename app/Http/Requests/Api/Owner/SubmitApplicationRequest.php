@@ -38,7 +38,7 @@ class SubmitApplicationRequest extends FormRequest
                 && ! $profile?->documents()->where('type', $type)->exists();
 
             $rules["documents.$type"] = [
-                Rule::requiredIf($required), 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120',
+                Rule::requiredIf($required), 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240',
             ];
         }
 
@@ -51,8 +51,16 @@ class SubmitApplicationRequest extends FormRequest
             'accept_terms.accepted' => 'Bạn cần đồng ý với điều khoản dành cho chủ sân.',
             'owner_id_number.regex' => 'Số CCCD phải gồm đúng 12 chữ số.',
             'documents.id_front.required' => 'Vui lòng tải ảnh CCCD mặt trước.',
+            'documents.id_front.mimes' => 'Ảnh CCCD mặt trước phải là định dạng: JPG, PNG, WEBP hoặc PDF.',
+            'documents.id_front.max' => 'Ảnh CCCD mặt trước dung lượng tối đa 10MB.',
             'documents.id_back.required' => 'Vui lòng tải ảnh CCCD mặt sau.',
+            'documents.id_back.mimes' => 'Ảnh CCCD mặt sau phải là định dạng: JPG, PNG, WEBP hoặc PDF.',
+            'documents.id_back.max' => 'Ảnh CCCD mặt sau dung lượng tối đa 10MB.',
             'documents.business_license.required' => 'Vui lòng tải giấy phép/đăng ký kinh doanh.',
+            'documents.business_license.mimes' => 'Giấy phép kinh doanh phải là định dạng: JPG, PNG, WEBP hoặc PDF.',
+            'documents.business_license.max' => 'Giấy phép kinh doanh dung lượng tối đa 10MB.',
+            'documents.land_right.mimes' => 'Giấy tờ quyền sân phải là định dạng: JPG, PNG, WEBP hoặc PDF.',
+            'documents.land_right.max' => 'Giấy tờ quyền sân dung lượng tối đa 10MB.',
         ];
     }
 }

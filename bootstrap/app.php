@@ -18,6 +18,20 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return rtrim(config('frontend.url'), '/').'/login';
+        });
+        $middleware->redirectUsersTo(function (Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return '/';
+        });
         $middleware->alias([
             // Kiểm tra role customer, field_owner hoặc admin.
             'api.role' => \App\Http\Middleware\EnsureUserHasRole::class,
