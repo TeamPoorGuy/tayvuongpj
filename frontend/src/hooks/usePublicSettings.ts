@@ -11,6 +11,7 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
   max_pending_bookings: 3,
   max_advance_days: 30,
   platform_bank_name: 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)',
+  platform_bank_code: 'VCB',
   platform_bank_account: '1234567890',
   platform_bank_holder: 'CONG TY SPORTHUB VIET NAM',
   support_email: 'hotro@sporthub.vn',

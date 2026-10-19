@@ -22,7 +22,7 @@ import type {
   ApiEnvelope,
   CurrentStatementSummary,
   OwnerStatement,
-  Paginated,
+  StatementList,
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { formatDate, formatMoney } from '../../utils/format'
@@ -45,7 +45,7 @@ export function OwnerStatementsPage() {
   const statementsQuery = useQuery({
     queryKey: ['owner', 'statements', page],
     queryFn: async () =>
-      (await api.get<Paginated<OwnerStatement>>(`/field-owner/statements?page=${page}&per_page=10`)).data,
+      (await api.get<StatementList>(`/field-owner/statements?page=${page}&per_page=10`)).data,
   })
 
   // 3. Chi tiết kỳ đối soát đang chọn (kèm danh sách bookings)
@@ -75,6 +75,7 @@ export function OwnerStatementsPage() {
   const summary = currentSummaryQuery.data
   const activeStatement = detailQuery.data || selectedStatement
   const list = statementsQuery.data?.data ?? []
+  const totals = statementsQuery.data?.meta?.totals
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -128,26 +129,51 @@ export function OwnerStatementsPage() {
             <span className="badge badge--brand">Tỉ lệ hoa hồng: {summary.commission_rate}%</span>
           )}
         </div>
-        <div className="stats-grid" style={{ marginTop: 12 }}>
-          <div className="stat-card">
-            <span className="stat-card__label">Tổng giá trị đơn (GMV)</span>
-            <strong className="stat-card__val">{formatMoney(summary?.estimated_gmv ?? 0)}</strong>
-            <small className="stat-card__note">Từ các đơn hoàn thành & giữ cọc</small>
-          </div>
-          <div className="stat-card">
-            <span className="stat-card__label">Số đơn tính phí</span>
-            <strong className="stat-card__val">{summary?.booking_count ?? 0} đơn</strong>
-            <small className="stat-card__note">Đã check-in / No-show</small>
-          </div>
-          <div className="stat-card stat-card--highlight">
-            <span className="stat-card__label">Phí nền tảng ước tính</span>
-            <strong className="stat-card__val" style={{ color: 'var(--brand-primary)' }}>
-              {formatMoney(summary?.estimated_commission ?? 0)}
-            </strong>
-            <small className="stat-card__note">Sẽ đối soát vào ngày 01 tháng sau</small>
+        <div className="data-panel__body">
+          <div className="stats-grid-3" style={{ marginBottom: 0 }}>
+            <div className="stat-card">
+              <span className="stat-card__label">Tổng giá trị đơn (GMV)</span>
+              <strong className="stat-card__val">{formatMoney(summary?.estimated_gmv ?? 0)}</strong>
+              <small className="stat-card__note">Từ các đơn hoàn thành & giữ cọc</small>
+            </div>
+            <div className="stat-card">
+              <span className="stat-card__label">Số đơn tính phí</span>
+              <strong className="stat-card__val">{summary?.booking_count ?? 0} đơn</strong>
+              <small className="stat-card__note">Đã check-in / No-show</small>
+            </div>
+            <div className="stat-card stat-card--highlight">
+              <span className="stat-card__label">Phí nền tảng ước tính</span>
+              <strong className="stat-card__val">
+                {formatMoney(summary?.estimated_commission ?? 0)}
+              </strong>
+              <small className="stat-card__note">Sẽ đối soát vào ngày 01 tháng sau</small>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Công nợ phí nền tảng: chưa thanh toán / đã thanh toán */}
+      <div className="stats-grid-3">
+        <div className="stat-card">
+          <span className="stat-card__label">Chưa thanh toán</span>
+          <strong className="stat-card__val" style={{ color: 'var(--warn, #e29a0c)' }}>
+            {formatMoney(totals?.unpaid_amount ?? 0)}
+          </strong>
+          <small className="stat-card__note">{totals?.unpaid_count ?? 0} kỳ chờ nộp hoặc chờ admin xác nhận</small>
+        </div>
+        <div className="stat-card stat-card--highlight">
+          <span className="stat-card__label">Đã thanh toán</span>
+          <strong className="stat-card__val">{formatMoney(totals?.paid_amount ?? 0)}</strong>
+          <small className="stat-card__note">{totals?.paid_count ?? 0} kỳ đã được xác nhận</small>
+        </div>
+        <div className="stat-card">
+          <span className="stat-card__label">Tổng phí đã phát sinh</span>
+          <strong className="stat-card__val">
+            {formatMoney((totals?.unpaid_amount ?? 0) + (totals?.paid_amount ?? 0))}
+          </strong>
+          <small className="stat-card__note">Không tính các kỳ được miễn thu</small>
+        </div>
+      </div>
 
       {/* Bảng danh sách các kỳ đối soát */}
       <section className="data-panel">
@@ -164,8 +190,8 @@ export function OwnerStatementsPage() {
           isEmpty={list.length === 0}
           empty={<Empty text="Bảng đối soát hàng tháng sẽ tự động được hệ thống tổng hợp vào ngày 01 của tháng kế tiếp." />}
         >
-          <div className="table-responsive">
-            <table className="data-table">
+          <div className="table-wrap">
+            <table>
               <thead>
                 <tr>
                   <th>Kỳ đối soát</th>
@@ -267,6 +293,19 @@ export function OwnerStatementsPage() {
                 <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 12px 0' }}>
                   <CreditCard size={16} /> Thông tin chuyển khoản SportHub
                 </h4>
+                {activeStatement.platform_bank?.qr_url && (
+                  <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                    <img
+                      src={activeStatement.platform_bank.qr_url}
+                      alt="Mã QR chuyển khoản phí đối soát"
+                      style={{ width: 220, maxWidth: '100%', borderRadius: 8 }}
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                    <small className="text-muted" style={{ display: 'block' }}>
+                      Quét bằng app ngân hàng — đã điền sẵn số tiền và nội dung chuyển khoản
+                    </small>
+                  </div>
+                )}
                 <div className="bank-info-grid" style={{ display: 'grid', gap: 8, fontSize: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span className="text-muted">Ngân hàng:</span>
@@ -376,8 +415,8 @@ export function OwnerStatementsPage() {
                 </a>
               </div>
               {activeStatement.bookings && activeStatement.bookings.length > 0 ? (
-                <div className="table-responsive" style={{ maxHeight: 250, overflowY: 'auto' }}>
-                  <table className="data-table data-table--compact">
+                <div className="table-wrap" style={{ maxHeight: 250 }}>
+                  <table style={{ minWidth: 0 }}>
                     <thead>
                       <tr>
                         <th>Mã đơn</th>

@@ -181,6 +181,7 @@ export interface OwnerStatement {
     bank_name: string
     account_number: string
     account_holder: string
+    qr_url: string | null
   }
   owner?: {
     id: number
@@ -198,6 +199,15 @@ export interface OwnerStatement {
   created_at: string
   updated_at: string
 }
+
+export interface StatementTotals {
+  unpaid_amount: number
+  unpaid_count: number
+  paid_amount: number
+  paid_count: number
+}
+
+export type StatementList = Paginated<OwnerStatement> & { meta: { totals: StatementTotals } }
 
 export interface CurrentStatementSummary {
   period: string
@@ -327,6 +337,7 @@ export interface PublicSettings {
   max_pending_bookings: number
   max_advance_days: number
   platform_bank_name: string
+  platform_bank_code: string
   platform_bank_account: string
   platform_bank_holder: string
   support_email: string

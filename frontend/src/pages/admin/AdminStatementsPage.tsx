@@ -1,13 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   CheckCircle2,
-  Clock,
   Coins,
   Download,
   Eye,
   Plus,
   RotateCcw,
+  Search,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -23,7 +22,7 @@ import type {
   AdminDashboard,
   ApiEnvelope,
   OwnerStatement,
-  Paginated,
+  StatementList,
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { formatDate, formatMoney } from '../../utils/format'
@@ -68,7 +67,7 @@ export function AdminStatementsPage() {
       if (periodFilter) params.set('period', periodFilter)
       if (statusFilter) params.set('status', statusFilter)
       if (debouncedSearch) params.set('keyword', debouncedSearch)
-      return (await api.get<Paginated<OwnerStatement>>(`/admin/statements?${params.toString()}`)).data
+      return (await api.get<StatementList>(`/admin/statements?${params.toString()}`)).data
     },
   })
 
@@ -141,21 +140,42 @@ export function AdminStatementsPage() {
   const stats = dashboardQuery.data
   const activeDetail = detailQuery.data || detailTarget
   const list = statementsQuery.data?.data ?? []
+  const totals = statementsQuery.data?.meta?.totals
 
   const renderStatus = (st: OwnerStatement) => {
     if (st.status === 'paid') {
-      return <span className="status-pill status-pill--confirmed"><CheckCircle2 size={13} /> Đã thu</span>
+      return (
+        <span className="status status--approved">
+          <i /> Đã duyệt thu
+        </span>
+      )
     }
     if (st.status === 'reported') {
-      return <span className="status-pill status-pill--pending" style={{ background: '#fef3c7', color: '#92400e' }}><Clock size={13} /> Khách báo chuyển</span>
+      return (
+        <span className="status status--reported">
+          <i /> Đã báo chuyển
+        </span>
+      )
     }
     if (st.status === 'waived') {
-      return <span className="status-pill status-pill--free"><RotateCcw size={13} /> Miễn thu</span>
+      return (
+        <span className="status status--inactive">
+          <i /> Miễn thu
+        </span>
+      )
     }
     if (st.is_overdue) {
-      return <span className="status-pill status-pill--cancelled"><AlertTriangle size={13} /> Nợ quá hạn</span>
+      return (
+        <span className="status status--cancelled">
+          <i /> Nợ quá hạn
+        </span>
+      )
     }
-    return <span className="status-pill status-pill--pending"><Clock size={13} /> Chờ nộp</span>
+    return (
+      <span className="status status--pending">
+        <i /> Chờ nộp
+      </span>
+    )
   }
 
   return (
@@ -168,7 +188,7 @@ export function AdminStatementsPage() {
         action={
           <button
             type="button"
-            className="button button--primary"
+            className="button button--brand"
             onClick={() => setGenerateModalOpen(true)}
           >
             <Plus size={16} /> Sinh kỳ đối soát
@@ -177,7 +197,7 @@ export function AdminStatementsPage() {
       />
 
       {/* Thẻ chỉ số hoa hồng */}
-      <div className="stats-grid" style={{ marginBottom: 20 }}>
+      <div className="stats-grid-3" style={{ marginBottom: 24 }}>
         <div className="stat-card">
           <span className="stat-card__label">Tổng giá trị đơn toàn sàn (GMV)</span>
           <strong className="stat-card__val">{formatMoney(stats?.total_gmv ?? 0)}</strong>
@@ -185,73 +205,80 @@ export function AdminStatementsPage() {
         </div>
         <div className="stat-card stat-card--highlight">
           <span className="stat-card__label">Hoa hồng nền tảng đã thu</span>
-          <strong className="stat-card__val" style={{ color: 'var(--color-success)' }}>
+          <strong className="stat-card__val">
             {formatMoney(stats?.total_commission_collected ?? 0)}
           </strong>
-          <small className="stat-card__note">Thực thu từ các kỳ đối soát đã duyệt</small>
+          <small className="stat-card__note">{totals?.paid_count ?? 0} kỳ đã duyệt thu</small>
         </div>
         <div className="stat-card">
           <span className="stat-card__label">Hoa hồng đang chờ thu</span>
-          <strong className="stat-card__val" style={{ color: 'var(--brand-primary)' }}>
+          <strong className="stat-card__val" style={{ color: 'var(--warn, #e29a0c)' }}>
             {formatMoney(stats?.total_commission_pending ?? 0)}
           </strong>
-          <small className="stat-card__note">Các kỳ chưa nộp hoặc đang chờ xác nhận</small>
+          <small className="stat-card__note">{totals?.unpaid_count ?? 0} kỳ chưa nộp hoặc chờ xác nhận</small>
         </div>
       </div>
 
-      {/* Bộ lọc */}
-      <section className="data-panel">
-        <div className="filters-bar" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <div style={{ flex: '1 1 200px', position: 'relative' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Tìm theo mã CK, tên cơ sở, chủ sân..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div style={{ width: 160 }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Kỳ YYYY-MM"
-              value={periodFilter}
-              onChange={(e) => setPeriodFilter(e.target.value)}
-            />
-          </div>
-          <div style={{ width: 160 }}>
-            <select
-              className="input"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="unpaid">Chờ nộp</option>
-              <option value="reported">Đã báo chuyển</option>
-              <option value="paid">Đã thanh toán</option>
-              <option value="waived">Miễn thu</option>
-            </select>
-          </div>
-          <a
-            href={`/api/v1/admin/statements/export-csv?period=${encodeURIComponent(periodFilter)}&status=${encodeURIComponent(statusFilter)}&keyword=${encodeURIComponent(debouncedSearch)}`}
-            className="button button--secondary"
-            title="Tải về file CSV toàn bộ bảng đối soát theo bộ lọc"
-            download
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', height: 40, padding: '0 14px', whiteSpace: 'nowrap' }}
-          >
-            <Download size={15} /> Xuất CSV
-          </a>
-        </div>
-
-        <QueryState
-          isPending={statementsQuery.isPending}
-          isError={statementsQuery.isError}
-          isEmpty={list.length === 0}
-          empty={<Empty text="Không tìm thấy bảng đối soát nào. Thử thay đổi bộ lọc hoặc bấm 'Sinh kỳ đối soát' để hệ thống tổng hợp." />}
+      {/* Bộ lọc chuẩn hệ thống */}
+      <div className="toolbar">
+        <label className="search-control">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Tìm theo mã CK, tên cơ sở, chủ sân..."
+            aria-label="Tìm theo mã CK, tên cơ sở, chủ sân"
+          />
+        </label>
+        <input
+          type="text"
+          placeholder="Kỳ YYYY-MM"
+          value={periodFilter}
+          onChange={(e) => {
+            setPeriodFilter(e.target.value)
+            setPage(1)
+          }}
+          style={{ maxWidth: 150 }}
+          aria-label="Lọc theo kỳ đối soát"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value)
+            setPage(1)
+          }}
+          aria-label="Lọc theo trạng thái"
         >
-          <div className="table-responsive">
-            <table className="data-table">
+          <option value="">Tất cả trạng thái</option>
+          <option value="unpaid">Chờ nộp</option>
+          <option value="reported">Đã báo chuyển</option>
+          <option value="paid">Đã thanh toán</option>
+          <option value="waived">Miễn thu</option>
+        </select>
+        <a
+          href={`/api/v1/admin/statements/export-csv?period=${encodeURIComponent(periodFilter)}&status=${encodeURIComponent(statusFilter)}&keyword=${encodeURIComponent(debouncedSearch)}`}
+          className="button button--ghost"
+          download
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', marginLeft: 'auto' }}
+          title="Tải về file CSV toàn bộ bảng đối soát theo bộ lọc"
+        >
+          <Download size={15} /> Xuất CSV
+        </a>
+      </div>
+
+      <QueryState
+        isPending={statementsQuery.isPending}
+        isError={statementsQuery.isError}
+        isEmpty={list.length === 0}
+        error={errorMessage(statementsQuery.error)}
+        empty={<Empty text="Không tìm thấy bảng đối soát nào. Thử thay đổi bộ lọc hoặc bấm 'Sinh kỳ đối soát' để hệ thống tổng hợp." />}
+      >
+        <section className="data-panel">
+          <div className="table-wrap">
+            <table>
               <thead>
                 <tr>
                   <th>Cơ sở / Chủ sân</th>
@@ -262,7 +289,7 @@ export function AdminStatementsPage() {
                   <th>Mã CK / Hạn nộp</th>
                   <th>Trạng thái</th>
                   <th>Ghi chú</th>
-                  <th>Hành động</th>
+                  <th style={{ textAlign: 'right' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -270,9 +297,9 @@ export function AdminStatementsPage() {
                   <tr key={st.id}>
                     <td>
                       <strong>{st.owner?.business_name || '—'}</strong>
-                      <div className="text-muted" style={{ fontSize: 12 }}>
+                      <small style={{ display: 'block', color: 'var(--muted)' }}>
                         {st.owner?.user_name} ({st.owner?.user_phone || st.owner?.user_email})
-                      </div>
+                      </small>
                     </td>
                     <td>
                       <strong>Tháng {st.period}</strong>
@@ -280,25 +307,27 @@ export function AdminStatementsPage() {
                     <td>{st.booking_count}</td>
                     <td>{formatMoney(st.gmv)}</td>
                     <td>
-                      <strong style={{ color: 'var(--brand-primary)' }}>{formatMoney(st.commission_amount)}</strong>
+                      <strong style={{ color: 'var(--forest)' }}>{formatMoney(st.commission_amount)}</strong>
                     </td>
                     <td>
-                      <code style={{ fontSize: 12, background: 'var(--bg-card-secondary)', padding: '2px 4px', borderRadius: 4 }}>
+                      <code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 'var(--r-sm)' }}>
                         {st.transfer_code}
                       </code>
-                      <div style={{ fontSize: 12, color: st.is_overdue ? 'var(--color-danger)' : 'inherit', marginTop: 2 }}>
+                      <small style={{ display: 'block', color: st.is_overdue ? 'var(--danger)' : 'var(--muted)', marginTop: 2 }}>
                         Hạn: {st.due_at ? formatDate(st.due_at) : '—'}
-                      </div>
+                      </small>
                     </td>
                     <td>{renderStatus(st)}</td>
-                    <td style={{ maxWidth: 160, fontSize: 12 }}>
-                      {st.note ? <span title={st.note}>{st.note}</span> : '—'}
+                    <td style={{ maxWidth: 160 }}>
+                      <small style={{ display: 'block', color: 'var(--muted)' }} title={st.note || ''}>
+                        {st.note || '—'}
+                      </small>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="row-actions">
                         <button
                           type="button"
-                          className="button button--tiny button--ghost"
+                          className="button button--ghost button--small"
                           onClick={() => setDetailTarget(st)}
                           title="Xem danh sách đơn"
                         >
@@ -307,7 +336,7 @@ export function AdminStatementsPage() {
                         {['unpaid', 'reported'].includes(st.status) && (
                           <button
                             type="button"
-                            className="button button--tiny button--primary"
+                            className="button button--brand button--small"
                             onClick={() => setConfirmTarget(st)}
                             title="Xác nhận đã nhận tiền"
                           >
@@ -317,7 +346,7 @@ export function AdminStatementsPage() {
                         {st.status === 'reported' && (
                           <button
                             type="button"
-                            className="button button--tiny button--danger"
+                            className="button button--danger button--small"
                             onClick={() => {
                               setRejectTarget(st)
                               setRejectReason('')
@@ -330,7 +359,7 @@ export function AdminStatementsPage() {
                         {st.status !== 'paid' && st.status !== 'waived' && (
                           <button
                             type="button"
-                            className="button button--tiny button--ghost"
+                            className="button button--ghost button--small"
                             onClick={() => {
                               setWaiveTarget(st)
                               setWaiveReason('')
@@ -353,8 +382,8 @@ export function AdminStatementsPage() {
             lastPage={statementsQuery.data?.meta?.last_page ?? 1}
             onPageChange={setPage}
           />
-        </QueryState>
-      </section>
+        </section>
+      </QueryState>
 
       {/* Modal sinh kỳ đối soát */}
       <Modal
@@ -362,22 +391,21 @@ export function AdminStatementsPage() {
         onClose={() => setGenerateModalOpen(false)}
         title="Sinh bảng đối soát hoa hồng hàng tháng"
       >
-        <div style={{ display: 'grid', gap: 16 }}>
-          <p style={{ fontSize: 14 }}>
+        <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
+          <p style={{ fontSize: 14, margin: 0, color: 'var(--muted)' }}>
             Hệ thống sẽ quét tất cả các đơn đặt sân đã hoàn thành hoặc huỷ có phạt cọc trong tháng được chọn,
             tính toán phí hoa hồng tương ứng theo tỷ lệ cấu hình và tạo bảng đối soát cho toàn bộ chủ sân được duyệt.
           </p>
-          <div className="form-group">
-            <label htmlFor="genPeriod">Kỳ đối soát (Định dạng YYYY-MM):</label>
+          <label>
+            <span>Kỳ đối soát (Định dạng YYYY-MM):</span>
             <input
               id="genPeriod"
               type="text"
-              className="input"
               placeholder="Ví dụ: 2026-09"
               value={genPeriod}
               onChange={(e) => setGenPeriod(e.target.value)}
             />
-          </div>
+          </label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <button
               type="button"
@@ -388,7 +416,7 @@ export function AdminStatementsPage() {
             </button>
             <button
               type="button"
-              className="button button--primary"
+              className="button button--brand"
               disabled={generateMutation.isPending || !/^\d{4}-\d{2}$/.test(genPeriod)}
               onClick={() => generateMutation.mutate(genPeriod)}
             >
@@ -416,21 +444,20 @@ export function AdminStatementsPage() {
         onClose={() => setWaiveTarget(null)}
         title={`Miễn thu phí đối soát tháng ${waiveTarget?.period}`}
       >
-        <div style={{ display: 'grid', gap: 16 }}>
-          <p style={{ fontSize: 14 }}>
+        <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
+          <p style={{ fontSize: 14, margin: 0 }}>
             Bạn đang thực hiện miễn thu phí hoa hồng <strong>{formatMoney(waiveTarget?.commission_amount ?? 0)}</strong> cho cơ sở <strong>{waiveTarget?.owner?.business_name}</strong>.
           </p>
-          <div className="form-group">
-            <label htmlFor="waiveReason">Lý do miễn thu (bắt buộc):</label>
+          <label>
+            <span>Lý do miễn thu (bắt buộc):</span>
             <textarea
               id="waiveReason"
-              className="input"
               rows={3}
               placeholder="Ví dụ: Chương trình khuyến mãi khai trương / bồi thường sự cố..."
               value={waiveReason}
               onChange={(e) => setWaiveReason(e.target.value)}
             />
-          </div>
+          </label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button
               type="button"
@@ -457,22 +484,21 @@ export function AdminStatementsPage() {
         onClose={() => setRejectTarget(null)}
         title={`Từ chối báo cáo chuyển khoản tháng ${rejectTarget?.period}`}
       >
-        <div style={{ display: 'grid', gap: 16 }}>
-          <p style={{ fontSize: 14 }}>
+        <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
+          <p style={{ fontSize: 14, margin: 0 }}>
             Bạn đang xác nhận <strong>chưa nhận được</strong> số tiền <strong>{formatMoney(rejectTarget?.commission_amount ?? 0)}</strong> từ chủ sân <strong>{rejectTarget?.owner?.business_name}</strong>.
-            Kỳ đối soát sẽ được chuyển lại về trạng thái <strong>Chờ nộp (unpaid)</strong>.
+            Kỳ đối soát sẽ được chuyển lại về trạng thái <strong>Chờ nộp</strong>.
           </p>
-          <div className="form-group">
-            <label htmlFor="rejectReason">Lý do từ chối (tuỳ chọn):</label>
+          <label>
+            <span>Lý do từ chối (tuỳ chọn):</span>
             <input
               id="rejectReason"
               type="text"
-              className="input"
               placeholder="Ví dụ: Chưa thấy tiền nổi trên sao kê tài khoản ngân hàng..."
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
             />
-          </div>
+          </label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button
               type="button"
@@ -498,39 +524,40 @@ export function AdminStatementsPage() {
         isOpen={Boolean(detailTarget)}
         onClose={() => setDetailTarget(null)}
         title={`Chi tiết đối soát tháng ${detailTarget?.period} - ${detailTarget?.owner?.business_name}`}
+        wide
       >
         {activeDetail && (
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-              <div style={{ background: 'var(--bg-card-secondary)', padding: 12, borderRadius: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tổng GMV:</span>
-                <div style={{ fontWeight: 'bold', fontSize: 16 }}>{formatMoney(activeDetail.gmv)}</div>
+              <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Tổng GMV:</span>
+                <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--ink)' }}>{formatMoney(activeDetail.gmv)}</div>
               </div>
-              <div style={{ background: 'var(--bg-card-secondary)', padding: 12, borderRadius: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Phí hoa hồng:</span>
-                <div style={{ fontWeight: 'bold', fontSize: 16, color: 'var(--brand-primary)' }}>
+              <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Phí hoa hồng:</span>
+                <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--forest)' }}>
                   {formatMoney(activeDetail.commission_amount)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-card-secondary)', padding: 12, borderRadius: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trạng thái:</span>
+              <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Trạng thái:</span>
                 <div style={{ marginTop: 2 }}>{renderStatus(activeDetail)}</div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
-              <h4 style={{ margin: 0 }}>Danh sách đơn đặt sân tính phí ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
+              <h4 style={{ margin: 0, fontSize: 15 }}>Danh sách đơn đặt sân tính phí ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
               <a
                 href={`/api/v1/admin/statements/${activeDetail.id}/export-csv`}
-                className="button button--tiny button--secondary"
+                className="button button--ghost button--small"
                 download
-                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
                 <Download size={13} /> Xuất CSV đơn
               </a>
             </div>
-            <div className="table-responsive" style={{ maxHeight: 300, overflowY: 'auto' }}>
-              <table className="data-table data-table--compact">
+            <div className="table-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <table>
                 <thead>
                   <tr>
                     <th>Mã đơn</th>
@@ -543,12 +570,15 @@ export function AdminStatementsPage() {
                 <tbody>
                   {(activeDetail.bookings ?? []).map((b) => (
                     <tr key={b.id}>
-                      <td>#{b.id}</td>
+                      <td><strong>#BK-{b.id}</strong></td>
                       <td>{formatDate(b.booking_date)}</td>
-                      <td>{b.customer?.name} ({b.customer?.phone})</td>
+                      <td>
+                        <strong>{b.customer?.name}</strong>
+                        {b.customer?.phone && <small style={{ display: 'block', color: 'var(--muted)' }}>{b.customer.phone}</small>}
+                      </td>
                       <td>{formatMoney(b.total_price)}</td>
                       <td>
-                        <strong>{formatMoney(b.commission?.amount ?? 0)}</strong>
+                        <strong style={{ color: 'var(--forest)' }}>{formatMoney(b.commission?.amount ?? 0)}</strong>
                       </td>
                     </tr>
                   ))}
