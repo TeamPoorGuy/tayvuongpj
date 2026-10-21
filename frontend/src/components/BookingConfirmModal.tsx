@@ -40,11 +40,13 @@ export function BookingConfirmModal({
 
   const effectiveTotalPrice = totalPrice * (isRecurring ? weeks : 1)
   const depositPercent = settings?.deposit_percent ?? 30
-  const perMatchDeposit = Math.min(totalPrice, Math.ceil((totalPrice * depositPercent) / 100 / 1000) * 1000)
-  const depositAmount = isRecurring ? perMatchDeposit : Math.min(totalPrice, Math.ceil((totalPrice * depositPercent) / 100 / 1000) * 1000)
-  const remainingAmount = Math.max(0, effectiveTotalPrice - (isRecurring ? perMatchDeposit * weeks : depositAmount))
-  const paymentWindowHours = settings?.payment_window_hours ?? 2
-  const freeCancelHours = settings?.free_cancel_hours ?? 4
+  // Cọc tính trên tổng cả lượt (kể cả chuỗi nhiều tuần), trả một lần vào tài khoản SportHub.
+  const perMatchDeposit = Math.min(effectiveTotalPrice, Math.ceil((effectiveTotalPrice * depositPercent) / 100 / 1000) * 1000)
+  const remainingAmount = Math.max(0, effectiveTotalPrice - perMatchDeposit)
+  const holdMinutes = settings?.payment_hold_minutes ?? 15
+  const refundFullHours = settings?.refund_full_hours ?? 24
+  const refundPartialHours = settings?.refund_partial_hours ?? 6
+  const refundPartialPercent = settings?.refund_partial_percent ?? 50
 
   const handleClose = () => {
     setAgreed(false)
@@ -153,12 +155,12 @@ export function BookingConfirmModal({
             <strong>{formatMoney(effectiveTotalPrice)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--pitch)', fontWeight: 600, marginBottom: 4 }}>
-            <span>{isRecurring ? `Tiền cọc mỗi buổi (${depositPercent}%):` : `Tiền đặt cọc giữ chỗ (${depositPercent}%):`}</span>
+            <span>{`Tiền cọc (${depositPercent}%${isRecurring ? ', cả chuỗi' : ''}):`}</span>
             <span>{formatMoney(perMatchDeposit)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
-            <span>{isRecurring ? 'Thanh toán cọc:' : 'Thanh toán còn lại tại sân:'}</span>
-            <span>{isRecurring ? 'Từng buổi trước trận đấu' : formatMoney(remainingAmount)}</span>
+            <span>Còn lại trả tại sân (nếu đặt cọc):</span>
+            <span>{formatMoney(remainingAmount)}</span>
           </div>
         </div>
 
@@ -167,13 +169,13 @@ export function BookingConfirmModal({
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <Clock size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Hạn chuyển khoản:</strong> Sau khi chủ sân duyệt, bạn có <strong>{paymentWindowHours} giờ</strong> để chuyển khoản cọc giữ sân. Quá hạn đơn sẽ tự huỷ.
+              <strong>Giữ chỗ {holdMinutes} phút:</strong> chuyển khoản vào tài khoản SportHub (cọc hoặc trả hết) để đơn được xác nhận ngay. Quá hạn chỗ sẽ được nhả cho người khác.
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <ShieldCheck size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Chính sách hoàn cọc:</strong> Hủy trước giờ chơi tối thiểu <strong>{freeCancelHours} giờ</strong> (hoặc trong <strong>2 giờ sau khi duyệt</strong> nếu đặt cận giờ) để được hoàn 100% cọc. Hủy sát giờ bị trừ 15 điểm uy tín và mất cọc.
+              <strong>Chính sách huỷ:</strong> huỷ trước <strong>{refundFullHours} giờ</strong> hoàn 100%, trước <strong>{refundPartialHours} giờ</strong> hoàn {refundPartialPercent}%, sát giờ hơn không hoàn. Chủ sân huỷ thì bạn được hoàn đủ.
             </span>
           </div>
         </div>

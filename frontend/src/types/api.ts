@@ -147,7 +147,6 @@ export interface Booking {
     base: number
     statement_id?: number | null
   }
-  bank?: { bank_name: string | null; bank_bin?: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
@@ -162,7 +161,28 @@ export interface BookingRefund {
 }
 
 /** Thanh toán chuyển khoản: null = chưa duyệt, awaiting = chờ khách chuyển, reported = khách báo đã chuyển, paid = đã nhận tiền. */
+/** Một lần chuyển khoản vào tài khoản nền tảng, gộp một hay nhiều đơn. */
+export interface Payment {
+  id: number
+  code: string
+  option: 'deposit' | 'full'
+  total: number
+  amount: number
+  deposit_percent: number
+  status: 'awaiting' | 'paid' | 'expired' | 'cancelled' | 'refund_required'
+  due_at: string
+  paid_at: string | null
+  source: 'webhook' | 'admin' | null
+  bank_ref: string | null
+  bank: { name: string; code: string; account_number: string; account_holder: string; qr_url: string | null }
+  customer?: User
+  bookings?: Booking[]
+  created_at: string
+}
+
 export interface BookingPayment {
+  /** Lượt thanh toán thu hộ chứa đơn này (null với đơn kiểu cũ). */
+  id?: number | null
   status: 'awaiting' | 'reported' | 'paid' | null
   option: 'deposit' | 'full' | null
   amount: number | null
@@ -344,8 +364,12 @@ export interface PublicSettings {
   commission_percent: number
   statement_due_days: number
   deposit_percent: number
-  payment_window_hours: number
+  payment_hold_minutes: number
+  min_minutes: number
   free_cancel_hours: number
+  refund_full_hours: number
+  refund_partial_hours: number
+  refund_partial_percent: number
   max_pending_bookings: number
   max_advance_days: number
   platform_bank_name: string

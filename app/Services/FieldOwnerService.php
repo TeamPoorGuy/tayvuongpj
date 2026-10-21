@@ -178,6 +178,11 @@ class FieldOwnerService
             throw new ConflictException('Chuyển trạng thái đơn không hợp lệ.');
         }
 
+        // Đơn đang giữ chỗ chờ khách chuyển khoản sẽ tự huỷ khi quá hạn; chủ sân không từ chối ngang.
+        if ($next === BookingStatus::Rejected && $booking->payment_id) {
+            throw new ConflictException('Đơn đang giữ chỗ chờ khách thanh toán và sẽ tự huỷ nếu quá hạn.');
+        }
+
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
             if ($booking->payment_status === 'reported') {
                 throw new ConflictException('Khách đã báo chuyển khoản, vui lòng xác nhận hoặc đối soát thanh toán thay vì từ chối/huỷ.');

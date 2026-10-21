@@ -74,8 +74,9 @@ export function TermsPage() {
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Cung cấp thông tin tài khoản, số điện thoại và email chính xác khi đăng ký để nhận thông báo đơn đặt sân.</li>
           <li>Có mặt tại sân đúng giờ đã đặt, giữ gìn vệ sinh chung và bảo quản trang thiết bị tại sân thể thao.</li>
-          <li>Thực hiện chuyển khoản đặt cọc đúng số tiền và nội dung quy định trong vòng <strong>{settings?.payment_window_hours ?? 2} giờ</strong> sau khi đơn được chủ sân duyệt.</li>
-          <li>Đơn không được thanh toán trong thời hạn hoặc chủ sân không phản hồi trong 24 giờ sẽ tự động bị huỷ.</li>
+          <li>Chuyển khoản (cọc hoặc trả hết) vào tài khoản SportHub đúng số tiền và nội dung trong vòng <strong>{settings?.payment_hold_minutes ?? 15} phút</strong> giữ chỗ; đơn được xác nhận ngay khi SportHub nhận tiền.</li>
+          <li>Không chuyển tiền trực tiếp cho chủ sân: SportHub giữ tiền và chỉ bảo vệ, hoàn tiền cho giao dịch qua nền tảng.</li>
+          <li>Hết thời gian giữ chỗ mà chưa thanh toán thì đơn tự huỷ để nhả chỗ cho người khác.</li>
         </ul>
       </section>
 
@@ -163,7 +164,9 @@ export function PrivacyPage() {
 /** 3. Chính sách hủy & hoàn cọc (/chinh-sach-huy-hoan) */
 export function RefundPolicyPage() {
   const { data: settings } = usePublicSettings()
-  const depositPercent = settings?.deposit_percent ?? 30
+  const fullHours = settings?.refund_full_hours ?? 24
+  const partialHours = settings?.refund_partial_hours ?? 6
+  const partialPercent = settings?.refund_partial_percent ?? 50
   const freeCancelHours = settings?.free_cancel_hours ?? 4
 
   return (
@@ -176,23 +179,23 @@ export function RefundPolicyPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
         <div className="content-card" style={{ padding: 20, borderLeft: '4px solid var(--pitch)' }}>
-          <strong style={{ color: 'var(--pitch)', fontSize: 16, display: 'block', marginBottom: 6 }}>Huỷ miễn phí (Trước {freeCancelHours} giờ)</strong>
+          <strong style={{ color: 'var(--pitch)', fontSize: 16, display: 'block', marginBottom: 6 }}>Hoàn 100% (trước {fullHours} giờ)</strong>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--soft)' }}>
-            Hủy trước giờ chơi tối thiểu <strong>{freeCancelHours} giờ</strong>: Hoàn lại toàn bộ {depositPercent}% tiền đặt cọc, không bị trừ điểm uy tín.
+            Hủy trước giờ chơi từ <strong>{fullHours} giờ</strong> trở lên: SportHub hoàn lại toàn bộ số tiền bạn đã chuyển.
           </p>
         </div>
 
         <div className="content-card" style={{ padding: 20, borderLeft: '4px solid var(--forest)' }}>
-          <strong style={{ color: 'var(--forest)', fontSize: 16, display: 'block', marginBottom: 6 }}>Ân hạn huỷ 2 giờ sau duyệt</strong>
+          <strong style={{ color: 'var(--forest)', fontSize: 16, display: 'block', marginBottom: 6 }}>Hoàn {partialPercent}% (trước {partialHours} giờ)</strong>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--soft)' }}>
-            Sau khi chủ sân duyệt đơn, bạn có <strong>ân hạn 2 giờ</strong> để huỷ miễn phí nhận lại 100% tiền cọc (áp dụng nếu thời điểm huỷ trước giờ chơi tối thiểu 1 giờ).
+            Hủy trong khoảng {partialHours}–{fullHours} giờ trước giờ chơi: hoàn <strong>{partialPercent}%</strong> số tiền đã chuyển, phần còn lại bù cho chủ sân vì slot khó bán lại.
           </p>
         </div>
 
         <div className="content-card" style={{ padding: 20, borderLeft: '4px solid var(--warn)' }}>
-          <strong style={{ color: 'var(--warn)', fontSize: 16, display: 'block', marginBottom: 6 }}>Huỷ muộn (Mất cọc)</strong>
+          <strong style={{ color: 'var(--warn)', fontSize: 16, display: 'block', marginBottom: 6 }}>Huỷ sát giờ (không hoàn)</strong>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--soft)' }}>
-            Hủy sau thời hạn huỷ miễn phí / ân hạn: Tiền cọc được bồi hoàn cho chủ sân bù đắp slot trống; khách bị trừ cố định <strong>15 điểm uy tín</strong>.
+            Hủy dưới {partialHours} giờ trước giờ chơi: không hoàn tiền. Hủy dưới {freeCancelHours} giờ còn bị trừ <strong>15 điểm uy tín</strong>. Chủ sân huỷ đơn thì bạn luôn được hoàn đủ.
           </p>
         </div>
 
@@ -293,11 +296,11 @@ export function FaqPage() {
     },
     {
       q: 'Tôi cần đặt cọc bao nhiêu phần trăm khi đặt sân?',
-      a: `Mức đặt cọc mặc định là ${settings?.deposit_percent ?? 30}% tổng tiền đơn. Sau khi chủ sân duyệt đơn, bạn chuyển khoản số tiền cọc này để giữ chỗ; phần tiền còn lại bạn thanh toán trực tiếp tại sân khi đến chơi.`,
+      a: `Mức đặt cọc mặc định là ${settings?.deposit_percent ?? 30}% tổng tiền đơn. Khi đặt, bạn chuyển khoản số tiền cọc (hoặc trả hết) vào tài khoản SportHub để giữ chỗ; phần còn lại thanh toán tại sân khi đến chơi.`,
     },
     {
       q: 'Nếu tôi bận việc đột xuất thì hủy đơn như thế nào?',
-      a: `Bạn có thể bấm Hủy đơn trong mục "Lịch đặt của tôi". Nếu hủy trước giờ chơi tối thiểu ${settings?.free_cancel_hours ?? 4} giờ, bạn được hoàn lại 100% tiền cọc và không bị trừ điểm uy tín.`,
+      a: `Bạn có thể bấm Hủy đơn trong mục "Lịch đặt của tôi". Hủy trước giờ chơi từ ${settings?.refund_full_hours ?? 24} giờ được hoàn 100%, từ ${settings?.refund_partial_hours ?? 6} giờ được hoàn ${settings?.refund_partial_percent ?? 50}%, sát giờ hơn thì không hoàn.`,
     },
     {
       q: 'Mã check-in tại sân hoạt động như thế nào?',

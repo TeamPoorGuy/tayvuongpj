@@ -399,18 +399,10 @@ export function CustomerBookingsPage() {
                       {booking.field?.address}
                     </span>
                   </div>
-                  {booking.status === 'pending' && !booking.payment?.status && (
-                    <p className="form-help">
-                      Đang chờ chủ sân duyệt — bạn có thể huỷ bất cứ lúc nào, không bị trừ điểm. Sau khi được duyệt bạn sẽ
-                      chuyển khoản cọc hoặc trả hết để giữ sân. Đơn tự huỷ nếu chủ sân không phản hồi sau 24 giờ.
-                    </p>
-                  )}
                   {booking.status === 'pending' && booking.payment?.status === 'awaiting' && (
                     <p className="form-help">
-                      Chủ sân đã duyệt. Hãy chuyển khoản
-                      {booking.payment.due_at &&
-                        ` trước ${formatDateTime(booking.payment.due_at)}`}
-                      , quá hạn đơn sẽ tự huỷ.
+                      Đang giữ chỗ. Hãy chuyển khoản vào tài khoản SportHub
+                      {booking.payment.due_at && ` trước ${formatDateTime(booking.payment.due_at)}`}, quá hạn chỗ sẽ được nhả cho người khác.
                     </p>
                   )}
                   {booking.status === 'pending' && booking.payment?.status === 'reported' && (
@@ -435,15 +427,15 @@ export function CustomerBookingsPage() {
                       {booking.can_be_cancelled ? (
                         booking.cancel_penalty ? (
                           <span style={{ color: '#ef4444' }}>
-                            Chủ sân đã xác nhận. Đã vào khung huỷ muộn (dưới 4 giờ trước giờ chơi): bạn vẫn có thể huỷ nhưng sẽ mất cọc và bị trừ 15 điểm uy tín.
+                            Đã sát giờ chơi: bạn vẫn có thể huỷ nhưng chỉ được hoàn một phần hoặc không hoàn tiền và bị trừ 15 điểm uy tín.
                           </span>
                         ) : (
                           <span>
-                            Chủ sân đã xác nhận. Bạn có thể huỷ miễn phí (hoàn cọc, không trừ điểm) trước {booking.cancel_until ? formatDateTime(booking.cancel_until) : 'giờ chơi'}.
+                            Đơn đã xác nhận. {booking.cancel_until ? `Huỷ trước ${formatDateTime(booking.cancel_until)} được hoàn 100%; sau mốc này hoàn theo chính sách huỷ.` : 'Huỷ lúc này được hoàn tiền theo chính sách huỷ.'}
                           </span>
                         )
                       ) : (
-                        <span>Chủ sân đã xác nhận và đã đến/quá giờ chơi nên không thể tự huỷ đơn.</span>
+                        <span>Đã đến/quá giờ chơi nên không thể tự huỷ đơn.</span>
                       )}{' '}
                       Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
                       {booking.payment?.status === 'paid' &&
@@ -455,20 +447,20 @@ export function CustomerBookingsPage() {
                   )}
                   {booking.refund?.status === 'pending' && (
                     <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      <strong>Khoản hoàn tiền:</strong> Đơn đã ghi nhận hoàn cọc {formatMoney(booking.refund.amount)}. Nếu sau 24h chưa nhận được chuyển khoản, bạn hãy bấm &quot;Khiếu nại&quot; bên dưới để ban quản trị đối soát hỗ trợ.
+                      <strong>Khoản hoàn tiền:</strong> SportHub sẽ hoàn {formatMoney(booking.refund.amount)} cho bạn. Nếu sau 24h chưa nhận được, hãy bấm &quot;Khiếu nại&quot; bên dưới để được hỗ trợ.
                     </div>
                   )}
                   {booking.refund?.status === 'done' && (
                     <div className="notice notice--success" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      Đã hoàn trả {formatMoney(booking.refund.amount)} tiền cọc{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                      Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
                     </div>
                   )}
                   <div className="booking-item__footer">
                     <strong>{formatMoney(booking.total_price)}</strong>
 
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {booking.status === 'pending' && booking.payment?.status && (
-                        <Link to={`/bookings/${booking.id}/payment`} className="button button--brand button--small">
+                      {booking.payment?.id && (
+                        <Link to={`/payments/${booking.payment.id}`} className={`button button--small ${booking.payment.status === 'awaiting' ? 'button--brand' : 'button--ghost'}`}>
                           {booking.payment.status === 'awaiting' ? 'Thanh toán' : 'Xem thanh toán'}
                         </Link>
                       )}

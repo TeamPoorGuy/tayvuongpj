@@ -34,6 +34,11 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL', 'http://127.0.0.1:8011').'/auth/google/callback'),
     ],
 
+    // Webhook báo có tiền vào tài khoản nền tảng (định dạng SePay); header: Authorization: Apikey <key>.
+    'bank_webhook' => [
+        'key' => env('BANK_WEBHOOK_KEY', 'local-dev-key'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

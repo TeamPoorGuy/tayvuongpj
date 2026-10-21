@@ -10,8 +10,14 @@ return [
     'late_cancel_hours' => (int) env('BOOKING_LATE_CANCEL_HOURS', 4),
     // Thanh toán chuyển khoản: mức cọc (% tổng tiền, làm tròn lên nghìn đồng) nếu khách không trả hết.
     'deposit_percent' => (int) env('BOOKING_DEPOSIT_PERCENT', 30),
-    // Sau khi chủ sân duyệt, khách có N giờ để chuyển khoản (không muộn hơn giờ bắt đầu chơi).
-    'payment_window_hours' => (int) env('BOOKING_PAYMENT_WINDOW_HOURS', 2),
+    // Giữ chỗ N phút chờ khách chuyển khoản vào tài khoản nền tảng; quá hạn thì nhả chỗ.
+    'payment_hold_minutes' => (int) env('BOOKING_PAYMENT_HOLD_MINUTES', 15),
+    // Thời lượng tối thiểu của một đơn chọn trên lưới 30 phút.
+    'min_minutes' => (int) env('BOOKING_MIN_MINUTES', 60),
+    // Hoàn tiền khi khách huỷ: còn ≥ full giờ → 100%; còn ≥ partial giờ → partial_percent%; ít hơn → không hoàn.
+    'refund_full_hours' => (int) env('BOOKING_REFUND_FULL_HOURS', 24),
+    'refund_partial_hours' => (int) env('BOOKING_REFUND_PARTIAL_HOURS', 6),
+    'refund_partial_percent' => (int) env('BOOKING_REFUND_PARTIAL_PERCENT', 50),
     // Thời gian cho phép huỷ miễn phí trước giờ chơi (thay ý nghĩa của late_cancel_hours).
     'free_cancel_hours' => (int) env('BOOKING_FREE_CANCEL_HOURS', 4),
     // Tỉ lệ hoa hồng nền tảng mặc định (%)

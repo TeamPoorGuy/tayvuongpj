@@ -238,23 +238,15 @@ class PhaseSixExtendedFeaturesTest extends TestCase
         $bookings = Booking::where('recurring_group_id', $groupId)->get();
         $this->assertCount(4, $bookings);
 
-        // Owner approves entire recurring series
-        Sanctum::actingAs($this->owner);
-        $approveRes = $this->patchJson("/api/v1/field-owner/bookings/recurring/{$groupId}/approve");
-        $approveRes->assertOk();
-
-        // 4 bookings are now awaiting payment
-        $freshBookings = Booking::where('recurring_group_id', $groupId)->orderBy('booking_date')->get();
+        // Cả chuỗi giữ chỗ chung một lượt thanh toán vào tài khoản nền tảng.
+        $paymentId = $res->json('data.payment.id');
+        $this->assertNotNull($paymentId);
+        $freshBookings = Booking::where('recurring_group_id', $groupId)->get();
         foreach ($freshBookings as $b) {
             $this->assertSame('awaiting', $b->payment_status);
-            $this->assertNotNull($b->payment_due_at);
+            $this->assertSame($paymentId, $b->payment_id);
         }
-
-        // Buổi 1: due_at trong vòng vài tiếng (payment_window_hours)
-        $this->assertTrue($freshBookings[0]->payment_due_at->lte(now()->addHours(3)));
-
-        // Buổi 4: due_at cách xa theo quy tắc trước giờ thi đấu 24h
-        $this->assertTrue($freshBookings[3]->payment_due_at->gt(now()->addDays(10)));
+        $this->assertEquals($freshBookings->sum('total_price'), $res->json('data.payment.total'));
     }
 
     public function test_recurring_booking_detects_conflicts_and_skips_when_requested(): void
@@ -306,29 +298,6 @@ class PhaseSixExtendedFeaturesTest extends TestCase
         $this->assertContains($startDate, $bookings);
     }
 
-    public function test_owner_can_reject_recurring_series(): void
-    {
-        Sanctum::actingAs($this->customer);
-        $createRes = $this->postJson('/api/v1/customer/bookings/recurring', [
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'start_date' => today()->addDays(3)->toDateString(),
-            'weeks' => 3,
-        ]);
-        $groupId = $createRes->json('data.recurring_group_id');
-
-        Sanctum::actingAs($this->owner);
-        $rejectRes = $this->patchJson("/api/v1/field-owner/bookings/recurring/{$groupId}/reject", [
-            'reason' => 'Khung giờ này sân ưu tiên giải đấu nội bộ.',
-        ]);
-        $rejectRes->assertOk();
-
-        $rejectedBookings = Booking::where('recurring_group_id', $groupId)->get();
-        foreach ($rejectedBookings as $b) {
-            $this->assertSame('rejected', $b->status->value);
-            $this->assertSame('Khung giờ này sân ưu tiên giải đấu nội bộ.', $b->cancel_reason);
-        }
-    }
 
     public function test_customer_can_cancel_entire_remaining_recurring_series(): void
     {
@@ -354,48 +323,6 @@ class PhaseSixExtendedFeaturesTest extends TestCase
         }
     }
 
-    public function test_owner_can_approve_recurring_series_with_tiered_due_dates(): void
-    {
-        Sanctum::actingAs($this->customer);
-        $createRes = $this->postJson('/api/v1/customer/bookings/recurring', [
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'start_date' => today()->addDays(7)->toDateString(),
-            'weeks' => 3,
-        ]);
-        $createRes->assertCreated();
-        $groupId = $createRes->json('data.recurring_group_id');
-
-        Sanctum::actingAs($this->owner);
-        $approveRes = $this->patchJson("/api/v1/field-owner/bookings/recurring/{$groupId}/approve");
-        $approveRes->assertOk();
-
-        $bookings = Booking::where('recurring_group_id', $groupId)->orderBy('booking_date')->get();
-        $this->assertCount(3, $bookings);
-
-        foreach ($bookings as $b) {
-            $this->assertSame('awaiting', $b->payment_status);
-            $this->assertNotNull($b->payment_code);
-            $this->assertNotNull($b->payment_due_at);
-        }
-
-        // Buổi 1: thanh toán theo payment_window_hours (2 tiếng kể từ bây giờ)
-        $this->assertTrue($bookings[0]->payment_due_at->between(now()->addMinutes(110), now()->addMinutes(130)));
-
-        // Buổi 2 (14 ngày tới): thanh toán muộn nhất trước giờ chơi 24 tiếng
-        $expectedDueSession2 = $bookings[1]->startsAt()->subHours(24);
-        $this->assertSame(
-            $expectedDueSession2->format('Y-m-d H:i'),
-            $bookings[1]->payment_due_at->format('Y-m-d H:i')
-        );
-
-        // Buổi 3 (21 ngày tới): thanh toán muộn nhất trước giờ chơi 24 tiếng
-        $expectedDueSession3 = $bookings[2]->startsAt()->subHours(24);
-        $this->assertSame(
-            $expectedDueSession3->format('Y-m-d H:i'),
-            $bookings[2]->payment_due_at->format('Y-m-d H:i')
-        );
-    }
 
     public function test_closure_creation_rejects_past_date(): void
     {

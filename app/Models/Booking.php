@@ -15,6 +15,7 @@ class Booking extends Model
 
     protected $fillable = [
         'user_id',
+        'payment_id',
         'sports_field_id',
         'time_slot_id',
         'booking_date',
@@ -97,6 +98,11 @@ class Booking extends Model
         return $this->belongsTo(TimeSlot::class);
     }
 
+    public function payment()
+    {
+        return $this->belongsTo(Payment::class);
+    }
+
     public function review()
     {
         return $this->hasOne(Review::class);
@@ -134,9 +140,12 @@ class Booking extends Model
             return (float) ($this->payment_amount ?? $this->depositAmount());
         }
 
-        // Đơn huỷ mà chủ sân được giữ tiền (khách huỷ muộn / phạt cọc, không hoàn tiền)
-        if ($this->status === BookingStatus::Cancelled && $this->payment_status === 'paid' && in_array($this->refund_status, [null, 'waived'], true)) {
-            return (float) ($this->payment_amount ?? $this->depositAmount());
+        // Đơn huỷ đã thanh toán: phần nền tảng giữ lại sau hoàn tiền (huỷ muộn hoàn một phần hoặc không hoàn).
+        if ($this->status === BookingStatus::Cancelled && $this->payment_status === 'paid') {
+            // Không ghi số tiền hoàn = hoàn toàn bộ.
+            $refunded = in_array($this->refund_status, ['pending', 'done'], true) ? (float) ($this->refund_amount ?? $this->payment_amount) : 0.0;
+
+            return max(0.0, (float) $this->payment_amount - $refunded);
         }
 
         return 0.0;
@@ -175,6 +184,7 @@ class Booking extends Model
         $relations = [
             'sportsField.primaryImage',
             'sportsField.owner.fieldOwnerProfile',
+            'payment',
             'review',
         ];
         if ($withCustomer) {
@@ -194,28 +204,32 @@ class Booking extends Model
         return Carbon::parse($this->booking_date->toDateString().' '.$this->end_time);
     }
 
-    /**
-     * Hạn chót khách tự huỷ đơn đã duyệt mà vẫn được miễn phí (hoàn cọc, không trừ điểm).
-     * Trả về null nếu đơn không thuộc diện này hoặc đã hết hạn huỷ miễn phí.
-     */
+    /** Hạn chót khách huỷ đơn đã thanh toán mà vẫn được hoàn 100%; null nếu đã qua hoặc không áp dụng. */
     public function cancelUntil(): ?Carbon
     {
         if ($this->status !== BookingStatus::Confirmed) {
             return null;
         }
 
-        $freeHours = Settings::getInt('free_cancel_hours', Settings::getInt('late_cancel_hours', 4));
-        $freeDeadline = $this->startsAt()->subHours($freeHours);
+        $deadline = $this->startsAt()->subHours(Settings::getInt('refund_full_hours', 24));
 
-        $graceDeadline = $this->confirmed_at
-            ? $this->confirmed_at->copy()->addHours(Settings::getInt('confirmed_cancel_window_hours', 2))->min($this->startsAt()->subHour())
-            : null;
+        return $deadline->isFuture() ? $deadline : null;
+    }
 
-        if ($graceDeadline && $graceDeadline->gt($freeDeadline)) {
-            return $graceDeadline;
-        }
+    /**
+     * Số tiền hoàn nếu khách huỷ lúc này (bậc theo số giờ còn lại trước giờ chơi):
+     * ≥ refund_full_hours → 100%; ≥ refund_partial_hours → refund_partial_percent%; ít hơn → 0.
+     */
+    public function refundAmountIfCancelledNow(): float
+    {
+        $paid = (float) ($this->payment_amount ?? 0);
+        $hoursLeft = now()->diffInMinutes($this->startsAt(), false) / 60;
 
-        return $freeDeadline->isFuture() ? $freeDeadline : null;
+        return match (true) {
+            $hoursLeft >= Settings::getInt('refund_full_hours', 24) => $paid,
+            $hoursLeft >= Settings::getInt('refund_partial_hours', 6) => round($paid * Settings::getInt('refund_partial_percent', 50) / 100),
+            default => 0.0,
+        };
     }
 
     /** Tiền cọc: % tổng tiền theo cấu hình, làm tròn lên nghìn đồng và không vượt tổng tiền. */
@@ -229,41 +243,21 @@ class Booking extends Model
     public function canBeCancelled(): bool
     {
         return match ($this->status) {
-            // Khách đã báo chuyển khoản thì phải chờ chủ sân đối chiếu, không tự huỷ khi tiền đang treo.
+            // Đơn kiểu cũ: khách đã báo chuyển khoản thì phải chờ đối chiếu, không tự huỷ khi tiền đang treo.
             BookingStatus::Pending => $this->payment_status !== 'reported',
-            // Đơn confirmed huỷ được bất kỳ lúc nào trước giờ chơi
             BookingStatus::Confirmed => $this->startsAt()->isFuture(),
             default => false,
         };
     }
 
-    /**
-     * Kiểm tra xem đơn có được huỷ miễn phí (không trừ điểm, được hoàn cọc) hay không.
-     */
+    /** Huỷ không bị trừ điểm uy tín: đơn chưa thanh toán, hoặc còn từ free_cancel_hours trở lên trước giờ chơi. */
     public function isFreeCancel(): bool
     {
         if ($this->status !== BookingStatus::Confirmed) {
             return true;
         }
 
-        $freeCancelHours = Settings::getInt('free_cancel_hours', Settings::getInt('late_cancel_hours', 4));
-        $startsAt = $this->startsAt();
-        $now = now();
-
-        // 1. Huỷ trước giờ chơi từ free_cancel_hours trở lên
-        if ($startsAt->gte($now->copy()->addHours($freeCancelHours))) {
-            return true;
-        }
-
-        // 2. Hoặc trong 2 giờ ân hạn sau khi được chủ sân duyệt, nhưng vẫn phải trước giờ chơi ít nhất 1 giờ
-        $graceWindowHours = Settings::getInt('confirmed_cancel_window_hours', 2);
-        if ($this->confirmed_at && $now->lte($this->confirmed_at->copy()->addHours($graceWindowHours))) {
-            if ($startsAt->gte($now->copy()->addHours(1))) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->startsAt()->gte(now()->addHours(Settings::getInt('free_cancel_hours', Settings::getInt('late_cancel_hours', 4))));
     }
 
     /** Huỷ lúc này có bị trừ điểm uy tín không: chỉ đơn đã duyệt mà bị tính là huỷ muộn. */
@@ -281,32 +275,19 @@ class Booking extends Model
      */
     public function markCancelled(string $by, ?string $reason = null, BookingStatus $targetStatus = BookingStatus::Cancelled): self
     {
-        $refundStatus = null;
         $refundAmount = null;
 
-        $hasPaidOrReported = in_array($this->payment_status, ['reported', 'paid'], true);
-
-        if ($hasPaidOrReported) {
-            if ($by === 'customer') {
-                if ($this->status === BookingStatus::Confirmed && ! $this->isLateToCancel()) {
-                    $refundStatus = 'pending';
-                    $refundAmount = $this->payment_amount ?? $this->depositAmount();
-                } else {
-                    $refundStatus = null;
-                    $refundAmount = null;
-                }
-            } else {
-                $refundStatus = 'pending';
-                $refundAmount = $this->payment_amount ?? $this->depositAmount();
-            }
+        // Tiền đang do nền tảng giữ: khách tự huỷ hoàn theo bậc giờ; chủ sân/admin/hệ thống huỷ hoàn đủ.
+        if (in_array($this->payment_status, ['reported', 'paid'], true)) {
+            $refundAmount = $by === 'customer' ? $this->refundAmountIfCancelledNow() : (float) $this->payment_amount;
         }
 
         $this->update([
             'status' => $targetStatus->value,
             'cancelled_at' => now(),
             'cancel_reason' => $reason,
-            'refund_status' => $refundStatus,
-            'refund_amount' => $refundAmount,
+            'refund_status' => $refundAmount > 0 ? 'pending' : null,
+            'refund_amount' => $refundAmount > 0 ? $refundAmount : null,
         ]);
 
         return $this;

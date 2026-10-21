@@ -96,8 +96,8 @@ class PhaseOneRulesAndRefundTest extends TestCase
             'payment_amount' => 135000, // cọc 30%
         ]);
 
-        // Huỷ lúc 09:00 sáng ngày mai (trước giờ chơi 8 tiếng >= 4h)
-        $this->travelTo(today()->addDay()->setTime(9, 0));
+        // Huỷ lúc 09:00 hôm nay (trước giờ chơi 32 tiếng ≥ 24h → hoàn 100%)
+        $this->travelTo(today()->setTime(9, 0));
 
         Sanctum::actingAs($this->customer);
         $res = $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel");
@@ -312,14 +312,13 @@ class PhaseOneRulesAndRefundTest extends TestCase
                 'is_active' => true,
             ]);
 
-            Booking::create([
-                'user_id' => $this->customer->id,
+            // Mỗi lần giữ chỗ chưa thanh toán là một lượt thanh toán đang chờ.
+            Sanctum::actingAs($this->customer);
+            $this->postJson('/api/v1/customer/bookings', [
                 'sports_field_id' => $this->field->id,
                 'time_slot_id' => $otherSlot->id,
                 'booking_date' => today()->addDays($i)->toDateString(),
-                'status' => BookingStatus::Pending->value,
-                'total_price' => 300000,
-            ]);
+            ])->assertCreated();
         }
 
         Sanctum::actingAs($this->customer);
@@ -330,7 +329,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
 
         $res->assertStatus(409);
-        $res->assertJsonFragment(['message' => 'Bạn đang có 3 đơn chờ xử lý. Tối đa chỉ được có 3 đơn cùng lúc.']);
+        $res->assertJsonFragment(['message' => 'Bạn đang có 3 lượt đặt chờ thanh toán. Tối đa chỉ được có 3 lượt cùng lúc.']);
     }
 
     public function test_booking_too_far_in_advance_is_rejected(): void

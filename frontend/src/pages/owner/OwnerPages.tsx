@@ -1296,7 +1296,6 @@ export function OwnerBookingsPage() {
           <option value="">Mọi trạng thái</option>
           <option value="pending">Chờ xử lý (tất cả)</option>
           <option value="pay:awaiting">Chờ khách thanh toán</option>
-          <option value="pay:reported">Chờ xác nhận tiền</option>
           <option value="confirmed">Đã xác nhận</option>
           <option value="completed">Hoàn thành</option>
           <option value="cancelled">Đã hủy</option>

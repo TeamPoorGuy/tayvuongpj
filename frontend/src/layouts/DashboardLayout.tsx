@@ -51,6 +51,7 @@ const adminGroups = [
     title: 'Vận hành',
     items: [
       { to: '/admin/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
+      { to: '/admin/payments', label: 'Giao dịch thu hộ', icon: Receipt },
       { to: '/admin/complaints', label: 'Khiếu nại', icon: AlertTriangle },
       { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
     ],

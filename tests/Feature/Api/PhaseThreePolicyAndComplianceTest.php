@@ -147,7 +147,7 @@ class PhaseThreePolicyAndComplianceTest extends TestCase
                 'commission_percent',
                 'statement_due_days',
                 'deposit_percent',
-                'payment_window_hours',
+                'payment_hold_minutes',
                 'free_cancel_hours',
                 'max_pending_bookings',
                 'max_advance_days',

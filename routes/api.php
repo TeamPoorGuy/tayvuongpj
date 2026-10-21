@@ -47,6 +47,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
 
 
+    // Ngân hàng báo có tiền vào tài khoản nền tảng (thu hộ).
+    Route::post('/webhooks/bank', \App\Http\Controllers\Api\V1\Webhook\BankWebhookController::class)->middleware('throttle:120,1');
+
     Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
@@ -60,7 +63,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::post('/bookings/recurring', [Customer\BookingController::class, 'storeRecurring'])->middleware(['verified', 'throttle:writes']);
             Route::post('/bookings/recurring/{groupId}/cancel', [Customer\BookingController::class, 'cancelRecurring'])->middleware('throttle:writes');
             Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
-            Route::post('/bookings/{booking}/payment', [Customer\BookingController::class, 'reportPayment'])->middleware(['verified', 'throttle:writes']);
+            Route::get('/payments/{payment}', [Customer\PaymentController::class, 'show']);
+            Route::patch('/payments/{payment}', [Customer\PaymentController::class, 'update'])->middleware('throttle:writes');
+            Route::post('/payments/{payment}/cancel', [Customer\PaymentController::class, 'cancel'])->middleware('throttle:writes');
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
@@ -142,11 +147,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             [FieldOwner\BookingController::class, 'index']
         );
 
-        Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
-        Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
         Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
-        Route::patch('/bookings/recurring/{groupId}/approve', [FieldOwner\BookingController::class, 'approveRecurring'])->middleware('throttle:writes');
-        Route::patch('/bookings/recurring/{groupId}/reject', [FieldOwner\BookingController::class, 'rejectRecurring'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',
@@ -168,6 +169,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
+            Route::get('/payments', [Admin\PaymentController::class, 'index']);
+            Route::post('/payments/{payment}/confirm', [Admin\PaymentController::class, 'confirm'])->middleware('throttle:writes');
             Route::get('/users', [Admin\UserController::class, 'index']);
             Route::get('/users/{user}/detail', [Admin\UserController::class, 'detail']);
             Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);

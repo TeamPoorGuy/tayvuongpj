@@ -21,6 +21,7 @@ import { AdminComplaintsPage } from './pages/admin/AdminComplaintsPage'
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
 import { AdminLogsPage } from './pages/admin/AdminLogsPage'
 import { AdminStatementsPage } from './pages/admin/AdminStatementsPage'
+import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage'
 import {
   AboutPage,
   ContactPage,
@@ -58,7 +59,7 @@ export default function App() {
       <Route element={<ProtectedRoute roles={['customer']} />}>
         <Route element={<DashboardLayout />}>
           <Route path="bookings" element={<CustomerBookingsPage />} />
-          <Route path="bookings/:id/payment" element={<BookingPaymentPage />} />
+          <Route path="payments/:id" element={<BookingPaymentPage />} />
           <Route path="profile" element={<CustomerProfilePage />} />
           <Route path="become-owner" element={<OwnerApplicationPage />} />
         </Route>
@@ -85,6 +86,7 @@ export default function App() {
           <Route path="admin/bookings" element={<AdminBookingsPage />} />
           <Route path="admin/complaints" element={<AdminComplaintsPage />} />
           <Route path="admin/statements" element={<AdminStatementsPage />} />
+          <Route path="admin/payments" element={<AdminPaymentsPage />} />
           <Route path="admin/matches" element={<AdminMatchesPage />} />
           <Route path="admin/reviews" element={<AdminReviewsPage />} />
           <Route path="admin/categories" element={<AdminCategoriesPage />} />

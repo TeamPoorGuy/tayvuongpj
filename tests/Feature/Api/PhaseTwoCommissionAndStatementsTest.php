@@ -420,49 +420,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         ]);
     }
 
-    public function test_owner_blocked_from_approving_bookings_when_having_overdue_debt(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        // Tạo kỳ đối soát quá hạn: due_at ngày hôm qua, status unpaid
-        $overdueStatement = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-07',
-            'booking_count' => 4,
-            'gmv' => 1600000,
-            'commission_amount' => 128000,
-            'status' => 'unpaid',
-            'due_at' => now()->subDay(),
-            'transfer_code' => 'ST202607P1DEBT',
-        ]);
-
-        $this->assertTrue($overdueStatement->isOverdue());
-
-        // Khách đặt đơn mới
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-
-        // Chủ sân bấm duyệt -> bị chặn với HTTP 409
-        $response = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $response->assertStatus(409)
-            ->assertJsonPath('message', 'Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
-
-        // Sau khi thanh toán (chuyển sang paid)
-        $overdueStatement->update(['status' => 'paid', 'paid_at' => now()]);
-
-        // Duyệt lại -> thành công
-        $retryResponse = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $retryResponse->assertOk()
-            ->assertJsonPath('data.payment.status', 'awaiting');
-    }
 
     public function test_owner_and_admin_dashboards_include_statement_and_gmv_metrics(): void
     {
@@ -536,21 +493,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         $st->update(['due_at' => now()->subDays(10)]);
         $this->assertFalse($st->isOverdue());
         $this->assertFalse($service->hasOverdueDebt($this->owner));
-
-        // Chủ sân vẫn duyệt đơn bình thường không bị khoá
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-        $response = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $response->assertOk()
-            ->assertJsonPath('data.payment.status', 'awaiting');
     }
 
     public function test_platform_bank_settings_change_is_reflected_in_statements(): void
@@ -580,59 +522,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
             ->assertJsonPath('data.platform_bank.account_holder', 'CONG TY SPORTHUB VIET NAM - MB');
     }
 
-    public function test_admin_can_reject_reported_statement_and_overdue_debt_is_enforced(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        // Kỳ đối soát quá hạn
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-07',
-            'booking_count' => 2,
-            'gmv' => 1000000,
-            'commission_amount' => 80000,
-            'status' => 'unpaid',
-            'due_at' => now()->subDay(),
-            'transfer_code' => 'ST202607REJECT',
-        ]);
-
-        // Chủ sân bấm báo đã chuyển tiền để thoát khoá
-        Sanctum::actingAs($this->owner);
-        $this->postJson("/api/v1/field-owner/statements/{$st->id}/report", ['note' => 'Tôi đã chuyển tiền rồi']);
-        $this->assertEquals('reported', $st->refresh()->status);
-        $this->assertFalse(app(StatementService::class)->hasOverdueDebt($this->owner));
-
-        // Admin đối chiếu sao kê và bấm từ chối
-        Sanctum::actingAs($this->admin);
-        $rejectRes = $this->postJson("/api/v1/admin/statements/{$st->id}/reject-report", [
-            'reason' => 'Chưa thấy tiền nổi trên tài khoản Vietcombank.',
-        ]);
-        $rejectRes->assertOk()
-            ->assertJsonPath('data.status', 'unpaid')
-            ->assertJsonPath('data.note', 'Từ chối báo chuyển: Chưa thấy tiền nổi trên tài khoản Vietcombank.');
-
-        $this->assertDatabaseHas('admin_logs', [
-            'action' => 'reject_statement_payment',
-            'admin_id' => $this->admin->id,
-        ]);
-
-        // Ngay lập tức chủ sân bị khoá duyệt đơn lại vì quá hạn và status là unpaid
-        $this->assertTrue(app(StatementService::class)->hasOverdueDebt($this->owner));
-
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-        $approveRes = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $approveRes->assertStatus(409)
-            ->assertJsonPath('message', 'Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
-    }
 
     public function test_cannot_generate_statement_for_future_period(): void
     {

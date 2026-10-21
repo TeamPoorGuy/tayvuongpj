@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\DomainException;
-use App\Mail\NewBookingRequest;
 use App\Mail\WaitlistSlotOffered;
 use App\Models\Booking;
 use App\Models\BookingWaitlist;
@@ -252,15 +251,15 @@ class WaitlistService
             ]);
 
             $waitlist->update(['status' => 'accepted']);
+            // Nhận lời mời = giữ chỗ như đặt thường: chờ khách chuyển khoản vào tài khoản nền tảng.
+            app(PaymentService::class)->createFor($user, [$booking], 'deposit');
 
-            return $booking->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
+            return $booking->refresh()->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
         });
 
         if (is_string($booking)) {
             throw new ConflictException($booking);
         }
-
-        SafeMail::queue($booking->sportsField->owner->email, new NewBookingRequest($booking));
 
         return $booking;
     }

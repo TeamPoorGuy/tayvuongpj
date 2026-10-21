@@ -601,26 +601,6 @@ class LayeredApiTest extends TestCase
         $this->patchJson("/api/v1/customer/bookings/{$past->id}/cancel")->assertStatus(409);
     }
 
-    public function test_pending_requests_are_auto_cancelled_when_owner_does_not_respond(): void
-    {
-        [$field, $slot] = $this->createApprovedFieldWithSlot('san-treo', '18:00:00', '19:30:00');
-        $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
-        $old = Booking::create([
-            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
-            'booking_date' => today()->addDays(5)->toDateString(), 'status' => 'pending', 'total_price' => 1,
-        ]);
-        $old->forceFill(['created_at' => now()->subHours(25)])->save();
-        $fresh = Booking::create([
-            'user_id' => $customer->id, 'sports_field_id' => $field->id, 'time_slot_id' => $slot->id,
-            'booking_date' => today()->addDays(6)->toDateString(), 'status' => 'pending', 'total_price' => 1,
-        ]);
-
-        app(\App\Services\BookingService::class)->syncStatuses();
-
-        $this->assertSame('rejected', $old->fresh()->status->value);
-        $this->assertStringContainsString('không phản hồi', $old->fresh()->cancel_reason);
-        $this->assertSame('pending', $fresh->fresh()->status->value);
-    }
 
     public function test_owner_completes_only_after_slot_ends_and_cancel_needs_reason(): void
     {
@@ -648,8 +628,12 @@ class LayeredApiTest extends TestCase
         [$field, $slot] = $this->createApprovedFieldWithSlot();
         Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true]));
 
-        $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))->assertCreated();
+        $paymentId = $this->postJson('/api/v1/customer/bookings', $this->bookingPayload($field, $slot, now()->addDay()->toDateString()))
+            ->assertCreated()->json('payment.id');
 
+        // Chủ sân chỉ được báo khi tiền đã vào tài khoản nền tảng (đơn đã xác nhận).
+        Mail::assertNotQueued(NewBookingRequest::class);
+        app(\App\Services\PaymentService::class)->markPaid(\App\Models\Payment::find($paymentId), 'admin');
         Mail::assertQueued(NewBookingRequest::class, fn ($m) => $m->hasTo($field->owner->email));
     }
 

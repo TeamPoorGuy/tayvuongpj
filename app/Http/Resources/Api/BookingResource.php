@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Api;
 
-use App\Support\Banks;
 use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -28,11 +27,13 @@ class BookingResource extends JsonResource
             'no_show' => $this->no_show_at !== null,
             'recurring_group_id' => $this->recurring_group_id,
             'payment' => [
+                'id' => $this->payment_id,
                 'status' => $this->payment_status,
                 'option' => $this->payment_option,
                 'amount' => $this->payment_amount !== null ? (float) $this->payment_amount : null,
-                'code' => $this->payment_code,
-                'due_at' => $this->payment_due_at?->toISOString(),
+                // Đơn thu hộ lấy mã và hạn từ lượt thanh toán; đơn kiểu cũ giữ cột trên chính đơn.
+                'code' => $this->payment?->code ?? $this->payment_code,
+                'due_at' => ($this->payment?->due_at ?? $this->payment_due_at)?->toISOString(),
                 'reported_at' => $this->payment_reported_at?->toISOString(),
                 'paid_at' => $this->paid_at?->toISOString(),
                 'deposit_amount' => $this->depositAmount(),
@@ -51,19 +52,6 @@ class BookingResource extends JsonResource
                 'statement_id' => $this->statement_id,
             ],
 
-            // Tài khoản nhận tiền: chỉ trả cho chính khách của đơn, sau khi chủ sân đã duyệt, ở endpoint chi tiết.
-            'bank' => $this->when(
-                $this->payment_status !== null
-                    && $request->user()?->id === $this->user_id
-                    && $this->relationLoaded('sportsField')
-                    && $this->sportsField->relationLoaded('owner'),
-                fn () => [
-                    'bank_name' => $this->sportsField->owner->fieldOwnerProfile?->bank_name,
-                    'bank_bin' => $this->sportsField->owner->fieldOwnerProfile?->bank_bin ?? Banks::guessBin($this->sportsField->owner->fieldOwnerProfile?->bank_name),
-                    'account_number' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_number,
-                    'account_holder' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_holder,
-                ]
-            ),
             'field' => $this->whenLoaded('sportsField', fn () => new FieldResource($this->sportsField)),
             'customer' => $this->whenLoaded('customer', fn () => new UserResource($this->customer)),
             // Giữ tên time_slot cho giao diện cũ; giờ lấy từ chính đơn (đơn theo khoảng giờ không có khung giờ).

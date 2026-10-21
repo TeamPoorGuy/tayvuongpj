@@ -46,7 +46,7 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; bg: string; border: string; color: string; dot: string }
 > = {
-  pending: { label: 'Chờ duyệt', bg: '#fdf1d3', border: '#f0cf7a', color: '#6b4700', dot: '#e29a0c' },
+  pending: { label: 'Chờ thanh toán', bg: '#fdf1d3', border: '#f0cf7a', color: '#6b4700', dot: '#e29a0c' },
   confirmed: { label: 'Đã xác nhận', bg: '#e4f1e6', border: '#9fcfb0', color: '#0b3025', dot: '#1f875e' },
   completed: { label: 'Hoàn thành', bg: '#eef1e9', border: '#c4cdbf', color: '#0b3025', dot: '#0b3025' },
   cancelled: { label: 'Đã hủy', bg: '#f4f5f2', border: '#dde3d8', color: '#66756c', dot: '#9aa59e' },
@@ -293,7 +293,7 @@ export function OwnerSchedulePage() {
         <div>
           <strong>Quy định vận hành & quản lý khung giờ</strong>
           <p>
-            Khung giờ có màu vàng (Chờ duyệt) cần được xác nhận để giữ chỗ cho khách. Khi khách tới sân,
+            Khung giờ màu vàng là khách đang giữ chỗ và chuyển khoản qua SportHub; đơn tự xác nhận khi có tiền. Khi khách tới sân,
             bấm vào ô booking để <strong>xác nhận khách đã đến (+10 điểm uy tín)</strong>. Bạn có thể
             điều chỉnh giá giờ hoặc thêm khung giờ hoạt động tại{' '}
             <Link to="/owner/fields">Quản lý sân</Link>.
@@ -744,10 +744,8 @@ export function OwnerSchedulePage() {
                 </strong>
                 <small>
                   {detailBooking.payment?.status === 'paid'
-                    ? `Đã nhận ${formatMoney(detailBooking.payment.amount ?? 0)} chuyển khoản (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
-                    : detailBooking.payment?.status
-                      ? 'Khách chuyển khoản cọc hoặc trả hết trước khi đơn được xác nhận'
-                      : 'Duyệt đơn để khách chuyển khoản cọc hoặc trả hết'}
+                    ? `SportHub đã thu hộ ${formatMoney(detailBooking.payment.amount ?? 0)} (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
+                    : 'Khách đang chuyển khoản vào tài khoản SportHub; đơn tự xác nhận khi có tiền'}
                 </small>
                 {detailBooking.payment?.proof_url && (
                   <button

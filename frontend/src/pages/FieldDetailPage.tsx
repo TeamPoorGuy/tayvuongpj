@@ -19,7 +19,7 @@ import {
   BellRing,
   Zap,
 } from 'lucide-react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useState, useMemo } from 'react'
 import axios from 'axios'
 import { api } from '../api/client'
@@ -108,6 +108,7 @@ export function FieldDetailPage() {
     },
   })
 
+  const navigate = useNavigate()
   const booking = useMutation({
     mutationFn: async ({ isRecurring, weeks, skipConflicts }: { isRecurring: boolean; weeks: number; skipConflicts?: boolean }) => {
       if (isRecurring) {
@@ -127,18 +128,17 @@ export function FieldDetailPage() {
         notes,
       })).data
     },
-    onSuccess: (_, vars) => {
+    onSuccess: (res, vars) => {
       setShowConfirmModal(false)
       setRecurringConflicts(null)
       setPendingRecurringConfig(null)
       pickSlot(null)
       setNotes('')
-      const msg = vars.isRecurring
-        ? `Đã gửi yêu cầu đặt cố định ${vars.weeks} buổi. Khi chủ sân duyệt, bạn sẽ thanh toán cọc theo từng tuần.`
-        : 'Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.'
-      success(msg, 'Đã gửi yêu cầu')
+      success(vars.isRecurring ? `Đã giữ chỗ ${vars.weeks} buổi. Thanh toán một lần cho cả chuỗi.` : 'Đã giữ chỗ. Hãy chuyển khoản để hoàn tất.', 'Đã giữ chỗ')
       void queryClient.invalidateQueries({ queryKey: ['slots'] })
       void queryClient.invalidateQueries({ queryKey: ['customer', 'bookings'] })
+      const paymentId = vars.isRecurring ? res?.data?.payment?.id : res?.payment?.id
+      if (paymentId) navigate(`/payments/${paymentId}`)
     },
     onError: (err: any) => {
       const data = err?.response?.data
@@ -383,7 +383,7 @@ export function FieldDetailPage() {
                 <Check /> Xác nhận bởi chủ sân
               </span>
               <span>
-                <Info /> Chờ duyệt: hủy bất cứ lúc nào · Đã xác nhận: hủy được trong 2 giờ, hủy khi còn dưới 4 giờ trước giờ chơi bị trừ điểm uy tín
+                <Info /> Giữ chỗ 15 phút để chuyển khoản · Huỷ sớm được hoàn tiền theo chính sách huỷ
               </span>
             </div>
           </section>
@@ -772,13 +772,13 @@ export function FieldDetailPage() {
 
           {booking.isSuccess && !selectedSlot && (
             <div className="notice notice--success" role="status">
-              Đã gửi yêu cầu, đang chờ chủ sân duyệt để thanh toán. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
+              Đã giữ chỗ, hãy chuyển khoản để hoàn tất. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
             </div>
           )}
 
           <div className="booking-guarantee">
             <ShieldCheck size={14} />
-            <span>Sau khi chủ sân duyệt, bạn chuyển khoản đặt cọc hoặc trả hết để giữ sân.</span>
+            <span>Thanh toán qua SportHub: đơn xác nhận ngay khi nhận tiền, được hoàn tiền nếu chủ sân huỷ.</span>
           </div>
         </aside>
       </div>
