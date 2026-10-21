@@ -143,7 +143,7 @@ export function PrivacyPage() {
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Biện pháp bảo vệ và lưu trữ</h2>
         <p>
-          Mật khẩu của người dùng được mã hóa bằng thuật toán băm an toàn (Bcrypt/Argon2). Các giấy tờ nhạy cảm như CCCD, giấy phép kinh doanh của chủ sân được lưu trữ trên vùng nhớ riêng biệt (private storage) có kiểm soát quyền truy cập nghiêm ngặt.
+          Mật khẩu của người dùng được mã hóa bằng thuật toán băm an toàn (Bcrypt/Argon2). Các giấy tờ nhạy cảm như CCCD, giấy phép kinh doanh của chủ sân được lưu trữ trên vùng nhớ riêng biệt (private storage) có kiểm soát quyền truy cập nghiêm ngặt. Với hồ sơ bị từ chối, giấy tờ sẽ được tự động xoá sau 30 ngày; số CCCD luôn được mã hoá và chỉ hiển thị 4 số cuối cho người nộp hồ sơ.
         </p>
       </section>
 

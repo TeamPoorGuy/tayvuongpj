@@ -10,11 +10,11 @@ readonly class SubmitApplicationData
     /** @param array<string, UploadedFile> $documents keyed by OwnerDocument type */
     public function __construct(
         public string $ownerName,
-        public string $ownerIdNumber,
+        public ?string $ownerIdNumber,
         public string $businessName,
         public string $businessAddress,
         public string $businessPhone,
-        public string $businessLicense,
+        public ?string $businessLicense,
         public ?string $description,
         public string $bankName,
         public ?string $bankBin,
@@ -28,11 +28,11 @@ readonly class SubmitApplicationData
     {
         return new self(
             ownerName: $request->string('owner_name')->toString(),
-            ownerIdNumber: $request->string('owner_id_number')->toString(),
+            ownerIdNumber: $request->input('owner_id_number') ?: null,
             businessName: $request->string('business_name')->toString(),
             businessAddress: $request->string('business_address')->toString(),
             businessPhone: $request->string('business_phone')->toString(),
-            businessLicense: $request->string('business_license')->toString(),
+            businessLicense: $request->input('business_license') ?: null,
             description: $request->input('description'),
             bankName: $request->string('bank_name')->toString(),
             bankBin: $request->input('bank_bin') ?: \App\Support\Banks::guessBin($request->string('bank_name')->toString()),

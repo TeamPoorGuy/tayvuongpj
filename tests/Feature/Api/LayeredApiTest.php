@@ -304,7 +304,7 @@ class LayeredApiTest extends TestCase
 
         $this->postJson('/api/v1/customer/owner-application', $this->applicationPayload(['accept_terms' => false, 'documents' => []]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['accept_terms', 'documents.id_front', 'documents.id_back', 'documents.business_license']);
+            ->assertJsonValidationErrors(['accept_terms', 'documents.id_front', 'documents.id_back']);
     }
 
     public function test_same_id_number_cannot_be_used_by_two_accounts(): void

@@ -109,7 +109,8 @@ export function OwnerApplicationPage() {
     if (data) {
       setFormData((prev) => ({
         owner_name: data.owner_name ?? prev.owner_name,
-        owner_id_number: data.owner_id_number ?? prev.owner_id_number,
+        // Số CCCD từ server đã bị che nên không điền sẵn; để trống nghĩa là giữ số cũ.
+        owner_id_number: prev.owner_id_number,
         business_name: data.business_name ?? prev.business_name,
         business_address: data.business_address ?? prev.business_address,
         business_phone: data.business_phone ?? prev.business_phone,
@@ -235,7 +236,7 @@ export function OwnerApplicationPage() {
         newErrors.owner_name = 'Vui lòng nhập họ và tên người đại diện.'
       }
       if (!formData.owner_id_number.trim()) {
-        newErrors.owner_id_number = 'Vui lòng nhập số CCCD / CMND.'
+        if (!data?.owner_id_number) newErrors.owner_id_number = 'Vui lòng nhập số CCCD / CMND.'
       } else if (!/^[0-9]{12}$/.test(formData.owner_id_number.trim())) {
         newErrors.owner_id_number = 'Số CCCD phải gồm đúng 12 chữ số.'
       }
@@ -262,13 +263,6 @@ export function OwnerApplicationPage() {
       }
       if (!formData.bank_account_holder.trim()) {
         newErrors.bank_account_holder = 'Vui lòng nhập tên chủ tài khoản ngân hàng.'
-      }
-      if (!formData.business_license.trim()) {
-        newErrors.business_license = 'Vui lòng nhập mã số giấy phép kinh doanh / MST.'
-      }
-      const hasLicenseDoc = data?.documents?.some((d) => d.type === 'business_license')
-      if (!hasLicenseDoc && !files.business_license) {
-        newErrors['documents.business_license'] = 'Vui lòng tải lên ảnh hoặc PDF Giấy phép kinh doanh.'
       }
     } else if (s === 4) {
       const hasIdFront = data?.documents?.some((d) => d.type === 'id_front')
@@ -326,7 +320,9 @@ export function OwnerApplicationPage() {
     // Build FormData
     const fd = new FormData()
     fd.append('owner_name', formData.owner_name.trim())
-    fd.append('owner_id_number', formData.owner_id_number.trim())
+    if (formData.owner_id_number.trim()) {
+      fd.append('owner_id_number', formData.owner_id_number.trim())
+    }
     fd.append('business_name', formData.business_name.trim())
     fd.append('business_address', formData.business_address.trim())
     fd.append('business_phone', formData.business_phone.trim())
@@ -469,7 +465,7 @@ export function OwnerApplicationPage() {
                         e.target.value = digitsOnly(e.target.value, 12)
                         handleChange(e)
                       }}
-                      placeholder="12 chữ số trên thẻ CCCD"
+                      placeholder={data?.owner_id_number ? `Đã lưu ${data.owner_id_number} — để trống nếu giữ nguyên` : '12 chữ số trên thẻ CCCD'}
                       maxLength={12}
                       inputMode="numeric"
                       className={errors.owner_id_number ? 'input--invalid' : ''}
@@ -664,7 +660,7 @@ export function OwnerApplicationPage() {
                     Hồ sơ pháp lý kinh doanh
                   </h4>
                   <label>
-                    <span>Mã số giấy phép kinh doanh / Đăng ký hộ kinh doanh</span>
+                    <span>Mã số giấy phép kinh doanh / Đăng ký hộ kinh doanh (nếu có)</span>
                     <input
                       name="business_license"
                       value={formData.business_license}
@@ -676,7 +672,7 @@ export function OwnerApplicationPage() {
                   </label>
                   <label>
                     <span>
-                      Ảnh chụp hoặc PDF Giấy phép kinh doanh
+                      Ảnh chụp hoặc PDF Giấy phép kinh doanh (nếu có)
                       {data?.documents?.some((d) => d.type === 'business_license')
                         ? ' (đã có tệp tải lên trước đó, chọn tệp mới nếu muốn thay)'
                         : ''}
@@ -770,7 +766,7 @@ export function OwnerApplicationPage() {
                   <div className="wizard-summary-grid">
                     <div className="wizard-summary-item">
                       <span>Đại diện:</span>
-                      <strong>{formData.owner_name || '—'} (CCCD: {formData.owner_id_number || '—'})</strong>
+                      <strong>{formData.owner_name || '—'} (CCCD: {formData.owner_id_number || data?.owner_id_number || '—'})</strong>
                     </div>
                     <div className="wizard-summary-item">
                       <span>Cơ sở kinh doanh:</span>

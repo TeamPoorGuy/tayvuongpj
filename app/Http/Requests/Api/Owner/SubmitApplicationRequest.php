@@ -21,7 +21,8 @@ class SubmitApplicationRequest extends FormRequest
 
         $rules = [
             'owner_name' => InputRules::personName(),
-            'owner_id_number' => ['required', 'regex:/^[0-9]{12}$/'],
+            // Nộp lại sau khi bị từ chối: để trống thì giữ số CCCD đã lưu.
+            'owner_id_number' => [$profile?->owner_id_number ? 'nullable' : 'required', 'regex:/^[0-9]{12}$/'],
             'business_name' => ['required', 'string', 'max:255'],
             'business_address' => ['required', 'string', 'max:255'],
             'business_phone' => InputRules::phone(),

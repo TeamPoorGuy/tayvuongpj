@@ -49,3 +49,10 @@ Artisan::command('statements:remind', function (\App\Services\StatementService $
 })->purpose('Nhắc chủ sân nộp phí đối soát sắp đến hạn hoặc quá hạn');
 
 Schedule::command('statements:remind')->dailyAt('08:00')->withoutOverlapping();
+
+Artisan::command('owners:purge-documents', function (\App\Services\OwnerApplicationService $service) {
+    $count = $service->purgeRejectedDocuments();
+    $this->info("Đã xoá {$count} giấy tờ của hồ sơ chủ sân bị từ chối quá hạn lưu.");
+})->purpose('Xoá giấy tờ của hồ sơ chủ sân bị từ chối quá 30 ngày');
+
+Schedule::command('owners:purge-documents')->dailyAt('02:00')->withoutOverlapping();
