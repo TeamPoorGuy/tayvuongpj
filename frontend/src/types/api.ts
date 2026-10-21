@@ -220,18 +220,24 @@ export interface OwnerStatement {
   period: string
   booking_count: number
   gmv: number
+  /** Tiền khách đã trả qua SportHub (thu hộ) trong kỳ. */
+  collected_amount: number
+  refunded_amount: number
   commission_amount: number
-  status: 'unpaid' | 'reported' | 'paid' | 'waived'
+  /** Số SportHub chuyển cho chủ sân = thu hộ − hoàn khách − hoa hồng. */
+  payout_amount: number
+  /** unpaid = SportHub chưa chi trả, paid = đã chi trả. */
+  status: 'unpaid' | 'paid'
   due_at: string | null
   is_overdue: boolean
   transfer_code: string
-  reported_at: string | null
+  payout_ref: string | null
   paid_at: string | null
   note: string | null
-  platform_bank?: {
-    bank_name: string
-    account_number: string
-    account_holder: string
+  payout_bank?: {
+    bank_name: string | null
+    account_number: string | null
+    account_holder: string | null
     qr_url: string | null
   }
   owner?: {
@@ -264,9 +270,11 @@ export interface CurrentStatementSummary {
   period: string
   booking_count: number
   estimated_gmv: number
+  collected: number
+  refunded: number
   estimated_commission: number
+  estimated_payout: number
   commission_rate: number
-  has_overdue_debt: boolean
 }
 
 export interface HomeData {
@@ -295,7 +303,6 @@ export interface OwnerDashboard {
   current_month_collected?: number
   current_month_commission?: number
   current_month_net_revenue?: number
-  has_overdue_debt?: boolean
   statement_summary?: CurrentStatementSummary
   most_booked_field: SportsField | null
   recent_bookings: Booking[]
@@ -467,7 +474,7 @@ export interface AdminDashboardData {
     pending_owners: number
     pending_fields: number
     open_complaints: number
-    reported_statements: number
+    pending_payouts: number
     pending_refunds: number
   }
   total_gmv?: number

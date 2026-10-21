@@ -112,11 +112,11 @@ export function AdminDashboardPage() {
 
           <Link to="/admin/statements" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Đối soát đã báo chuyển</span>
-              <Receipt size={16} style={{ color: queue.reported_statements > 0 ? 'var(--pitch)' : 'var(--muted)' }} />
+              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Kỳ chờ chi trả chủ sân</span>
+              <Receipt size={16} style={{ color: queue.pending_payouts > 0 ? 'var(--pitch)' : 'var(--muted)' }} />
             </div>
-            <strong style={{ fontSize: 20, color: queue.reported_statements > 0 ? 'var(--pitch)' : 'var(--forest)' }}>
-              {queue.reported_statements}
+            <strong style={{ fontSize: 20, color: queue.pending_payouts > 0 ? 'var(--pitch)' : 'var(--forest)' }}>
+              {queue.pending_payouts}
             </strong>
           </Link>
 

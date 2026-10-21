@@ -1,7 +1,6 @@
 import { digitsOnly, toBankHolder } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   Building2,
   CalendarDays,
   CalendarX,
@@ -97,21 +96,6 @@ export function OwnerDashboardPage() {
         title="Nhịp vận hành hôm nay"
         copy="Theo dõi sân, lượt đặt và doanh thu trong một màn hình."
       />
-
-      {data?.has_overdue_debt && (
-        <div className="alert-banner alert-banner--danger" style={{ marginBottom: 20 }}>
-          <AlertTriangle size={20} />
-          <div>
-            <strong>Tài khoản đang có kỳ đối soát nợ phí quá hạn!</strong>
-            <p>
-              Bạn đang bị tạm dừng duyệt đơn đặt sân mới. Vui lòng thanh toán phí đối soát để tiếp tục nhận và duyệt đơn.{' '}
-              <Link to="/owner/statements" style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
-                Đến trang đối soát &rarr;
-              </Link>
-            </p>
-          </div>
-        </div>
-      )}
 
       <div className="stats-grid">
         <Stat label="Tổng số sân" value={data?.total_fields ?? 0} />

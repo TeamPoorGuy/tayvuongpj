@@ -136,7 +136,7 @@ export function PrivacyPage() {
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Xác thực tài khoản và gửi email thông báo trạng thái đơn đặt sân.</li>
           <li>Cung cấp số tài khoản và nội dung chuyển tiền để phục vụ việc chuyển khoản giữa khách và chủ sân.</li>
-          <li>Hỗ trợ giải quyết tranh chấp, đối soát hoa hồng và nâng cao chất lượng dịch vụ.</li>
+          <li>Hỗ trợ giải quyết tranh chấp, đối soát thu hộ - chi trả và nâng cao chất lượng dịch vụ.</li>
           <li>Không mua bán, chia sẻ hoặc chuyển giao dữ liệu cá nhân cho bên thứ ba vì mục đích thương mại.</li>
         </ul>
       </section>
@@ -236,7 +236,7 @@ export function OwnerRegulationsPage() {
     <PolicyShell kicker="Dành cho đối tác" title="Quy chế hoạt động dành cho chủ sân">
       <div className="content-card" style={{ padding: 24, marginBottom: 24 }}>
         <p style={{ margin: 0, color: 'var(--soft)' }}>
-          Quy chế này quy định quyền, trách nhiệm, cơ chế thu phí hoa hồng và các chế tài kỷ luật áp dụng đối với tất cả các đối tác quản lý cơ sở thể thao trên hệ thống SportHub.
+          Quy chế này quy định quyền, trách nhiệm, cơ chế thu hộ, hoa hồng, chi trả và các chế tài kỷ luật áp dụng đối với tất cả các đối tác quản lý cơ sở thể thao trên hệ thống SportHub.
         </p>
       </div>
 
@@ -251,22 +251,23 @@ export function OwnerRegulationsPage() {
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Mô hình hoa hồng & Đối soát hàng tháng (Mô hình Agoda)</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Thu hộ, hoa hồng & chi trả hàng tháng</h2>
         <div className="content-card" style={{ padding: 20, background: 'var(--surface)', marginBottom: 16 }}>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <li><strong>Mức hoa hồng nền tảng:</strong> Cố định <strong>{commissionPercent}%</strong> tính trên doanh thu đơn hoàn thành hoặc phần cọc giữ lại từ đơn huỷ muộn/no-show.</li>
-            <li><strong>Chu kỳ đối soát:</strong> Vào ngày 1 hàng tháng, SportHub tự động tổng hợp bảng kê đối soát hoa hồng cho doanh thu tháng trước.</li>
-            <li><strong>Thời hạn thanh toán:</strong> Chủ sân có <strong>{dueDays} ngày</strong> để chuyển khoản phí hoa hồng về tài khoản định danh của nền tảng.</li>
+            <li><strong>Thu hộ:</strong> Khách thanh toán (cọc hoặc trả hết) vào tài khoản SportHub; đơn được xác nhận ngay khi nền tảng nhận tiền. Phần còn lại của đơn đặt cọc khách trả trực tiếp tại sân.</li>
+            <li><strong>Mức hoa hồng nền tảng:</strong> Cố định <strong>{commissionPercent}%</strong> tính trên doanh thu đơn hoàn thành hoặc phần tiền giữ lại từ đơn huỷ muộn/no-show, trừ thẳng khi chi trả.</li>
+            <li><strong>Chu kỳ đối soát:</strong> Ngày 1 hàng tháng, SportHub lập bảng đối soát tháng trước: tiền đã thu hộ − tiền hoàn cho khách − hoa hồng = số chi trả cho chủ sân.</li>
+            <li><strong>Thời hạn chi trả:</strong> SportHub chuyển khoản vào tài khoản ngân hàng khai trong hồ sơ cơ sở trong vòng <strong>{dueDays} ngày</strong> kể từ ngày lập bảng.</li>
           </ul>
         </div>
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Chế tài xử lý khi nợ hoa hồng quá hạn</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Huỷ đơn và hoàn tiền</h2>
         <div className="notice notice--warn" style={{ marginBottom: 16 }}>
           <AlertTriangle size={18} />
           <span>
-            Nếu quá hạn <strong>{dueDays} ngày</strong> mà chủ sân chưa thanh toán hoa hồng, hệ thống sẽ <strong>tự động tạm khóa tính năng duyệt đơn mới</strong> của cụm sân đó cho tới khi hoàn tất nghĩa vụ tài chính.
+            Chủ sân huỷ đơn đã thanh toán thì khách được <strong>hoàn 100%</strong> và khoản hoàn được trừ vào kỳ chi trả. Huỷ nhiều lần không lý do chính đáng có thể bị tạm ngưng hiển thị sân.
           </span>
         </div>
       </section>

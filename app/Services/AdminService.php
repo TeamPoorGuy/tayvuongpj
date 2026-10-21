@@ -69,7 +69,8 @@ class AdminService
         $commissionCollected = (float) \App\Models\OwnerStatement::where('status', 'paid')
             ->whereBetween('paid_at', [$start, $end])
             ->sum('commission_amount');
-        $totalCommissionDebt = (float) \App\Models\OwnerStatement::whereIn('status', ['unpaid', 'reported'])
+        // Hoa hồng của các kỳ chưa chi trả (SportHub đang giữ trong tiền thu hộ).
+        $totalCommissionDebt = (float) \App\Models\OwnerStatement::where('status', 'unpaid')
             ->sum('commission_amount');
 
         // Daily series for SVG chart
@@ -114,7 +115,7 @@ class AdminService
             'pending_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Pending)->count(),
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'open_complaints' => \App\Models\Complaint::where('status', 'open')->count(),
-            'reported_statements' => \App\Models\OwnerStatement::where('status', 'reported')->count(),
+            'pending_payouts' => \App\Models\OwnerStatement::where('status', 'unpaid')->where('payout_amount', '>', 0)->count(),
             'pending_refunds' => Booking::where('refund_status', 'pending')->count(),
         ];
 

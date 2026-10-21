@@ -52,8 +52,7 @@ class FieldOwnerService
             'current_month_gmv' => $currentMonthGmv,
             'current_month_collected' => $currentMonthPaid,
             'current_month_commission' => $monthSummary['estimated_commission'],
-            'current_month_net_revenue' => max(0.0, $currentMonthPaid - $monthSummary['estimated_commission']),
-            'has_overdue_debt' => $monthSummary['has_overdue_debt'],
+            'current_month_net_revenue' => $monthSummary['estimated_payout'],
             'statement_summary' => $monthSummary,
             'most_booked_field' => SportsField::where('field_owner_id', $owner->id)->with(['primaryImage', 'fieldType.sportCategory'])->withRating()->withCount('bookings')->orderByDesc('bookings_count')->first(),
             // Dashboard summary only — deliberately omits 'review', unlike Booking::resourceRelations().

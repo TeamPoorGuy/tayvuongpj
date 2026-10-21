@@ -1,20 +1,22 @@
 @component('mail::message')
-# {{ $kind === 'overdue' ? 'Phí đối soát đã quá hạn' : 'Phí đối soát nền tảng tháng '.$statement->period }}
+# {{ $kind === 'paid_out' ? 'SportHub đã chuyển tiền cho bạn' : 'Bảng đối soát tháng '.$statement->period }}
 
-@if ($kind === 'overdue')
-Kỳ đối soát đã quá hạn nộp. Trong lúc còn nợ, tài khoản của bạn **không thể duyệt đơn mới**.
-@elseif ($kind === 'due_soon')
-Kỳ đối soát sắp đến hạn nộp, vui lòng chuyển khoản đúng hạn để không bị khoá duyệt đơn.
+@if ($kind === 'paid_out')
+SportHub đã chuyển khoản tiền thu hộ kỳ **{{ $statement->period }}** vào tài khoản ngân hàng của bạn.
 @else
-Bảng đối soát phí nền tảng của bạn đã được tạo.
+Bảng đối soát kỳ **{{ $statement->period }}** đã được lập. SportHub sẽ chuyển khoản cho bạn trước {{ $statement->due_at?->format('d/m/Y') }}.
 @endif
 
-- **Số tiền cần nộp:** {{ number_format($statement->commission_amount, 0, ',', '.') }}đ ({{ $statement->booking_count }} đơn)
-- **Hạn nộp:** {{ $statement->due_at->format('d/m/Y') }}
-- **Nội dung chuyển khoản:** {{ $statement->transfer_code }}
+- **Tiền khách đã thanh toán qua SportHub:** {{ number_format($statement->collected_amount, 0, ',', '.') }}đ ({{ $statement->booking_count }} đơn)
+- **Hoàn tiền cho khách:** {{ number_format($statement->refunded_amount, 0, ',', '.') }}đ
+- **Hoa hồng nền tảng:** {{ number_format($statement->commission_amount, 0, ',', '.') }}đ
+- **Số tiền chi trả cho bạn:** {{ number_format($statement->payout_amount, 0, ',', '.') }}đ
+@if ($statement->payout_ref)
+- **Mã giao dịch:** {{ $statement->payout_ref }}
+@endif
 
 @component('mail::button', ['url' => config('frontend.url').'/owner/statements'])
-Xem & thanh toán (có mã QR)
+Xem chi tiết đối soát
 @endcomponent
 
 Trân trọng,<br>

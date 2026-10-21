@@ -165,7 +165,6 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('/statements/current-summary', [FieldOwner\StatementController::class, 'currentSummary']);
         Route::get('/statements/{statement}/export-csv', [FieldOwner\StatementController::class, 'exportBookingsCsv']);
         Route::get('/statements/{statement}', [FieldOwner\StatementController::class, 'show']);
-        Route::post('/statements/{statement}/report', [FieldOwner\StatementController::class, 'report'])->middleware('throttle:writes');
     });
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
@@ -206,9 +205,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/statements/{statement}/export-csv', [Admin\StatementController::class, 'exportBookingsCsv']);
             Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
             Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/confirm', [Admin\StatementController::class, 'confirm'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/reject-report', [Admin\StatementController::class, 'rejectReport'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/waive', [Admin\StatementController::class, 'waive'])->middleware('throttle:writes');
+            Route::post('/statements/{statement}/payout', [Admin\StatementController::class, 'payout'])->middleware('throttle:writes');
         });
     });
 });
