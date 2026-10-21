@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
+use App\Support\Banks;
 use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -58,18 +59,19 @@ class BookingResource extends JsonResource
                     && $this->sportsField->relationLoaded('owner'),
                 fn () => [
                     'bank_name' => $this->sportsField->owner->fieldOwnerProfile?->bank_name,
-                    'bank_bin' => $this->sportsField->owner->fieldOwnerProfile?->bank_bin ?? \App\Support\Banks::guessBin($this->sportsField->owner->fieldOwnerProfile?->bank_name),
+                    'bank_bin' => $this->sportsField->owner->fieldOwnerProfile?->bank_bin ?? Banks::guessBin($this->sportsField->owner->fieldOwnerProfile?->bank_name),
                     'account_number' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_number,
                     'account_holder' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_holder,
                 ]
             ),
             'field' => $this->whenLoaded('sportsField', fn () => new FieldResource($this->sportsField)),
             'customer' => $this->whenLoaded('customer', fn () => new UserResource($this->customer)),
-            'time_slot' => $this->whenLoaded('timeSlot', fn () => [
-                'id' => $this->timeSlot->id,
-                'start_time' => substr($this->timeSlot->start_time, 0, 5),
-                'end_time' => substr($this->timeSlot->end_time, 0, 5),
-            ]),
+            // Giữ tên time_slot cho giao diện cũ; giờ lấy từ chính đơn (đơn theo khoảng giờ không có khung giờ).
+            'time_slot' => [
+                'id' => $this->time_slot_id,
+                'start_time' => substr($this->start_time, 0, 5),
+                'end_time' => substr($this->end_time, 0, 5),
+            ],
             'review' => $this->whenLoaded('review', fn () => $this->review ? new ReviewResource($this->review) : null),
             'created_at' => $this->created_at?->toISOString(),
         ];

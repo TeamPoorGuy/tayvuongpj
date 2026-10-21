@@ -427,7 +427,7 @@ class StatementService
                 '"'.str_replace('"', '""', (string) ($b->customer?->phone ?? '—')).'"',
                 '"'.str_replace('"', '""', (string) ($b->sportsField?->name ?? '—')).'"',
                 $b->booking_date?->format('Y-m-d') ?? '—',
-                ($b->timeSlot ? substr($b->timeSlot->start_time, 0, 5).' - '.substr($b->timeSlot->end_time, 0, 5) : '—'),
+                ($b->start_time ? substr($b->start_time, 0, 5).' - '.substr($b->end_time, 0, 5) : '—'),
                 number_format((float) $b->total_price, 0, '', ''),
                 $b->commission_rate ?? 0,
                 number_format((float) ($b->commission_amount ?? 0), 0, '', ''),

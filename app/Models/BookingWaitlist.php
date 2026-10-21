@@ -2,18 +2,21 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTimeRange;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class BookingWaitlist extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTimeRange;
 
     protected $fillable = [
         'user_id',
         'sports_field_id',
         'time_slot_id',
         'booking_date',
+        'start_time',
+        'end_time',
         'status',
         'priority_score',
         'offered_at',

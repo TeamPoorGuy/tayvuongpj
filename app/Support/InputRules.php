@@ -21,6 +21,9 @@ class InputRules
     /** Số giấy phép kinh doanh / mã số thuế. */
     public const LICENSE_NO = 'regex:/^[0-9A-Za-z\/-]{5,20}$/';
 
+    /** Giờ tròn :00 hoặc :30 (lưới đặt sân theo bước 30 phút). */
+    public const HALF_HOUR = 'regex:/^([01][0-9]|2[0-3]):(00|30)$/';
+
     public const MAX_MONEY = 100000000;
 
     /** @return list<string|Rule> */

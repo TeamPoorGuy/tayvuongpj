@@ -213,11 +213,7 @@ class FieldOwnerService
         $booking = $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
 
         if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
-            app(\App\Services\WaitlistService::class)->handleSlotFreed(
-                $booking->sports_field_id,
-                $booking->time_slot_id,
-                $booking->booking_date->toDateString()
-            );
+            app(\App\Services\WaitlistService::class)->handleBookingFreed($booking);
         }
 
         if ($next !== BookingStatus::Completed) {
@@ -355,12 +351,19 @@ class FieldOwnerService
         $start = Carbon::createFromFormat('H:i', $data['start_time'])->format('H:i:s');
         $end = Carbon::createFromFormat('H:i', $data['end_time'])->format('H:i:s');
 
+        $days = collect($data['days_of_week'] ?? [])->map(fn ($d) => (int) $d)->unique()->sort()->values();
+        // Chọn đủ 7 ngày hoặc không chọn = áp dụng mọi ngày.
+        $daysValue = $days->isEmpty() || $days->count() === 7 ? null : $days->implode(',');
+
+        // Hai khung chỉ coi là trùng khi giờ giao nhau và có ít nhất một ngày chung (giá cuối tuần ≠ giá ngày thường).
         $overlaps = TimeSlot::where('sports_field_id', $field->id)
             ->where('is_active', true)
             ->when($slot, fn ($q) => $q->whereKeyNot($slot->id))
             ->where('start_time', '<', $end)
             ->where('end_time', '>', $start)
-            ->exists();
+            ->get()
+            ->contains(fn (TimeSlot $other) => $other->days() === [] || $daysValue === null
+                || array_intersect($other->days(), $days->all()) !== []);
 
         if ($overlaps) {
             throw new ConflictException('Khung giờ bị trùng với khung giờ khác của sân.');
@@ -378,6 +381,7 @@ class FieldOwnerService
             'start_time' => $start,
             'end_time' => $end,
             'price_per_hour' => $data['price_per_hour'] ?? null,
+            'days_of_week' => $daysValue,
             'is_active' => $data['is_active'] ?? true,
         ];
 
@@ -407,9 +411,11 @@ class FieldOwnerService
 
     private function slotHasUpcomingBookings(TimeSlot $slot): bool
     {
-        return $slot->bookings()
+        // Theo khoảng giờ (không theo time_slot_id) vì đơn lưới 30 phút không gắn với khung giờ nào.
+        return Booking::where('sports_field_id', $slot->sports_field_id)
             ->whereIn('status', BookingStatus::blockingCases())
             ->whereDate('booking_date', '>=', today())
+            ->overlapping($slot->start_time, $slot->end_time)
             ->exists();
     }
 

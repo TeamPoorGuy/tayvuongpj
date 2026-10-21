@@ -51,6 +51,7 @@ class FieldResource extends JsonResource
                 'end_time' => substr($slot->end_time, 0, 5),
                 'is_active' => (bool) $slot->is_active,
                 'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
+                'days_of_week' => $slot->days(),
             ])),
             'reviews' => ReviewResource::collection($this->whenLoaded('reviews')),
             'closures' => FieldClosureResource::collection($this->whenLoaded('closures')),

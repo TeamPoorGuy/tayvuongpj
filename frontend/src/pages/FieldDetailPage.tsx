@@ -323,7 +323,8 @@ export function FieldDetailPage() {
               <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 13 }}>
                 {upcoming.map((c) => (
                   <li key={c.id}>
-                    Từ <strong>{formatDate(c.start_date)}</strong> đến <strong>{formatDate(c.end_date)}</strong>: {c.reason}
+                    Từ <strong>{formatDate(c.start_date)}</strong> đến <strong>{formatDate(c.end_date)}</strong>
+                    {c.start_time && c.end_time ? ` (khoá ${c.start_time}–${c.end_time})` : ''}: {c.reason}
                   </li>
                 ))}
               </ul>

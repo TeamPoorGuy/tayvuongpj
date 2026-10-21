@@ -91,6 +91,9 @@ export interface FieldClosure {
   sports_field_id: number
   start_date: string
   end_date: string
+  /** Cả hai null = đóng cả ngày. */
+  start_time?: string | null
+  end_time?: string | null
   reason: string
   created_at?: string
 }
@@ -104,6 +107,8 @@ export interface TimeSlot {
   is_past?: boolean
   is_held?: boolean
   price_per_hour?: number | null
+  /** Ngày áp dụng (ISO 1 = thứ 2 … 7 = chủ nhật); rỗng = mọi ngày. */
+  days_of_week?: number[]
 }
 
 export interface Review {

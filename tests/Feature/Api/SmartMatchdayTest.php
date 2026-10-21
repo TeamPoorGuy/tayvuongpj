@@ -378,7 +378,7 @@ class SmartMatchdayTest extends TestCase
 
         // Slot được nhả → người trong hàng đợi nhận lời mời 15 phút.
         $held->update(['status' => 'cancelled']);
-        app(\App\Services\WaitlistService::class)->handleSlotFreed($field->id, $slot->id, $date);
+        app(\App\Services\WaitlistService::class)->handleSlotFreed($field->id, $date, $slot->start_time, $slot->end_time);
 
         $payload = ['sports_field_id' => $field->id, 'time_slot_id' => $slot->id, 'booking_date' => $date];
 

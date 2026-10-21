@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\BookingStatus;
+use App\Models\Concerns\HasTimeRange;
 use App\Support\Settings;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,13 +11,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTimeRange;
 
     protected $fillable = [
         'user_id',
         'sports_field_id',
         'time_slot_id',
         'booking_date',
+        'start_time',
+        'end_time',
         'status',
         'confirmed_at',
         'total_price',
@@ -172,7 +175,6 @@ class Booking extends Model
         $relations = [
             'sportsField.primaryImage',
             'sportsField.owner.fieldOwnerProfile',
-            'timeSlot',
             'review',
         ];
         if ($withCustomer) {
@@ -184,12 +186,12 @@ class Booking extends Model
 
     public function startsAt(): Carbon
     {
-        return Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->start_time);
+        return Carbon::parse($this->booking_date->toDateString().' '.$this->start_time);
     }
 
     public function endsAt(): Carbon
     {
-        return Carbon::parse($this->booking_date->toDateString().' '.$this->timeSlot->end_time);
+        return Carbon::parse($this->booking_date->toDateString().' '.$this->end_time);
     }
 
     /**

@@ -42,6 +42,7 @@ class SlotController extends Controller
             'start_time' => substr($slot->start_time, 0, 5),
             'end_time' => substr($slot->end_time, 0, 5),
             'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
+            'days_of_week' => $slot->days(),
             'is_active' => (bool) $slot->is_active,
         ];
     }

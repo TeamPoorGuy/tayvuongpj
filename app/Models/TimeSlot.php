@@ -27,6 +27,7 @@ class TimeSlot extends Model
         'start_time',
         'end_time',
         'price_per_hour',
+        'days_of_week',
         'is_active',
     ];
 
@@ -48,6 +49,19 @@ class TimeSlot extends Model
     public function getFormattedSlotAttribute(): string
     {
         return substr($this->start_time, 0, 5) . ' - ' . substr($this->end_time, 0, 5);
+    }
+
+    /** Ngày (ISO 1–7) mà khung giờ này áp dụng; rỗng = mọi ngày. */
+    public function days(): array
+    {
+        return $this->days_of_week ? array_map('intval', explode(',', $this->days_of_week)) : [];
+    }
+
+    public function appliesTo(string|Carbon $date): bool
+    {
+        $days = $this->days();
+
+        return $days === [] || in_array(Carbon::parse($date)->dayOfWeekIso, $days, true);
     }
 
     public function durationInHours(): float

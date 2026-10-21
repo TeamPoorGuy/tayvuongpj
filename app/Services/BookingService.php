@@ -74,15 +74,23 @@ class BookingService
                 throw new ForbiddenException('Bạn không thể đặt sân của chính mình.');
             }
 
+            if (! $slot->appliesTo($bookingDateStr)) {
+                throw new ConflictException('Khung giờ này không áp dụng cho ngày đã chọn.');
+            }
+
+            if ($lock = $field->closureBlocking($bookingDateStr, $slot->start_time, $slot->end_time)) {
+                throw new ConflictException("Sân tạm khoá khung giờ này: {$lock->reason}");
+            }
+
             if (Carbon::parse($data->bookingDate)->toDateString().' '.$slot->start_time <= now()->format('Y-m-d H:i:s')) {
                 throw new ConflictException('Khung giờ này đã qua. Vui lòng chọn giờ khác.');
             }
 
             $isBooked = Booking::query()
                 ->where('sports_field_id', $field->id)
-                ->where('time_slot_id', $slot->id)
                 ->whereDate('booking_date', $data->bookingDate)
                 ->whereIn('status', BookingStatus::blockingCases())
+                ->overlapping($slot->start_time, $slot->end_time)
                 ->lockForUpdate()
                 ->exists();
 
@@ -93,10 +101,10 @@ class BookingService
             // Slot đang được giữ 15 phút cho người đứng đầu hàng đợi: không cho người khác chen ngang.
             $offer = BookingWaitlist::query()
                 ->where('sports_field_id', $field->id)
-                ->where('time_slot_id', $slot->id)
                 ->whereDate('booking_date', $data->bookingDate)
                 ->where('status', 'offered')
                 ->where('offer_expires_at', '>', now())
+                ->overlapping($slot->start_time, $slot->end_time)
                 ->lockForUpdate()
                 ->first();
 
@@ -111,7 +119,7 @@ class BookingService
                 'time_slot_id' => $slot->id,
                 'booking_date' => $data->bookingDate,
                 'status' => BookingStatus::Pending->value,
-                'total_price' => ($slot->price_per_hour ?? $field->price_per_hour) * $slot->durationInHours(),
+                'total_price' => $field->priceFor($bookingDateStr, $slot->start_time, $slot->end_time),
                 'notes' => $data->notes,
             ])->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
         });
@@ -135,11 +143,7 @@ class BookingService
 
         $booking->markCancelled('customer', $reason ?: 'Khách hàng tự hủy đơn.');
 
-        app(WaitlistService::class)->handleSlotFreed(
-            $booking->sports_field_id,
-            $booking->time_slot_id,
-            $booking->booking_date->toDateString()
-        );
+        app(WaitlistService::class)->handleBookingFreed($booking);
 
         return $booking->refresh()->load(Booking::resourceRelations());
     }
@@ -177,11 +181,7 @@ class BookingService
                         ]);
                     }
                     SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
-                    app(WaitlistService::class)->handleSlotFreed(
-                        $booking->sports_field_id,
-                        $booking->time_slot_id,
-                        $booking->booking_date->toDateString()
-                    );
+                    app(WaitlistService::class)->handleBookingFreed($booking);
                     $count['rejected']++;
                 } elseif ($booking->status === BookingStatus::Confirmed && $booking->endsAt()->isPast()) {
                     $attributes = ['status' => BookingStatus::Completed->value];
@@ -271,17 +271,21 @@ class BookingService
                     continue;
                 }
 
-                if ($field->isClosedOn($currentDate)) {
-                    $closure = $field->closureOn($currentDate);
+                if (! $slot->appliesTo($currentDate)) {
+                    $conflicts[] = ['date' => $currentDate, 'reason' => 'Khung giờ này không áp dụng cho ngày đó.'];
+                    continue;
+                }
+
+                if ($closure = $field->closureBlocking($currentDate, $slot->start_time, $slot->end_time)) {
                     $conflicts[] = ['date' => $currentDate, 'reason' => "Sân đóng cửa: {$closure->reason}"];
                     continue;
                 }
 
                 $isBooked = Booking::query()
                     ->where('sports_field_id', $field->id)
-                    ->where('time_slot_id', $slot->id)
                     ->whereDate('booking_date', $currentDate)
                     ->whereIn('status', BookingStatus::blockingCases())
+                    ->overlapping($slot->start_time, $slot->end_time)
                     ->lockForUpdate()
                     ->exists();
 
@@ -292,10 +296,10 @@ class BookingService
 
                 $offer = BookingWaitlist::query()
                     ->where('sports_field_id', $field->id)
-                    ->where('time_slot_id', $slot->id)
                     ->whereDate('booking_date', $currentDate)
                     ->where('status', 'offered')
                     ->where('offer_expires_at', '>', now())
+                    ->overlapping($slot->start_time, $slot->end_time)
                     ->lockForUpdate()
                     ->first();
 
@@ -321,10 +325,11 @@ class BookingService
             }
 
             $groupId = (string) Str::uuid();
-            $totalPrice = ($slot->price_per_hour ?? $field->price_per_hour) * $slot->durationInHours();
 
             $created = [];
             foreach ($availableDates as $item) {
+                // Giá tính theo từng ngày vì khung giờ có thể có giá riêng cho cuối tuần.
+                $totalPrice = $field->priceFor($item['date'], $slot->start_time, $slot->end_time);
                 $booking = Booking::create([
                     'user_id' => $user->id,
                     'sports_field_id' => $field->id,

@@ -180,11 +180,7 @@ class AdminService
                 SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
             }
 
-            app(WaitlistService::class)->handleSlotFreed(
-                $booking->sports_field_id,
-                $booking->time_slot_id,
-                $booking->booking_date->toDateString()
-            );
+            app(WaitlistService::class)->handleBookingFreed($booking);
 
             $count++;
         }
@@ -442,11 +438,7 @@ class AdminService
 
         $booking->markCancelled('admin', $reason);
 
-        app(WaitlistService::class)->handleSlotFreed(
-            $booking->sports_field_id,
-            $booking->time_slot_id,
-            $booking->booking_date->toDateString()
-        );
+        app(WaitlistService::class)->handleBookingFreed($booking);
 
         AdminLog::record('admin_cancel_booking', $booking, [
             'reason' => $reason,
@@ -533,7 +525,7 @@ class AdminService
                 '"'.str_replace('"', '""', $b->customer?->phone ?? 'N/A').'"',
                 '"'.str_replace('"', '""', $b->sportsField?->name ?? 'N/A').'"',
                 $b->booking_date->toDateString(),
-                ($b->timeSlot ? $b->timeSlot->start_time.'-'.$b->timeSlot->end_time : 'N/A'),
+                ($b->start_time ? substr($b->start_time, 0, 5).'-'.substr($b->end_time, 0, 5) : 'N/A'),
                 (int) $b->total_price,
                 '"'.$statusLabel.'"',
                 '"'.$payLabel.'"',

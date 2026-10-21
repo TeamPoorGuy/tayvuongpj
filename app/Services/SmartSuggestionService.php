@@ -32,7 +32,7 @@ class SmartSuggestionService
             ->where('is_active', true)
             ->orderBy('start_time')
             ->get()
-            ->filter(fn (TimeSlot $s) => ! $this->isPast($date, $s) && ! isset($busyToday[$field->id.':'.$s->id]))
+            ->filter(fn (TimeSlot $s) => $s->appliesTo($date) && ! $this->isPast($date, $s) && ! $this->isBusy($busyToday, $field->id, $s))
             ->take(2);
 
         foreach ($sameDay as $slot) {
@@ -45,7 +45,7 @@ class SmartSuggestionService
 
         // 2. Cùng sân, cùng khung giờ, ngày hôm sau (tính từ ngày đang xem).
         $busyTomorrow = $this->busySlots([$field->id], $tomorrow);
-        if (! isset($busyTomorrow[$field->id.':'.$targetSlot->id])) {
+        if ($targetSlot->appliesTo($tomorrow) && ! $this->isBusy($busyTomorrow, $field->id, $targetSlot)) {
             $suggestions[] = $this->item('same_slot_tomorrow', $field, $targetSlot, $tomorrow, $targetPrice, 'Cùng khung giờ ngày hôm sau');
         }
 
@@ -63,8 +63,8 @@ class SmartSuggestionService
         $candidates = [];
         foreach ($others as $other) {
             $slot = $other->timeSlots->where('is_active', true)
-                ->first(fn ($s) => substr($s->start_time, 0, 5) === $start);
-            if (! $slot || $this->isPast($date, $slot) || isset($busyOthers[$other->id.':'.$slot->id])) {
+                ->first(fn ($s) => substr($s->start_time, 0, 5) === $start && $s->appliesTo($date));
+            if (! $slot || $this->isPast($date, $slot) || $this->isBusy($busyOthers, $other->id, $slot)) {
                 continue;
             }
             $candidates[] = [$other, $slot, $this->distanceKm($field, $other)];
@@ -81,7 +81,7 @@ class SmartSuggestionService
         return array_slice($suggestions, 0, self::MAX_SUGGESTIONS);
     }
 
-    /** Các cặp "sân:slot" đã có đơn hoặc đang được giữ chỗ trong ngày (2 truy vấn cho cả danh sách sân). */
+    /** Khoảng giờ đã có đơn hoặc đang được giữ chỗ trong ngày, theo từng sân (2 truy vấn cho cả danh sách sân). */
     private function busySlots(array $fieldIds, Carbon $date): array
     {
         if ($fieldIds === []) {
@@ -92,21 +92,26 @@ class SmartSuggestionService
         Booking::whereIn('sports_field_id', $fieldIds)
             ->whereDate('booking_date', $date)
             ->whereIn('status', ['pending', 'confirmed'])
-            ->get(['sports_field_id', 'time_slot_id'])
+            ->get(['sports_field_id', 'start_time', 'end_time'])
             ->each(function ($b) use (&$busy) {
-                $busy[$b->sports_field_id.':'.$b->time_slot_id] = true;
+                $busy[$b->sports_field_id][] = [$b->start_time, $b->end_time];
             });
 
         BookingWaitlist::whereIn('sports_field_id', $fieldIds)
             ->whereDate('booking_date', $date)
             ->where('status', 'offered')
             ->where('offer_expires_at', '>', now())
-            ->get(['sports_field_id', 'time_slot_id'])
+            ->get(['sports_field_id', 'start_time', 'end_time'])
             ->each(function ($w) use (&$busy) {
-                $busy[$w->sports_field_id.':'.$w->time_slot_id] = true;
+                $busy[$w->sports_field_id][] = [$w->start_time, $w->end_time];
             });
 
         return $busy;
+    }
+
+    private function isBusy(array $busy, int $fieldId, TimeSlot $slot): bool
+    {
+        return SportsField::overlapsAny($busy[$fieldId] ?? [], $slot->start_time, $slot->end_time);
     }
 
     private function isPast(Carbon $date, TimeSlot $slot): bool

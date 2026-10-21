@@ -531,11 +531,12 @@ function SlotManagerModal({
   const [startTime, setStartTime] = useState(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00')
   const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 90))
   const [slotPrice, setSlotPrice] = useState('')
+  const [slotDays, setSlotDays] = useState<number[]>([])
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null)
   const [togglingSlot, setTogglingSlot] = useState<TimeSlot | null>(null)
 
   const addSlot = useMutation({
-    mutationFn: async (payload: { start_time: string; end_time: string; price_per_hour?: number | null }) =>
+    mutationFn: async (payload: { start_time: string; end_time: string; price_per_hour?: number | null; days_of_week?: number[] }) =>
       api.post(`/field-owner/fields/${field.id}/slots`, payload),
     onSuccess: () => {
       toast.success('Đã thêm khung giờ thành công.')
@@ -557,6 +558,7 @@ function SlotManagerModal({
         start_time: slot.start_time,
         end_time: slot.end_time,
         price_per_hour: slot.price_per_hour,
+        days_of_week: slot.days_of_week ?? [],
         is_active: !slot.is_active,
       }),
     onSuccess: () => {
@@ -588,6 +590,7 @@ function SlotManagerModal({
       start_time: startTime,
       end_time: endTime,
       price_per_hour: slotPrice ? Number(slotPrice) : null,
+      days_of_week: slotDays,
     })
   }
 
@@ -611,6 +614,7 @@ function SlotManagerModal({
                 <span>Giờ bắt đầu</span>
                 <input
                   type="time"
+                  step="1800"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
@@ -620,6 +624,7 @@ function SlotManagerModal({
                 <span>Giờ kết thúc</span>
                 <input
                   type="time"
+                  step="1800"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   required
@@ -637,6 +642,21 @@ function SlotManagerModal({
                   onChange={(e) => setSlotPrice(e.target.value)}
                 />
               </label>
+            </div>
+            <div className="weekday-picker" role="group" aria-label="Ngày áp dụng" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '8px 0 12px' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Áp dụng:</span>
+              {WEEKDAYS.map(([day, label]) => (
+                <label key={day} style={{ display: 'flex', alignItems: 'center', gap: 4, margin: 0, fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={slotDays.includes(day)}
+                    onChange={(e) => setSlotDays((prev) => (e.target.checked ? [...prev, day] : prev.filter((d) => d !== day)))}
+                    style={{ minHeight: 'auto', width: 'auto' }}
+                  />
+                  {label}
+                </label>
+              ))}
+              <small style={{ color: 'var(--muted)' }}>Không chọn = mọi ngày (dùng để đặt giá cuối tuần riêng).</small>
             </div>
             <button
               type="submit"
@@ -664,6 +684,7 @@ function SlotManagerModal({
                           ? `${formatMoney(slot.price_per_hour)}/h (riêng)`
                           : `${formatMoney(field.price_per_hour)}/h`}
                       </span>
+                      <span className="slot-item__price">{describeDays(slot.days_of_week)}</span>
                     </div>
                     <div className="slot-item__actions">
                       <button
@@ -893,6 +914,14 @@ function ImageGalleryModal({
   )
 }
 
+/** Nhãn thứ theo ISO (1 = thứ 2 … 7 = chủ nhật). */
+const WEEKDAYS: [number, string][] = [[1, 'T2'], [2, 'T3'], [3, 'T4'], [4, 'T5'], [5, 'T6'], [6, 'T7'], [7, 'CN']]
+
+function describeDays(days?: number[]) {
+  if (!days || days.length === 0 || days.length === 7) return 'Mọi ngày'
+  return WEEKDAYS.filter(([d]) => days.includes(d)).map(([, label]) => label).join(', ')
+}
+
 function FieldClosureModal({
   field,
   onClose,
@@ -907,6 +936,8 @@ function FieldClosureModal({
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
   const [reason, setReason] = useState('')
+  const [closeFrom, setCloseFrom] = useState('')
+  const [closeTo, setCloseTo] = useState('')
   const [deletingClosure, setDeletingClosure] = useState<FieldClosure | null>(null)
 
   const closuresQuery = useQuery({
@@ -949,6 +980,8 @@ function FieldClosureModal({
     addClosure.mutate({
       start_date: startDate,
       end_date: endDate,
+      // Để trống cả hai giờ = đóng cả ngày.
+      ...(closeFrom && closeTo ? { start_time: closeFrom, end_time: closeTo } : {}),
       reason: reason.trim(),
     })
   }
@@ -994,6 +1027,16 @@ function FieldClosureModal({
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
+              </label>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Từ giờ (tuỳ chọn, để trống = cả ngày)</span>
+                <input type="time" step="1800" value={closeFrom} onChange={(e) => setCloseFrom(e.target.value)} required={!!closeTo} />
+              </label>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Đến giờ</span>
+                <input type="time" step="1800" value={closeTo} onChange={(e) => setCloseTo(e.target.value)} required={!!closeFrom} />
               </label>
             </div>
             <label style={{ margin: '0 0 12px' }}>
@@ -1051,6 +1094,7 @@ function FieldClosureModal({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <strong>
                         {formatDate(c.start_date)} {c.start_date !== c.end_date ? `→ ${formatDate(c.end_date)}` : ''}
+                        {c.start_time && c.end_time ? ` · ${c.start_time}–${c.end_time}` : ''}
                       </strong>
                       {isOngoing && <span className="badge badge--danger" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Đang đóng sân</span>}
                       {isUpcoming && <span className="badge badge--warning" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Sắp tới</span>}
