@@ -287,6 +287,9 @@ export function FieldDetailPage() {
           <p>
             <MapPin size={16} /> {item.address}
           </p>
+          <button type="button" className="button button--brand" style={{ marginTop: 14 }} onClick={scrollToGrid}>
+            <CalendarDays size={16} /> Chọn giờ & đặt sân
+          </button>
         </div>
         <div className="detail-head__meta">
           <div className="detail-rating">
@@ -700,7 +703,6 @@ export function FieldDetailPage() {
             setPendingRecurringConfig({ isRecurring, weeks })
             booking.mutate({ isRecurring, weeks, skipConflicts: false })
           }}
-          field={item}
           blocks={blocks}
           date={date}
           totalPrice={total}

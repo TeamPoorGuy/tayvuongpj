@@ -154,6 +154,8 @@ export interface Booking {
   can_be_cancelled: boolean
   cancel_penalty?: boolean
   cancel_until?: string | null
+  /** Số tiền hoàn nếu huỷ ngay bây giờ (đơn đã thanh toán), theo bậc giờ. */
+  refund_if_cancelled?: number | null
   confirmed_at?: string | null
   no_show?: boolean
   check_in_code?: string | null

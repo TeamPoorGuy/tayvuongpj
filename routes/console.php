@@ -14,7 +14,8 @@ Artisan::command('bookings:sync', function (BookingService $bookings) {
     $this->info("Từ chối quá hạn: {$result['rejected']}, hoàn thành: {$result['completed']}");
 })->purpose('Tự động xử lý đơn đặt sân quá hạn / đã kết thúc');
 
-Schedule::command('bookings:sync')->everyFifteenMinutes()->withoutOverlapping();
+// Mỗi phút: lượt giữ chỗ chưa thanh toán phải nhả đúng hạn (mặc định 15 phút), không được kẹt thêm một chu kỳ.
+Schedule::command('bookings:sync')->everyMinute()->withoutOverlapping();
 
 Artisan::command('waitlist:expire', function (\App\Services\WaitlistService $waitlist) {
     $count = $waitlist->expireOffers();

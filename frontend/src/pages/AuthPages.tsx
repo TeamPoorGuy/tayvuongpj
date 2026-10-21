@@ -94,13 +94,13 @@ export function RegisterPage() {
       <form onSubmit={submit} className="form-stack">
         <GoogleButton />
         <div className="form-grid">
-          <label><span>Họ và tên</span><input name="name" required autoComplete="name" placeholder="Nguyễn Văn A" /></label>
+          <label><span>Họ và tên</span><input name="name" required maxLength={100} pattern="[\p{L}\s'.\-]+" title="Họ tên chỉ gồm chữ cái, không có chữ số hoặc ký tự đặc biệt" autoComplete="name" placeholder="Nguyễn Văn A" /></label>
           <label><span>Số điện thoại</span><input name="phone" type="tel" inputMode="numeric" required autoComplete="tel" placeholder="0901234567" maxLength={11} pattern="0[0-9]{9,10}" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} title="Số điện thoại gồm 10-11 chữ số" /></label>
         </div>
         <label><span>Email</span><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></label>
         <label><span>Địa chỉ <small className="optional">(không bắt buộc)</small></span><input name="address" autoComplete="street-address" placeholder="Số nhà, đường, quận/huyện" /></label>
         <div className="form-grid">
-          <label><span>Mật khẩu</span><input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="Tối thiểu 8 ký tự" /></label>
+          <label><span>Mật khẩu</span><input name="password" type="password" required minLength={8} maxLength={72} pattern="(?=.*[A-Za-z])(?=.*\d).{8,72}" title="Mật khẩu từ 8 ký tự, gồm cả chữ và số" autoComplete="new-password" placeholder="Tối thiểu 8 ký tự, gồm chữ và số" /></label>
           <label><span>Xác nhận mật khẩu</span><input name="password_confirmation" type="password" required minLength={8} autoComplete="new-password" placeholder="Nhập lại mật khẩu" /></label>
         </div>
         <label className="check-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, marginTop: 4 }}>

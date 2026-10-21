@@ -321,7 +321,7 @@ export function CustomerBookingsPage() {
               }}
             >
               <option value="">Mọi trạng thái</option>
-              <option value="pending">Chờ duyệt / chờ thanh toán</option>
+              <option value="pending">Đang giữ chỗ, chờ thanh toán</option>
               <option value="confirmed">Đã xác nhận</option>
               <option value="completed">Hoàn thành</option>
               <option value="cancelled">Đã hủy</option>
@@ -739,11 +739,32 @@ export function CustomerBookingsPage() {
                   <strong>Cảnh báo hủy muộn:</strong> Đang trong khung giờ hủy muộn (dưới 4 tiếng trước giờ chơi). Hủy đơn lúc này bạn sẽ <strong>KHÔNG được hoàn tiền cọc</strong> và bị <strong>trừ 15 điểm uy tín</strong>.
                 </div>
               </div>
+            ) : cancellingBooking.refund_if_cancelled != null ? (
+              <div
+                className={`notice ${cancellingBooking.refund_if_cancelled > 0 ? 'notice--success' : 'notice--warn'}`}
+                style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}
+              >
+                <CheckCircle2 size={18} />
+                <div>
+                  {cancellingBooking.refund_if_cancelled > 0 ? (
+                    <>
+                      <strong>Hủy lúc này bạn được hoàn {formatMoney(cancellingBooking.refund_if_cancelled)}</strong>
+                      {cancellingBooking.refund_if_cancelled < (cancellingBooking.payment?.amount ?? 0) &&
+                        ` (một phần trong ${formatMoney(cancellingBooking.payment?.amount ?? 0)} đã chuyển)`}
+                      , không bị trừ điểm uy tín.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Hủy lúc này bạn không được hoàn tiền</strong> vì đã sát giờ chơi.
+                    </>
+                  )}
+                </div>
+              </div>
             ) : (
               <div className="notice notice--success" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                 <CheckCircle2 size={18} />
                 <div>
-                  <strong>Hủy trong thời hạn hợp lệ:</strong> Bạn được <strong>hoàn tiền cọc</strong> và <strong>không bị trừ điểm uy tín</strong>.
+                  <strong>Chưa thanh toán:</strong> huỷ lúc này không mất phí và không bị trừ điểm uy tín.
                 </div>
               </div>
             )}

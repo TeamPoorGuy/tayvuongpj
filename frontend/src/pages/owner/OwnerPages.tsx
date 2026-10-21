@@ -100,9 +100,9 @@ export function OwnerDashboardPage() {
       <div className="stats-grid">
         <Stat label="Tổng số sân" value={data?.total_fields ?? 0} />
         <Stat
-          label="Đơn chờ xác nhận"
+          label="Đang giữ chỗ chờ thanh toán"
           value={data?.pending_bookings ?? 0}
-          note={data?.pending_bookings ? 'Xử lý ngay' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
+          note={data?.pending_bookings ? 'Khách đang chuyển khoản, tự xác nhận khi có tiền' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
           to={data?.pending_bookings ? '/owner/bookings?status=pending' : undefined}
         />
         <Stat
@@ -121,7 +121,7 @@ export function OwnerDashboardPage() {
         <div className="data-panel__head">
           <div>
             <span>Hoạt động gần đây</span>
-            <h2>Yêu cầu đặt sân mới nhất</h2>
+            <h2>Lượt đặt sân mới nhất</h2>
           </div>
         </div>
         <BookingTable bookings={data?.recent_bookings ?? []} />
@@ -513,7 +513,7 @@ function SlotManagerModal({
   // Mặc định nối tiếp khung giờ cuối cùng để thêm liên tục không phải gõ lại giờ.
   const lastEnd = (field.time_slots ?? []).map((s) => s.end_time).sort().at(-1)
   const [startTime, setStartTime] = useState(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00')
-  const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 90))
+  const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 60))
   const [slotPrice, setSlotPrice] = useState('')
   const [slotDays, setSlotDays] = useState<number[]>([])
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null)

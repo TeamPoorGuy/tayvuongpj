@@ -3,11 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\Booking;
+use App\Models\Payment;
 use App\Models\Review;
 use App\Models\SportsField;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class BookingSeeder extends Seeder
 {
@@ -67,17 +69,33 @@ class BookingSeeder extends Seeder
                 $status = $pool[($fieldIdx + $dateIdx) % count($pool)];
                 $when = Carbon::parse($date)->setTime(8, 0);
 
+                $paid = in_array($status, ['confirmed', 'completed'], true);
+                $amount = ceil($field->price_per_hour * 1.5 * 0.3 / 1000) * 1000;
+                // Đơn đã thanh toán có lượt thu hộ tương ứng để đối soát/dashboard khớp số.
+                $payment = $paid ? Payment::create([
+                    'user_id' => $customer->id,
+                    'code' => 'SH'.strtoupper(Str::random(6)),
+                    'option' => 'deposit',
+                    'total' => $field->price_per_hour * 1.5,
+                    'amount' => $amount,
+                    'status' => 'paid',
+                    'due_at' => $when->copy()->subDay(),
+                    'paid_at' => $when->copy()->subDay(),
+                    'source' => 'admin',
+                ]) : null;
+
                 $booking = Booking::create([
                     'user_id' => $customer->id,
+                    'payment_id' => $payment?->id,
                     'sports_field_id' => $field->id,
                     'booking_date' => $date,
                     'start_time' => $start,
                     'end_time' => $end,
                     'status' => $status,
                     'total_price' => $field->price_per_hour * 1.5,
-                    'payment_status' => in_array($status, ['confirmed', 'completed'], true) ? 'paid' : null,
-                    'payment_option' => in_array($status, ['confirmed', 'completed'], true) ? 'deposit' : null,
-                    'payment_amount' => in_array($status, ['confirmed', 'completed'], true) ? ceil($field->price_per_hour * 1.5 * 0.3 / 1000) * 1000 : null,
+                    'payment_status' => $paid ? 'paid' : null,
+                    'payment_option' => $paid ? 'deposit' : null,
+                    'payment_amount' => $paid ? $amount : null,
                     'notes' => 'Đặt sân đá giải nội bộ công ty.',
                     'confirmed_at' => in_array($status, ['confirmed', 'completed'], true) ? $when->copy()->subDay() : null,
                     'checked_in_at' => $status === 'completed' ? $when : null,

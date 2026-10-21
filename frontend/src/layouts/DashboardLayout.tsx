@@ -33,7 +33,7 @@ const ownerNav = [
   { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
-  { to: '/owner/statements', label: 'Đối soát & Phí sàn', icon: Receipt },
+  { to: '/owner/statements', label: 'Đối soát & Chi trả', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]

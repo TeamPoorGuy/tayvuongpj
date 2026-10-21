@@ -1661,7 +1661,7 @@ a svg {
   display: block;
 }
 .hide-on-desktop {
-  display: none;
+  display: none !important;
 }
 @media (max-width: 780px) {
   .hide-on-mobile {
@@ -3185,3 +3185,9 @@ label.check-line { font-size:13px; align-items:center; }
 @media (prefers-reduced-motion: reduce) { .bgrid__cell { transition: none; } }
 @media (max-width: 640px) { .bgrid__name { max-width: 96px; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 40px; } }
 @media (max-width: 640px) { .suggestion-item { flex-wrap: wrap; } .suggestion-item > button { margin-left: auto; } }
+
+/* Thanh lọc trên điện thoại: mọi ô chọn rộng bằng nhau */
+@media (max-width: 640px) { .filter-bar select, .filter-bar .search-control { width: 100%; } }
+/* Dòng thanh toán: không ngắt giữa số tiền/giờ, tên tài khoản không bị cắt giữa từ */
+.payment-rows dd { overflow-wrap: anywhere; }
+.payment-rows dd:not(.payment-rows__amount) { word-break: normal; }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
+use App\Enums\BookingStatus;
 use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -21,6 +22,8 @@ class BookingResource extends JsonResource
             'can_be_cancelled' => $this->canBeCancelled(),
             'cancel_penalty' => $this->canBeCancelled() && $this->isLateToCancel(),
             'cancel_until' => $this->cancelUntil()?->toISOString(),
+            // Số tiền được hoàn nếu khách huỷ ngay lúc này (theo bậc giờ); null khi đơn chưa thanh toán hoặc không còn huỷ được.
+            'refund_if_cancelled' => $this->status === BookingStatus::Confirmed && $this->payment_status === 'paid' ? $this->refundAmountIfCancelledNow() : null,
             'confirmed_at' => $this->confirmed_at?->toISOString(),
             'check_in_code' => $this->check_in_code,
             'checked_in_at' => $this->checked_in_at?->toISOString(),

@@ -218,6 +218,21 @@ class PaymentFlowTest extends TestCase
         }
     }
 
+    public function test_booking_shows_the_refund_the_customer_would_get_if_cancelling_now(): void
+    {
+        $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '20:00')])->json('payment.id'));
+        $booking = $payment->bookings()->first();
+
+        // Chưa thanh toán: chưa có khoản hoàn.
+        $this->getJson("/api/v1/customer/bookings/{$booking->id}")->assertOk()->assertJsonPath('data.refund_if_cancelled', null);
+
+        app(\App\Services\PaymentService::class)->markPaid($payment, 'admin');
+        $this->getJson("/api/v1/customer/bookings/{$booking->id}")->assertJsonPath('data.refund_if_cancelled', 60000);
+
+        $this->travelTo($booking->startsAt()->subHours(10));
+        $this->getJson("/api/v1/customer/bookings/{$booking->id}")->assertJsonPath('data.refund_if_cancelled', 30000);
+    }
+
     public function test_owner_cancelling_a_paid_booking_refunds_in_full(): void
     {
         $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '20:00')])->json('payment.id'));

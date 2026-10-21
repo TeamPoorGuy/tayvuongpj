@@ -4,14 +4,12 @@ import { Calendar, Clock, ShieldCheck } from 'lucide-react'
 import { Modal } from './Modal'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 import { formatMoney, formatDate } from '../utils/format'
-import type { SportsField } from '../types/api'
 import type { GridBlock } from '../utils/grid'
 
 interface BookingConfirmModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (isRecurring: boolean, weeks: number) => void
-  field: SportsField
   /** Các khoảng giờ đã chọn trên lưới (có thể nhiều sân). */
   blocks: GridBlock[]
   date: string
@@ -26,7 +24,6 @@ export function BookingConfirmModal({
   isOpen,
   onClose,
   onConfirm,
-  field,
   blocks,
   date,
   totalPrice,
@@ -134,10 +131,6 @@ export function BookingConfirmModal({
 
         {/* Thông tin đơn */}
         <div className="content-card" style={{ padding: 16, background: 'var(--surface)', marginBottom: 16, fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: 'var(--muted)' }}>Sân thể thao:</span>
-            <strong>{field.name}</strong>
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
             <span style={{ color: 'var(--muted)' }}>Lịch chơi ({formatDate(date)}):</span>
             <span style={{ textAlign: 'right' }}>

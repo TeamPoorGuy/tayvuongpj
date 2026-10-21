@@ -207,10 +207,8 @@ export function AdminStatementsPage() {
               <thead>
                 <tr>
                   <th>Cơ sở / Chủ sân</th>
-                  <th>Kỳ</th>
-                  <th>Số đơn</th>
-                  <th>Đã thu hộ</th>
-                  <th>Hoàn khách</th>
+                  <th>Kỳ / Số đơn</th>
+                  <th>Thu hộ / Hoàn</th>
                   <th>Hoa hồng</th>
                   <th>Chi trả</th>
                   <th>Nội dung CK / Hạn</th>
@@ -227,13 +225,15 @@ export function AdminStatementsPage() {
                         {st.owner?.user_name} ({st.owner?.user_phone || st.owner?.user_email})
                       </small>
                     </td>
-                    <td>
-                      <strong>Tháng {st.period}</strong>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <strong>T{st.period}</strong>
+                      <small style={{ display: 'block', color: 'var(--muted)' }}>{st.booking_count} đơn</small>
                     </td>
-                    <td>{st.booking_count}</td>
-                    <td>{formatMoney(st.collected_amount)}</td>
-                    <td>{formatMoney(st.refunded_amount)}</td>
-                    <td>{formatMoney(st.commission_amount)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {formatMoney(st.collected_amount)}
+                      <small style={{ display: 'block', color: 'var(--muted)' }}>hoàn {formatMoney(st.refunded_amount)}</small>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatMoney(st.commission_amount)}</td>
                     <td>
                       <strong style={{ color: 'var(--forest)' }}>{formatMoney(st.payout_amount)}</strong>
                     </td>
