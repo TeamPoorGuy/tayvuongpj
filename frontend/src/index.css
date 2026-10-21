@@ -3191,3 +3191,8 @@ label.check-line { font-size:13px; align-items:center; }
 /* Dòng thanh toán: không ngắt giữa số tiền/giờ, tên tài khoản không bị cắt giữa từ */
 .payment-rows dd { overflow-wrap: anywhere; }
 .payment-rows dd:not(.payment-rows__amount) { word-break: normal; }
+
+/* Chỉ dành cho trình đọc màn hình */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Lời nhắc lỗi trong ô nhập (form-stack ép màu chữ nhãn nên cần chỉ rõ) */
+.form-stack label > .input-error, .form-stack > .input-error { color: var(--danger); font-size: 13px; font-weight: 600; }

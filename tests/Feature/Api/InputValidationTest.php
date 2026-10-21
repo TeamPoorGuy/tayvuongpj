@@ -40,6 +40,17 @@ class InputValidationTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors($key);
     }
 
+    public function test_register_errors_are_specific_and_keyed_by_field(): void
+    {
+        User::factory()->create(['email' => 'trung@example.com']);
+
+        $this->postJson('/api/v1/auth/register', $this->registerPayload([
+            'name' => 'Nguyen 123', 'email' => 'trung@example.com', 'password_confirmation' => 'khac12345',
+        ]))->assertStatus(422)->assertJsonPath('errors.name.0', 'Họ tên chỉ gồm chữ cái, không chứa chữ số hoặc ký tự đặc biệt.')
+            ->assertJsonPath('errors.email.0', 'Email này đã được đăng ký. Hãy đăng nhập hoặc dùng email khác.')
+            ->assertJsonPath('errors.password.0', 'Mật khẩu xác nhận không khớp.');
+    }
+
     public static function badSettings(): array
     {
         return [

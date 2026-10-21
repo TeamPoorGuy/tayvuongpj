@@ -17,7 +17,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -32,6 +32,7 @@ import { formatMoney, formatDate } from '../utils/format'
 import { BookingConfirmModal } from '../components/BookingConfirmModal'
 import { BookingGrid, BookingGridLegend } from '../components/BookingGrid'
 import { bookedRunAround, cellKey, mergeSelection, type GridBlock } from '../utils/grid'
+import { loadSelectionDraft, saveSelectionDraft } from '../utils/selectionDraft'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 
 const minutesOf = (time: string) => {
@@ -54,15 +55,17 @@ export function FieldDetailPage() {
   const [searchParams] = useSearchParams()
   // Cho phép mở từ trang tìm đối với ngày đã chọn (?date=YYYY-MM-DD), bỏ qua ngày quá khứ.
   const dateParam = searchParams.get('date')
+  // Ô đã chọn trước khi rời trang (vd sang đăng nhập): khôi phục khi quay lại, trừ khi mở từ liên kết gợi ý có ngày/giờ riêng.
+  const [draft] = useState(() => (searchParams.get('date') || searchParams.get('start') ? null : loadSelectionDraft(slug, todayStr)))
   const [date, setDate] = useState(
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : todayStr,
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : (draft?.date ?? todayStr),
   )
   // Gợi ý / trang tìm đối mở kèm ?start=HH:MM(&end=HH:MM): chọn sẵn khoảng đó trên sân đang xem nếu còn trống.
   const [hint, setHint] = useState<{ fieldId?: number; start: string; end?: string } | null>(() => {
     const start = searchParams.get('start')
     return start ? { start, end: searchParams.get('end') ?? undefined } : null
   })
-  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(draft?.keys))
   const location = useLocation()
   const loginState = { from: location.pathname + location.search }
   const [notes, setNotes] = useState('')
@@ -92,14 +95,26 @@ export function FieldDetailPage() {
   const isDateClosed = !!viewedRow?.is_closed
   const closureReason = viewedRow?.closure_reason
 
+  // Chỉ giữ các ô vẫn còn trống (ô khôi phục từ lần trước có thể đã có người đặt trong lúc khách đi đăng nhập).
+  const stillFree = useMemo(() => {
+    if (gridFields.length === 0) return picked
+    const free = new Set(gridFields.flatMap((f) => f.cells.filter((c) => c.state === 'free').map((c) => cellKey(f.id, c.start))))
+    return new Set([...picked].filter((key) => free.has(key)))
+  }, [gridFields, picked])
+  const droppedCount = picked.size - stillFree.size
+
   const selected = useMemo(() => {
-    if (!hint || picked.size > 0) return picked
+    if (!hint || stillFree.size > 0) return stillFree
     const row = gridFields.find((f) => f.id === hint.fieldId) ?? viewedRow
-    if (!row) return picked
+    if (!row) return stillFree
     const end = hint.end ?? shiftTime(hint.start, minMinutes)
     const cells = row.cells.filter((c) => c.start >= hint.start && c.end <= end)
-    return cells.length > 0 && cells.every((c) => c.state === 'free') ? new Set(cells.map((c) => cellKey(row.id, c.start))) : picked
-  }, [hint, picked, gridFields, viewedRow, minMinutes])
+    return cells.length > 0 && cells.every((c) => c.state === 'free') ? new Set(cells.map((c) => cellKey(row.id, c.start))) : stillFree
+  }, [hint, stillFree, gridFields, viewedRow, minMinutes])
+
+  useEffect(() => {
+    saveSelectionDraft(slug, date, selected)
+  }, [slug, date, selected])
 
   const blocks = useMemo(() => mergeSelection(gridFields, selected), [gridFields, selected])
   const total = blocks.reduce((sum, b) => sum + b.price, 0)
@@ -605,6 +620,12 @@ export function FieldDetailPage() {
 
           <div className="booking-label">
             <span className="field-label">Khung giờ đã chọn ({formatDay(date)})</span>
+            {droppedCount > 0 && (
+              <div className="notice notice--warn" role="status" style={{ margin: '6px 0 10px', fontSize: 13 }}>
+                <AlertTriangle size={16} />
+                <span>{droppedCount} ô bạn chọn trước đó vừa có người đặt nên đã được bỏ chọn.</span>
+              </div>
+            )}
             {blocks.length === 0 ? (
               <p className="form-help" style={{ margin: '6px 0 12px' }}>
                 Bấm các ô trống trên lưới đặt sân (mỗi ô 30 phút). Có thể chọn nhiều sân, nhiều khung giờ rồi thanh toán một lần.
@@ -643,9 +664,12 @@ export function FieldDetailPage() {
           </label>
 
           {!user ? (
-            <Link className="button button--dark button--block" to="/login" state={loginState}>
-              Đăng nhập để đặt sân
-            </Link>
+            <>
+              <Link className="button button--dark button--block" to="/login" state={loginState}>
+                Đăng nhập để đặt sân
+              </Link>
+              {blocks.length > 0 && <p className="form-help" style={{ margin: '8px 0 0', textAlign: 'center' }}>Các ô bạn đã chọn sẽ được giữ lại sau khi đăng nhập.</p>}
+            </>
           ) : user.role !== 'customer' ? (
             <div className="notice notice--soft">Chỉ tài khoản khách hàng có thể đặt sân.</div>
           ) : (
