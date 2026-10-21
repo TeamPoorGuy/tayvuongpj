@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, Copy, CreditCard, Download, QrCode, ShieldAlert, Timer } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
@@ -128,9 +128,10 @@ export function BookingPaymentPage() {
 
   const summary = (
     <dl className="payment-rows">
-      {bookings.map((b) => row(
-        `${b.field?.name ?? 'Sân'} · ${formatDate(b.booking_date)}`,
-        `${b.time_slot?.start_time} – ${b.time_slot?.end_time} · ${formatMoney(b.total_price)}`,
+      {bookings.map((b) => (
+        <Fragment key={b.id}>
+          {row(`${b.field?.name ?? 'Sân'} · ${formatDate(b.booking_date)}`, `${b.time_slot?.start_time} – ${b.time_slot?.end_time} · ${formatMoney(b.total_price)}`)}
+        </Fragment>
       ))}
       {row('Tổng tiền thuê sân', formatMoney(payment.total))}
     </dl>

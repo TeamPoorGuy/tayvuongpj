@@ -128,6 +128,20 @@ class SportsFieldSeeder extends Seeder
             ],
         ];
 
+        // Cụm cầu lông nhiều sân cùng địa chỉ: hiện chung một lưới đặt (mỗi hàng một sân).
+        foreach (['A2', 'A3', 'A4'] as $court) {
+            $fieldsData[] = [
+                'owner_id' => $owner1->id,
+                'type_id' => $types['badminton']->id,
+                'name' => "Sân Cầu Lông Tây Vương {$court}",
+                'address' => '123 Đường Lê Văn Lương, Thanh Xuân, Hà Nội',
+                'description' => 'Sân cầu lông trong cụm Tây Vương, thảm Yonex, điều hoà.',
+                'price' => 120000,
+                'status' => 'approved',
+                'images' => ['https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80'],
+            ];
+        }
+
         $slotsConfig = TimeSlot::DEFAULT_SCHEDULE;
 
         foreach ($fieldsData as $fData) {

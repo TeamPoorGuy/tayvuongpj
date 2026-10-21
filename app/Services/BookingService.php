@@ -5,6 +5,7 @@ namespace App\Services;
 use App\DTOs\Booking\CreateBookingData;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
+use App\Exceptions\DomainException;
 use App\Exceptions\ForbiddenException;
 use App\Mail\BookingStatusChanged;
 use App\Models\Booking;
@@ -245,7 +246,7 @@ class BookingService
     public function createRecurring(User $user, array $data): array
     {
         $sportsFieldId = (int) $data['sports_field_id'];
-        $timeSlotId = (int) $data['time_slot_id'];
+        $timeSlotId = isset($data['time_slot_id']) ? (int) $data['time_slot_id'] : null;
         $startDate = Carbon::parse($data['start_date'])->toDateString();
         $weeks = max(2, min(8, (int) ($data['weeks'] ?? 4)));
         $skipConflicts = (bool) ($data['skip_conflicts'] ?? false);
@@ -258,7 +259,7 @@ class BookingService
             throw new ConflictException("Chuỗi đặt cố định vượt quá giới hạn đặt trước ({$maxAdvanceDays} ngày).");
         }
 
-        return DB::transaction(function () use ($user, $sportsFieldId, $timeSlotId, $startDate, $weeks, $skipConflicts, $notes, $paymentOption) {
+        return DB::transaction(function () use ($user, $data, $sportsFieldId, $timeSlotId, $startDate, $weeks, $skipConflicts, $notes, $paymentOption) {
             $field = SportsField::query()->approved()->lockForUpdate()->find($sportsFieldId);
             if (! $field) {
                 throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
@@ -269,11 +270,17 @@ class BookingService
 
             $this->assertPendingLimit($user);
 
-            $slot = TimeSlot::query()
-                ->where('sports_field_id', $field->id)
-                ->where('is_active', true)
-                ->lockForUpdate()
-                ->findOrFail($timeSlotId);
+            // Một khung giờ có sẵn, hoặc một khoảng giờ chọn trên lưới 30 phút (lặp lại mỗi tuần).
+            if ($timeSlotId) {
+                $slot = TimeSlot::query()
+                    ->where('sports_field_id', $field->id)
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->findOrFail($timeSlotId);
+            } else {
+                [$start, $end] = $this->resolveRange($field, $startDate, $data);
+                $slot = new TimeSlot(['start_time' => $start, 'end_time' => $end]);
+            }
 
             $conflicts = [];
             $availableDates = [];
@@ -293,6 +300,13 @@ class BookingService
 
                 if ($closure = $field->closureBlocking($currentDate, $slot->start_time, $slot->end_time)) {
                     $conflicts[] = ['date' => $currentDate, 'reason' => "Sân đóng cửa: {$closure->reason}"];
+                    continue;
+                }
+
+                try {
+                    $field->priceFor($currentDate, $slot->start_time, $slot->end_time);
+                } catch (DomainException) {
+                    $conflicts[] = ['date' => $currentDate, 'reason' => 'Ngoài giờ mở cửa của sân ngày đó.'];
                     continue;
                 }
 
@@ -350,6 +364,8 @@ class BookingService
                     'sports_field_id' => $field->id,
                     'time_slot_id' => $slot->id,
                     'booking_date' => $item['date'],
+                    'start_time' => $slot->start_time,
+                    'end_time' => $slot->end_time,
                     'status' => BookingStatus::Pending->value,
                     'total_price' => $totalPrice,
                     'notes' => $notes,

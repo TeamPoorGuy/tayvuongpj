@@ -4,14 +4,16 @@ import { Calendar, Clock, ShieldCheck } from 'lucide-react'
 import { Modal } from './Modal'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 import { formatMoney, formatDate } from '../utils/format'
-import type { SportsField, TimeSlot } from '../types/api'
+import type { SportsField } from '../types/api'
+import type { GridBlock } from '../utils/grid'
 
 interface BookingConfirmModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (isRecurring: boolean, weeks: number) => void
   field: SportsField
-  slot: TimeSlot
+  /** Các khoảng giờ đã chọn trên lưới (có thể nhiều sân). */
+  blocks: GridBlock[]
   date: string
   totalPrice: number
   notes?: string
@@ -25,7 +27,7 @@ export function BookingConfirmModal({
   onClose,
   onConfirm,
   field,
-  slot,
+  blocks,
   date,
   totalPrice,
   notes,
@@ -75,8 +77,8 @@ export function BookingConfirmModal({
           </div>
         </div>
 
-        {/* Tuỳ chọn đặt cố định định kỳ */}
-        <div style={{ padding: '12px 14px', background: 'var(--surface-sunken, #f8fafc)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
+        {/* Tuỳ chọn đặt cố định định kỳ: chỉ khi chọn đúng một khoảng giờ */}
+        {blocks.length === 1 && <div style={{ padding: '12px 14px', background: 'var(--surface-sunken, #f8fafc)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', margin: 0, fontWeight: 600, fontSize: 13 }}>
             <input
               type="checkbox"
@@ -101,7 +103,7 @@ export function BookingConfirmModal({
               </select>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Cảnh báo trùng ngày nếu có */}
         {conflicts && conflicts.length > 0 && (
@@ -136,11 +138,15 @@ export function BookingConfirmModal({
             <span style={{ color: 'var(--muted)' }}>Sân thể thao:</span>
             <strong>{field.name}</strong>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: 'var(--muted)' }}>Lịch chơi:</span>
-            <span>
-              {slot.start_time} – {slot.end_time}, {formatDate(date)}
-              {isRecurring ? ` (và ${weeks - 1} tuần tiếp theo)` : ''}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+            <span style={{ color: 'var(--muted)' }}>Lịch chơi ({formatDate(date)}):</span>
+            <span style={{ textAlign: 'right' }}>
+              {blocks.map((b) => (
+                <span key={`${b.fieldId}-${b.start}`} style={{ display: 'block' }}>
+                  {b.fieldName}: {b.start} – {b.end}
+                </span>
+              ))}
+              {isRecurring ? `(và ${weeks - 1} tuần tiếp theo)` : ''}
             </span>
           </div>
           {notes && (

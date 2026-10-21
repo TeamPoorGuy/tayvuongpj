@@ -11,15 +11,10 @@ class TimeSlot extends Model
     use HasFactory;
 
     /** Default schedule applied to a newly created field. @var list<array{0:string,1:string}> */
+    // Khung giờ mở cửa mặc định; khách chọn tự do theo ô 30 phút bên trong. Chủ sân chỉnh giá giờ cao điểm sau.
     public const DEFAULT_SCHEDULE = [
-        ['06:00', '07:30'],
-        ['07:30', '09:00'],
-        ['09:00', '10:30'],
-        ['14:00', '15:30'],
-        ['15:30', '17:00'],
-        ['17:00', '18:30'],
-        ['18:30', '20:00'],
-        ['20:00', '21:30'],
+        ['06:00', '16:00'],
+        ['16:00', '22:00'],
     ];
 
     protected $fillable = [

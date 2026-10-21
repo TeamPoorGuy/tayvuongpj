@@ -20,7 +20,7 @@ class WaitlistService
     /**
      * Tham gia hàng đợi thông minh khi slot đã có người đặt.
      */
-    public function join(User $user, int $fieldId, int $slotId, string $date): BookingWaitlist
+    public function join(User $user, int $fieldId, ?int $slotId, string $date, ?string $start = null, ?string $end = null): BookingWaitlist
     {
         $field = SportsField::approved()->findOrFail($fieldId);
 
@@ -32,11 +32,16 @@ class WaitlistService
         if ($activeCount >= 5) {
             throw new ConflictException('Bạn chỉ có thể xếp hàng chờ tối đa 5 khung giờ cùng lúc.');
         }
-        $slot = TimeSlot::where('sports_field_id', $fieldId)->where('is_active', true)->findOrFail($slotId);
-
         $parsedDate = Carbon::parse($date)->startOfDay();
-        if (! $slot->appliesTo($parsedDate)) {
-            throw new DomainException('Khung giờ này không áp dụng cho ngày đã chọn.');
+        if ($slotId) {
+            $slot = TimeSlot::where('sports_field_id', $fieldId)->where('is_active', true)->findOrFail($slotId);
+            if (! $slot->appliesTo($parsedDate)) {
+                throw new DomainException('Khung giờ này không áp dụng cho ngày đã chọn.');
+            }
+        } else {
+            // Khoảng giờ trên lưới: phải nằm trong giờ mở cửa (priceFor ném lỗi nếu không).
+            $field->priceFor($parsedDate->toDateString(), $start, $end);
+            $slot = new TimeSlot(['start_time' => Booking::normalizeTime($start), 'end_time' => Booking::normalizeTime($end)]);
         }
         if ($parsedDate->isPast() && ! $parsedDate->isToday()) {
             throw new DomainException('Không thể đăng ký hàng đợi cho ngày trong quá khứ.');
@@ -85,6 +90,8 @@ class WaitlistService
             'sports_field_id' => $fieldId,
             'time_slot_id' => $slotId,
             'booking_date' => $parsedDate->toDateString(),
+            'start_time' => $slot->start_time,
+            'end_time' => $slot->end_time,
             'status' => 'waiting',
             'priority_score' => $user->trust_score ?? 100,
         ])->load(['sportsField', 'timeSlot']);

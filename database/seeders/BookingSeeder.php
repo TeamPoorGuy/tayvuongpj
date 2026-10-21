@@ -51,16 +51,17 @@ class BookingSeeder extends Seeder
             Carbon::tomorrow()->addDays(2)->toDateString(),
         ];
         $pastStatuses = ['completed', 'completed', 'cancelled', 'rejected'];
-        $futureStatuses = ['confirmed', 'pending', 'cancelled'];
+        // Đơn tương lai đã thanh toán qua SportHub (thu hộ) hoặc đã huỷ; không để đơn giữ chỗ treo không có lượt thanh toán.
+        $futureStatuses = ['confirmed', 'confirmed', 'cancelled'];
+        $ranges = [['17:00', '18:30'], ['18:30', '20:00'], ['20:00', '21:30']];
 
         $count = 0;
         foreach ($fields as $fieldIdx => $field) {
-            $slots = $field->timeSlots;
-            if ($slots->isEmpty()) continue;
+            if ($field->timeSlots->isEmpty()) continue;
 
             foreach (array_merge($pastDates, $futureDates) as $dateIdx => $date) {
                 $isPast = $dateIdx < count($pastDates);
-                $slot = $slots[$dateIdx % count($slots)];
+                [$start, $end] = $ranges[$dateIdx % count($ranges)];
                 $customer = $customers[($fieldIdx + $dateIdx) % count($customers)];
                 $pool = $isPast ? $pastStatuses : $futureStatuses;
                 $status = $pool[($fieldIdx + $dateIdx) % count($pool)];
@@ -69,10 +70,14 @@ class BookingSeeder extends Seeder
                 $booking = Booking::create([
                     'user_id' => $customer->id,
                     'sports_field_id' => $field->id,
-                    'time_slot_id' => $slot->id,
                     'booking_date' => $date,
+                    'start_time' => $start,
+                    'end_time' => $end,
                     'status' => $status,
                     'total_price' => $field->price_per_hour * 1.5,
+                    'payment_status' => in_array($status, ['confirmed', 'completed'], true) ? 'paid' : null,
+                    'payment_option' => in_array($status, ['confirmed', 'completed'], true) ? 'deposit' : null,
+                    'payment_amount' => in_array($status, ['confirmed', 'completed'], true) ? ceil($field->price_per_hour * 1.5 * 0.3 / 1000) * 1000 : null,
                     'notes' => 'Đặt sân đá giải nội bộ công ty.',
                     'confirmed_at' => in_array($status, ['confirmed', 'completed'], true) ? $when->copy()->subDay() : null,
                     'checked_in_at' => $status === 'completed' ? $when : null,

@@ -127,6 +127,25 @@ class SportsField extends Model
             ->first();
     }
 
+    /**
+     * Các sân cùng chủ, cùng địa chỉ và cùng môn (cụm sân: Sân 1, Sân 2…) để hiện chung một lưới đặt; sân đang xem đứng đầu.
+     * ponytail: gom theo địa chỉ gõ trùng (không phân biệt hoa thường, khoảng trắng hai đầu); gõ lệch thì tách hàng — thêm bảng cụm sân nếu cần.
+     *
+     * @return Collection<int, SportsField>
+     */
+    public function siblings(): Collection
+    {
+        return static::approved()
+            ->where('field_owner_id', $this->field_owner_id)
+            ->whereHas('fieldType', fn ($q) => $q->where('sport_category_id', $this->fieldType?->sport_category_id))
+            ->orderBy('name')
+            ->get()
+            // So địa chỉ trong PHP: LOWER của SQLite không hạ chữ có dấu (Đ, Ư…).
+            ->filter(fn (self $field) => mb_strtolower(trim($field->address)) === mb_strtolower(trim($this->address)))
+            ->sortBy(fn (self $field) => $field->id === $this->id ? 0 : 1)
+            ->values();
+    }
+
     /** @return Collection<int, TimeSlot> khung giờ đang hoạt động và áp dụng cho ngày đó */
     public function slotsFor(string $date): Collection
     {

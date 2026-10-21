@@ -41,6 +41,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/fields/locations', [CatalogController::class, 'locations']);
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
+    Route::get('/fields/{field}/schedule', [CatalogController::class, 'schedule']);
     Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);
     Route::get('/settings/public', [SettingController::class, 'publicSettings']);
     Route::get('/matches', [MatchmakingController::class, 'index']);

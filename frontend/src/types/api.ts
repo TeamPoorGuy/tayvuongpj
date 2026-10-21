@@ -111,6 +111,25 @@ export interface TimeSlot {
   days_of_week?: number[]
 }
 
+/** Ô 30 phút trên lưới đặt sân (locked = khoá hoặc ngoài giờ mở cửa). */
+export interface GridCell {
+  start: string
+  end: string
+  price_per_hour: number | null
+  state: 'free' | 'booked' | 'held' | 'locked' | 'past'
+}
+
+/** Một hàng của lưới: một sân trong cụm sân cùng địa chỉ. */
+export interface GridField {
+  id: number
+  name: string
+  slug: string
+  price_per_hour: number
+  is_closed: boolean
+  closure_reason: string | null
+  cells: GridCell[]
+}
+
 export interface Review {
   id: number
   rating: number
@@ -308,12 +327,11 @@ export interface SlotSuggestion {
   field_id: number
   field_name: string
   field_slug: string
-  time_slot_id: number
   start_time: string
   end_time: string
   date: string
   date_label: string
-  price_per_hour: number
+  price_per_hour: number | null
   badge: string
 }
 

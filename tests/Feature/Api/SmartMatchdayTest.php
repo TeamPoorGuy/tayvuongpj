@@ -498,7 +498,7 @@ class SmartMatchdayTest extends TestCase
         $this->assertStringNotContainsString('Hôm nay', $labels);
         $this->assertStringContainsString(now()->addDays(4)->format('d/m'), $labels); // 'cùng giờ ngày hôm sau' tính từ ngày đang xem
         // Slot 20:00 đang được giữ chỗ nên không được gợi ý.
-        $this->assertNotContains($other->id, collect($data)->where('type', 'same_field_today')->pluck('time_slot_id')->all());
+        $this->assertNotContains('20:00', collect($data)->where('type', 'same_field_today')->pluck('start_time')->all());
     }
 
     public function test_match_validation_leave_and_cancel_notifications(): void

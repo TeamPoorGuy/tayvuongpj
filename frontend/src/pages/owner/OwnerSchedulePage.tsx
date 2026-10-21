@@ -223,48 +223,25 @@ export function OwnerSchedulePage() {
     return fields.filter((f) => String(f.id) === selectedFieldId)
   }, [fields, selectedFieldId])
 
-  // Extract all unique time slot ranges across active fields
+  // Hàng theo từng giờ, từ giờ mở sớm nhất tới giờ đóng muộn nhất của các sân đang xem.
+  // Khung giờ của sân nay là khung mở cửa/giá (vd 06:00–16:00), khách đặt tự do theo ô 30 phút nên không dùng làm hàng.
   const timeSlots = useMemo(() => {
-    const set = new Map<string, { start: string; end: string }>()
-    displayFields.forEach((f) => {
-      f.time_slots?.forEach((ts) => {
-        const key = `${ts.start_time}-${ts.end_time}`
-        if (!set.has(key)) {
-          set.set(key, { start: ts.start_time, end: ts.end_time })
-        }
-      })
-    })
-
-    const list = Array.from(set.values()).sort((a, b) =>
-      a.start.localeCompare(b.start),
-    )
-
-    // Fallback if field has no time slots defined yet
-    if (list.length === 0) {
-      for (let h = 6; h <= 22; h += 2) {
-        const start = `${String(h).padStart(2, '0')}:00`
-        const end = `${String(h + 2).padStart(2, '0')}:00`
-        list.push({ start, end })
-      }
-    }
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+    const windows = displayFields.flatMap((f) => f.time_slots ?? []).filter((ts) => ts.is_active !== false)
+    const open = windows.length ? Math.min(...windows.map((ts) => toMin(ts.start_time))) : 6 * 60
+    const close = windows.length ? Math.max(...windows.map((ts) => toMin(ts.end_time))) : 22 * 60
+    const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    const list: { start: string; end: string }[] = []
+    for (let m = Math.floor(open / 60) * 60; m < close; m += 60) list.push({ start: fmt(m), end: fmt(Math.min(m + 60, close)) })
     return list
   }, [displayFields])
 
-  // Bookings mapped by key: `${field_id}_${date}_${start_time}`
-  const bookingMap = useMemo(() => {
-    const map = new Map<string, Booking>()
-    bookings.forEach((b) => {
-      const datePart = b.booking_date.slice(0, 10)
-      const startPart = b.time_slot?.start_time
-      if (startPart) {
-        const key = `${b.field?.id}_${datePart}_${startPart}`
-        // Đơn đã huỷ/từ chối không chiếm khung giờ: không để nó ghi đè đơn đang hiệu lực.
-        const inactive = b.status === 'cancelled' || b.status === 'rejected'
-        if (!inactive || !map.has(key)) map.set(key, b)
-      }
-    })
-    return map
-  }, [bookings])
+  // Đơn giao với một hàng giờ (đơn 18:00–20:00 hiện ở cả hàng 18h và 19h); đơn đang hiệu lực được ưu tiên hơn đơn đã huỷ.
+  const bookingAt = (fieldId: number, date: string, start: string, end: string) => {
+    const hits = bookings.filter((b) => b.field?.id === fieldId && b.booking_date.slice(0, 10) === date
+      && (b.time_slot?.start_time ?? '') < end && (b.time_slot?.end_time ?? '') > start)
+    return hits.find((b) => b.status !== 'cancelled' && b.status !== 'rejected') ?? hits[0]
+  }
 
   return (
     <div className="owner-schedule-page">
@@ -483,7 +460,7 @@ export function OwnerSchedulePage() {
 
                 <div className="mobile-field-slots">
                   {timeSlots.map((ts, idx) => {
-                    const booking = bookingMap.get(`${f.id}_${selectedDate}_${ts.start}`)
+                    const booking = bookingAt(f.id, selectedDate, ts.start, ts.end)
                     const cfg = booking ? STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.pending : null
 
                     if (booking) {
@@ -566,7 +543,7 @@ export function OwnerSchedulePage() {
 
                   {/* Each Field's cell for this slot */}
                   {displayFields.map((f) => {
-                    const booking = bookingMap.get(`${f.id}_${selectedDate}_${ts.start}`)
+                    const booking = bookingAt(f.id, selectedDate, ts.start, ts.end)
                     const cfg = booking ? STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.pending : null
 
                     return (

@@ -3155,3 +3155,33 @@ label.check-line { font-size:13px; align-items:center; }
 
 .avatar { overflow:hidden; }
 .avatar__img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* Lưới đặt sân 30 phút: hàng = sân trong cụm, cột = 30 phút */
+.booking-grid-section { margin-top: 20px; }
+.booking-grid-section__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.booking-grid-section__head h2 { margin: 0; }
+.bgrid-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md, 12px); background: var(--paper); }
+.bgrid-scroll:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+.bgrid { display: grid; width: 100%; min-width: max-content; }
+.bgrid__corner, .bgrid__time { position: sticky; top: 0; height: 28px; background: #dff3f8; border-bottom: 1px solid var(--line); }
+.bgrid__corner { left: 0; z-index: 3; }
+.bgrid__time { z-index: 1; font-size: 11px; font-weight: 600; color: var(--forest); padding-left: 2px; line-height: 28px; white-space: nowrap; overflow: visible; }
+.bgrid__name { position: sticky; left: 0; z-index: 2; display: flex; align-items: center; padding: 0 10px; height: 40px; background: var(--pitch-soft); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line-strong); font-size: 13px; font-weight: 600; color: var(--forest); white-space: nowrap; }
+.bgrid__cell { width: 100%; height: 40px; padding: 0; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff; cursor: pointer; transition: background-color .12s; }
+.bgrid__cell:disabled { cursor: not-allowed; }
+.bgrid__cell:focus-visible { outline: 2px solid var(--forest); outline-offset: -2px; }
+.bgrid__cell--free:hover { background: var(--pitch-soft); }
+.bgrid__cell--selected { background: var(--pitch); }
+.bgrid__cell--booked { background: #ee6b62; }
+.bgrid__cell--held { background: #c9a6e8; }
+.bgrid__cell--locked { background: #b4b4b4; }
+.bgrid__cell--past { background: #e2e4df; }
+.bgrid-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--soft); }
+.bgrid-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bgrid-legend i { display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--line-strong); }
+.selection-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.selection-list li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface); }
+.selection-list li.is-short { background: var(--warn-soft); }
+@media (prefers-reduced-motion: reduce) { .bgrid__cell { transition: none; } }
+@media (max-width: 640px) { .bgrid__name { max-width: 96px; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 40px; } }
+@media (max-width: 640px) { .suggestion-item { flex-wrap: wrap; } .suggestion-item > button { margin-left: auto; } }

@@ -10,6 +10,7 @@ use App\Http\Resources\Api\BookingResource;
 use App\Http\Resources\Api\PaymentResource;
 use App\Models\Booking;
 use App\Services\BookingService;
+use App\Support\InputRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -57,7 +58,10 @@ class BookingController extends Controller
     {
         $validated = $request->validate([
             'sports_field_id' => ['required', 'integer', 'exists:sports_fields,id'],
-            'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            // Một khung giờ có sẵn, hoặc một khoảng giờ trên lưới 30 phút.
+            'time_slot_id' => ['required_without:start_time', 'nullable', 'integer', 'exists:time_slots,id'],
+            'start_time' => ['required_without:time_slot_id', 'nullable', 'date_format:H:i', InputRules::HALF_HOUR],
+            'end_time' => ['required_with:start_time', 'nullable', 'date_format:H:i', 'after:start_time', InputRules::HALF_HOUR],
             'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'weeks' => ['required', 'integer', 'min:2', 'max:8'],
             'skip_conflicts' => ['nullable', 'boolean'],
