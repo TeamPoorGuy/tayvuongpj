@@ -400,7 +400,7 @@ export function AdminStatementsPage() {
             <span>Kỳ đối soát (Định dạng YYYY-MM):</span>
             <input
               id="genPeriod"
-              type="text"
+              type="month"
               placeholder="Ví dụ: 2026-09"
               value={genPeriod}
               onChange={(e) => setGenPeriod(e.target.value)}

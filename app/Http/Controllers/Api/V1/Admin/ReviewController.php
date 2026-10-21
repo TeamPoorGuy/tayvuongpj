@@ -16,6 +16,7 @@ class ReviewController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['rating' => ['nullable', 'integer', 'between:1,5']]);
         $rating = $request->filled('rating') ? (int) $request->input('rating') : null;
 
         return ReviewResource::collection($this->service->reviews($rating));

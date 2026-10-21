@@ -23,11 +23,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        RateLimiter::for('api', fn (Request $r) => Limit::perMinute(120)->by($r->user()?->id ?: $r->ip()));
-        RateLimiter::for('login', fn (Request $r) => Limit::perMinute(5)->by(Str::lower($r->input('email')).'|'.$r->ip()));
-        RateLimiter::for('register', fn (Request $r) => Limit::perMinute(3)->by($r->ip()));
-        RateLimiter::for('forgot', fn (Request $r) => Limit::perMinute(3)->by($r->ip()));
-        RateLimiter::for('verification', fn (Request $r) => Limit::perMinute(2)->by($r->user()?->id ?: $r->ip()));
-        RateLimiter::for('writes', fn (Request $r) => Limit::perMinute(20)->by($r->user()?->id ?: $r->ip()));
+        RateLimiter::for('api', fn(Request $r) => Limit::perMinute(120)->by($r->user()?->id ?: $r->ip()));
+        RateLimiter::for('login', fn(Request $r) => Limit::perMinute(5)->by(Str::lower($r->input('email')) . '|' . $r->ip()));
+        RateLimiter::for('register', fn(Request $r) => Limit::perMinute(3)->by($r->ip()));
+        RateLimiter::for('forgot', fn(Request $r) => Limit::perMinute(3)->by($r->ip()));
+        RateLimiter::for('verification', fn(Request $r) => Limit::perMinute(2)->by($r->user()?->id ?: $r->ip()));
+        RateLimiter::for('writes', fn(Request $r) => Limit::perMinute(20)->by($r->user()?->id ?: $r->ip()));
     }
 }

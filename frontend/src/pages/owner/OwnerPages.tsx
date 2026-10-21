@@ -1,3 +1,4 @@
+import { digitsOnly, toBankHolder } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -462,7 +463,7 @@ function FieldModal({
         </label>
         <label>
           <span>Giá cơ bản mỗi giờ (VNĐ)</span>
-          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" step="1000" />
+          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" max="100000000" step="1000" />
         </label>
       </div>
       <label>
@@ -608,11 +609,12 @@ function SlotManagerModal({
                 <span>Giá riêng/giờ (để trống nếu theo sân)</span>
                 <input
                   type="number"
+                  min="1000"
+                  max="100000000"
+                  step="1000"
                   placeholder={formatMoney(field.price_per_hour)}
                   value={slotPrice}
                   onChange={(e) => setSlotPrice(e.target.value)}
-                  min="1000"
-                  step="1000"
                 />
               </label>
             </div>
@@ -1773,7 +1775,7 @@ export function OwnerProfilePage() {
           </label>
           <label>
             <span>SĐT kinh doanh</span>
-            <input name="business_phone" defaultValue={profile.data?.business_phone} required />
+            <input name="business_phone" type="tel" inputMode="numeric" maxLength={11} pattern="0[0-9]{9,10}" title="Số điện thoại gồm 10–11 chữ số, bắt đầu bằng 0" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} defaultValue={profile.data?.business_phone} required />
           </label>
           <label>
             <span>Địa chỉ kinh doanh</span>
@@ -1825,13 +1827,16 @@ export function OwnerProfilePage() {
               name="bank_account_number"
               defaultValue={profile.data?.bank_account_number ?? ''}
               inputMode="numeric"
+              required
+              maxLength={20}
               pattern="[0-9]{6,20}"
               title="Số tài khoản gồm 6–20 chữ số"
+              onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 20))}
             />
           </label>
           <label>
             <span>Chủ tài khoản</span>
-            <input name="bank_account_holder" defaultValue={profile.data?.bank_account_holder ?? ''} placeholder="NGUYEN VAN A" />
+            <input name="bank_account_holder" required maxLength={50} onInput={(e) => (e.currentTarget.value = toBankHolder(e.currentTarget.value))} defaultValue={profile.data?.bank_account_holder ?? ''} placeholder="NGUYEN VAN A" />
           </label>
         </div>
         {update.isError && <div className="notice notice--error">{errorMessage(update.error)}</div>}

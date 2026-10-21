@@ -108,15 +108,15 @@ export function TermsPage() {
   )
 }
 
-/** 2. Chính sách bảo mật theo Nghị định 13/2023/NĐ-CP (/chinh-sach-bao-mat) */
+/** 2. Chính sách bảo mật (/chinh-sach-bao-mat) */
 export function PrivacyPage() {
   const { data: settings } = usePublicSettings()
 
   return (
-    <PolicyShell kicker="Bảo mật dữ liệu" title="Chính sách bảo mật thông tin (Nghị định 13/2023/NĐ-CP)">
+    <PolicyShell kicker="Bảo mật dữ liệu" title="Chính sách bảo mật thông tin">
       <div className="content-card" style={{ padding: 24, marginBottom: 24 }}>
         <p style={{ margin: 0, color: 'var(--soft)' }}>
-          SportHub cam kết tuân thủ đầy đủ các quy định của <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về Bảo vệ dữ liệu cá nhân. Chính sách này mô tả cách chúng tôi thu thập, sử dụng, lưu trữ và bảo vệ thông tin của bạn.
+          SportHub cam kết tuân thủ các quy định pháp luật về bảo vệ dữ liệu cá nhân. Chính sách này mô tả cách chúng tôi thu thập, sử dụng, lưu trữ và bảo vệ thông tin của bạn.
         </p>
       </div>
 
@@ -150,7 +150,7 @@ export function PrivacyPage() {
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>4. Quyền của chủ thể dữ liệu</h2>
         <p>
-          Theo Điều 9 Nghị định 13/2023/NĐ-CP, bạn có quyền được biết, đồng ý, truy cập, chỉnh sửa, rút lại sự đồng ý hoặc yêu cầu xóa dữ liệu cá nhân của mình bất kỳ lúc nào bằng cách liên hệ ban quản trị tại{' '}
+          Bạn có quyền được biết, đồng ý, truy cập, chỉnh sửa, rút lại sự đồng ý hoặc yêu cầu xóa dữ liệu cá nhân của mình bất kỳ lúc nào bằng cách liên hệ ban quản trị tại{' '}
           <a href={`mailto:${settings?.support_email ?? 'hotro@sporthub.vn'}`} style={{ color: 'var(--pitch)', fontWeight: 600 }}>
             {settings?.support_email ?? 'hotro@sporthub.vn'}
           </a>.

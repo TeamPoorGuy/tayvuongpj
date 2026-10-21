@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\Profile;
 
+use App\Support\InputRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,9 +16,9 @@ class UpdateCustomerProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', Rule::unique('users')->ignore($this->user()->id)],
-            'phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
+            'name' => InputRules::personName(),
+            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($this->user()->id)],
+            'phone' => InputRules::phone(),
             'address' => ['nullable', 'string', 'max:255'],
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
         ];

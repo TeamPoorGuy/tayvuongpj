@@ -1,3 +1,4 @@
+import { digitsOnly } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -1014,11 +1015,11 @@ export function CustomerProfilePage() {
             </label>
             <label>
               <span>Email</span>
-              <input name="email" defaultValue={profile.data?.email} required />
+              <input name="email" type="email" maxLength={255} defaultValue={profile.data?.email} required />
             </label>
             <label>
               <span>Số điện thoại</span>
-              <input name="phone" defaultValue={profile.data?.phone ?? ''} />
+              <input name="phone" type="tel" inputMode="numeric" required maxLength={11} pattern="0[0-9]{9,10}" title="Số điện thoại gồm 10–11 chữ số, bắt đầu bằng 0" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} defaultValue={profile.data?.phone ?? ''} />
             </label>
             <label>
               <span>Địa chỉ</span>
@@ -1060,11 +1061,11 @@ export function CustomerProfilePage() {
           )}
           <label>
             <span>Mật khẩu mới</span>
-            <input name="password" type="password" required />
+            <input name="password" type="password" required minLength={8} maxLength={72} />
           </label>
           <label>
             <span>Xác nhận mật khẩu</span>
-            <input name="password_confirmation" type="password" required />
+            <input name="password_confirmation" type="password" required minLength={8} maxLength={72} />
           </label>
           <button disabled={password.isPending} className="button button--dark">
             {password.isPending ? 'Đang xử lý...' : hasPassword ? 'Cập nhật mật khẩu' : 'Tạo mật khẩu'}

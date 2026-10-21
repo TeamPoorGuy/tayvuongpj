@@ -7,6 +7,7 @@ use App\Http\Resources\Api\MatchParticipantResource;
 use App\Http\Resources\Api\MatchRequestResource;
 use App\Models\MatchRequest;
 use App\Services\MatchmakingService;
+use App\Support\InputRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -44,7 +45,7 @@ class MatchmakingController extends Controller
             'skill_level' => ['required', 'in:beginner,intermediate,advanced,any'],
             'players_needed' => ['required', 'integer', 'min:1', 'max:30'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'contact_phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
+            'contact_phone' => InputRules::phone(),
         ]);
 
         $match = $this->service->create($request->user(), $validated);

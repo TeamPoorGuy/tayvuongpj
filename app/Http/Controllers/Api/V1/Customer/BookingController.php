@@ -90,7 +90,7 @@ class BookingController extends Controller
         }
 
         return response()->json([
-            'message' => 'Đã gửi yêu cầu đặt cố định ' . $result['total_bookings'] . ' buổi.',
+            'message' => 'Đã gửi yêu cầu đặt cố định '.$result['total_bookings'].' buổi.',
             'data' => [
                 'recurring_group_id' => $result['recurring_group_id'],
                 'total_bookings' => $result['total_bookings'],
@@ -102,7 +102,7 @@ class BookingController extends Controller
 
     public function cancelRecurring(Request $request, string $groupId): JsonResponse
     {
-        $reason = $request->input('cancel_reason');
+        $reason = $request->validate(['cancel_reason' => ['nullable', 'string', 'max:500']])['cancel_reason'] ?? null;
         $cancelled = $this->bookingService->cancelRecurring($request->user(), $groupId, $reason);
 
         return response()->json([

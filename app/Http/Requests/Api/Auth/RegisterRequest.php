@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\Auth;
 
+use App\Support\InputRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -15,10 +16,10 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => InputRules::personName(),
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
+            'phone' => InputRules::phone(),
             'address' => ['nullable', 'string', 'max:255'],
             'terms_accepted' => ['required', 'accepted'],
         ];

@@ -1,3 +1,4 @@
+import { digitsOnly, toBankHolder } from '../../utils/input'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -464,7 +465,10 @@ export function OwnerApplicationPage() {
                     <input
                       name="owner_id_number"
                       value={formData.owner_id_number}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        e.target.value = digitsOnly(e.target.value, 12)
+                        handleChange(e)
+                      }}
                       placeholder="12 chữ số trên thẻ CCCD"
                       maxLength={12}
                       inputMode="numeric"
@@ -519,7 +523,10 @@ export function OwnerApplicationPage() {
                     <input
                       name="business_phone"
                       value={formData.business_phone}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        e.target.value = digitsOnly(e.target.value, 11)
+                        handleChange(e)
+                      }}
                       placeholder="0988776655"
                       maxLength={11}
                       inputMode="tel"
@@ -606,7 +613,11 @@ export function OwnerApplicationPage() {
                       <input
                         name="bank_account_number"
                         value={formData.bank_account_number}
-                        onChange={handleChange}
+                        onChange={(e) => {
+                        e.target.value = digitsOnly(e.target.value, 20)
+                        handleChange(e)
+                      }}
+                        maxLength={20}
                         placeholder="Số tài khoản ngân hàng"
                         inputMode="numeric"
                         className={errors.bank_account_number ? 'input--invalid' : ''}
@@ -621,7 +632,11 @@ export function OwnerApplicationPage() {
                     <input
                       name="bank_account_holder"
                       value={formData.bank_account_holder}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        e.target.value = toBankHolder(e.target.value)
+                        handleChange(e)
+                      }}
+                      maxLength={50}
                       placeholder="NGUYEN VAN A"
                       className={errors.bank_account_holder ? 'input--invalid' : ''}
                     />
@@ -795,7 +810,7 @@ export function OwnerApplicationPage() {
                       </Link>
                       {' '}và xử lý tranh chấp của SportHub, và đồng ý để SportHub xử lý dữ liệu cá nhân theo{' '}
                       <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
-                        Nghị định 13/2023/NĐ-CP
+                        Chính sách bảo mật
                       </Link>.
                     </span>
                   </label>

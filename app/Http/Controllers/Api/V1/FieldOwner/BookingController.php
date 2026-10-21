@@ -20,11 +20,11 @@ class BookingController extends Controller
     {
         $filters = $request->validate([
             'field_id' => ['nullable', 'integer'],
-            'status' => ['nullable', 'string'],
+            'status' => ['nullable', 'in:pending,confirmed,completed,cancelled,rejected'],
             'payment_status' => ['nullable', 'in:awaiting,reported,paid'],
-            'date' => ['nullable', 'date'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
 
@@ -71,14 +71,14 @@ class BookingController extends Controller
         $approved = $payments->approveRecurring($request->user(), $groupId);
 
         return response()->json([
-            'message' => 'Đã duyệt toàn bộ chuỗi đặt sân cố định (' . $approved->count() . ' buổi).',
+            'message' => 'Đã duyệt toàn bộ chuỗi đặt sân cố định ('.$approved->count().' buổi).',
             'data' => BookingResource::collection($approved),
         ]);
     }
 
     public function rejectRecurring(Request $request, string $groupId, BookingPaymentService $payments): JsonResponse
     {
-        $reason = $request->input('reason');
+        $reason = $request->validate(['reason' => ['nullable', 'string', 'max:500']])['reason'] ?? null;
         $rejected = $payments->rejectRecurring($request->user(), $groupId, $reason);
 
         return response()->json([

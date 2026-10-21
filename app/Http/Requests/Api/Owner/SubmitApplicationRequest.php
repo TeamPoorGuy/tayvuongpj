@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\Owner;
 
 use App\Models\OwnerDocument;
 use App\Support\Banks;
+use App\Support\InputRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,17 +20,17 @@ class SubmitApplicationRequest extends FormRequest
         $profile = $this->user()->fieldOwnerProfile;
 
         $rules = [
-            'owner_name' => ['required', 'string', 'max:255'],
+            'owner_name' => InputRules::personName(),
             'owner_id_number' => ['required', 'regex:/^[0-9]{12}$/'],
             'business_name' => ['required', 'string', 'max:255'],
             'business_address' => ['required', 'string', 'max:255'],
-            'business_phone' => ['required', 'regex:/^[0-9]{10,11}$/'],
-            'business_license' => ['required', 'string', 'max:100'],
+            'business_phone' => InputRules::phone(),
+            'business_license' => ['nullable', InputRules::LICENSE_NO],
             'description' => ['nullable', 'string', 'max:2000'],
             'bank_name' => ['required', 'string', 'max:255'],
             'bank_bin' => ['nullable', Rule::in(Banks::bins())],
-            'bank_account_number' => ['required', 'regex:/^[0-9]{6,20}$/'],
-            'bank_account_holder' => ['required', 'string', 'max:255'],
+            'bank_account_number' => ['required', InputRules::BANK_ACCOUNT],
+            'bank_account_holder' => InputRules::bankHolder(),
             'accept_terms' => ['accepted'],
             'documents' => ['sometimes', 'array'],
         ];

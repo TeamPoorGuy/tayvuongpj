@@ -17,7 +17,7 @@ class StoreComplaintRequest extends FormRequest
             'booking_id' => ['nullable', 'integer', 'exists:bookings,id'],
             'subject_type' => ['nullable', 'string', 'in:booking,contact'],
             'subject_id' => ['nullable', 'string', 'max:100'],
-            'category' => ['required', 'string', 'max:50'],
+            'category' => ['required', 'in:refund_pending,field_mismatch,owner_cancelled,bad_behavior,other'],
             'content' => ['required', 'string', 'min:5', 'max:3000'],
         ];
     }

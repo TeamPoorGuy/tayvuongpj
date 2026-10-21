@@ -1,3 +1,4 @@
+import { digitsOnly } from '../utils/input'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -94,7 +95,7 @@ export function RegisterPage() {
         <GoogleButton />
         <div className="form-grid">
           <label><span>Họ và tên</span><input name="name" required autoComplete="name" placeholder="Nguyễn Văn A" /></label>
-          <label><span>Số điện thoại</span><input name="phone" type="tel" inputMode="numeric" required autoComplete="tel" placeholder="0901234567" pattern="[0-9]{10,11}" title="Số điện thoại gồm 10-11 chữ số" /></label>
+          <label><span>Số điện thoại</span><input name="phone" type="tel" inputMode="numeric" required autoComplete="tel" placeholder="0901234567" maxLength={11} pattern="0[0-9]{9,10}" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} title="Số điện thoại gồm 10-11 chữ số" /></label>
         </div>
         <label><span>Email</span><input name="email" type="email" required autoComplete="email" placeholder="ban@email.com" /></label>
         <label><span>Địa chỉ <small className="optional">(không bắt buộc)</small></span><input name="address" autoComplete="street-address" placeholder="Số nhà, đường, quận/huyện" /></label>
@@ -119,7 +120,7 @@ export function RegisterPage() {
             <Link to="/chinh-sach-bao-mat" target="_blank" style={{ color: 'var(--pitch)', textDecoration: 'underline' }}>
               Chính sách bảo mật
             </Link>{' '}
-            của SportHub (theo Nghị định 13/2023/NĐ-CP).
+            của SportHub.
           </span>
         </label>
         {error && <div className="notice notice--error">{error}</div>}

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\Profile;
 
 use App\Support\Banks;
+use App\Support\InputRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,13 +19,13 @@ class UpdateOwnerProfileRequest extends FormRequest
         return [
             'business_name' => ['required', 'string', 'max:255'],
             'business_address' => ['required', 'string', 'max:255'],
-            'business_phone' => ['required', 'string', 'max:20'],
-            'description' => ['nullable', 'string'],
+            'business_phone' => InputRules::phone(),
+            'description' => ['nullable', 'string', 'max:2000'],
             // Tài khoản nhận tiền chuyển khoản của khách; bắt buộc để đối soát và thanh toán.
             'bank_name' => ['required', 'string', 'max:255'],
             'bank_bin' => ['nullable', Rule::in(Banks::bins())],
-            'bank_account_number' => ['required', 'regex:/^[0-9]{6,20}$/'],
-            'bank_account_holder' => ['required', 'string', 'max:255'],
+            'bank_account_number' => ['required', InputRules::BANK_ACCOUNT],
+            'bank_account_holder' => InputRules::bankHolder(),
         ];
     }
 }
