@@ -38,6 +38,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/categories', [CatalogController::class, 'categories']);
     Route::get('/field-types', [CatalogController::class, 'fieldTypes']);
     Route::get('/fields', [CatalogController::class, 'fields']);
+    Route::get('/fields/locations', [CatalogController::class, 'locations']);
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
     Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);

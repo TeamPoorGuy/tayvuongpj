@@ -6,6 +6,7 @@ use App\Enums\FieldStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class SportsField extends Model
 {
@@ -17,6 +18,9 @@ class SportsField extends Model
         'name',
         'slug',
         'address',
+        'city',
+        'district',
+        'search_text',
         'latitude',
         'longitude',
         'description',
@@ -33,6 +37,28 @@ class SportsField extends Model
         'longitude' => 'decimal:8',
         'is_active' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $field) {
+            // Chủ sân không nhập quận/thành phố thì suy ra từ 2 đoạn cuối của địa chỉ.
+            if ($field->isDirty('address') && ! $field->city && ! $field->district) {
+                $parts = array_values(array_filter(array_map('trim', explode(',', (string) $field->address))));
+                $field->city = count($parts) >= 2 ? end($parts) : null;
+                $field->district = count($parts) >= 3 ? $parts[count($parts) - 2] : null;
+            }
+
+            $field->search_text = static::normalizeForSearch(implode(' ', array_filter([
+                $field->name, $field->address, $field->district, $field->city,
+            ])));
+        });
+    }
+
+    /** Bỏ dấu, viết thường: "Đống Đa" → "dong da". */
+    public static function normalizeForSearch(string $text): string
+    {
+        return Str::lower(Str::ascii($text));
+    }
 
     public function owner()
     {

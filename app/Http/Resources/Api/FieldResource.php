@@ -16,6 +16,8 @@ class FieldResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'address' => $this->address,
+            'city' => $this->city,
+            'district' => $this->district,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'description' => $this->description,

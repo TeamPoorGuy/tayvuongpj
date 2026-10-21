@@ -35,6 +35,7 @@ import type {
   Booking,
   FieldClosure,
   FieldType,
+  LocationGroup,
   OwnerDashboard,
   OwnerProfile,
   Paginated,
@@ -430,6 +431,11 @@ function FieldModal({
   }
   const resolved = field ?? activeField
   const current = resolved === 'new' ? null : resolved
+  const locations = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => (await api.get<{ data: LocationGroup[] }>('/fields/locations')).data.data,
+    enabled: !!field,
+  })
   return (
     <Modal isOpen={!!field} onClose={onClose} wide asForm onSubmit={onSubmit}>
       <h2>{current ? 'Chỉnh sửa sân' : 'Thêm sân mới'}</h2>
@@ -452,6 +458,20 @@ function FieldModal({
         <label>
           <span>Địa chỉ</span>
           <input name="address" defaultValue={current?.address} required />
+        </label>
+        <label>
+          <span>Thành phố (tuỳ chọn)</span>
+          <input name="city" list="location-cities" maxLength={100} placeholder="VD: Hà Nội" defaultValue={current?.city ?? ''} />
+          <datalist id="location-cities">
+            {locations.data?.map((l) => <option value={l.city} key={l.city} />)}
+          </datalist>
+        </label>
+        <label>
+          <span>Quận / Huyện (tuỳ chọn)</span>
+          <input name="district" list="location-districts" maxLength={100} placeholder="VD: Thanh Xuân" defaultValue={current?.district ?? ''} />
+          <datalist id="location-districts">
+            {[...new Set(locations.data?.flatMap((l) => l.districts))].map((d) => <option value={d} key={d} />)}
+          </datalist>
         </label>
         <label>
           <span>Vĩ độ (tuỳ chọn)</span>

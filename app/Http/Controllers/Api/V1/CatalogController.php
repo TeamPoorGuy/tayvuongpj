@@ -40,6 +40,11 @@ class CatalogController extends Controller
         return FieldResource::collection($this->catalogService->fields($request));
     }
 
+    public function locations(): JsonResponse
+    {
+        return response()->json(['data' => $this->catalogService->locations()]);
+    }
+
     public function field(string $slug): FieldResource
     {
         return new FieldResource($this->catalogService->fieldBySlug($slug));

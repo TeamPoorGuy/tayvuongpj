@@ -55,11 +55,18 @@ export interface FieldType {
   category?: Pick<Category, 'id' | 'name' | 'slug' | 'icon'>
 }
 
+export interface LocationGroup {
+  city: string
+  districts: string[]
+}
+
 export interface SportsField {
   id: number
   name: string
   slug: string
   address: string
+  city?: string | null
+  district?: string | null
   latitude?: number | string | null
   longitude?: number | string | null
   description: string | null

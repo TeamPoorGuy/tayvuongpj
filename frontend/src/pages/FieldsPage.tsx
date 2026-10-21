@@ -11,7 +11,7 @@ import { api } from '../api/client'
 import { FieldCard } from '../components/FieldCard'
 import { Pagination } from '../components/Pagination'
 import { useReveal } from '../hooks/useReveal'
-import type { Category, FieldType, Paginated, SportsField } from '../types/api'
+import type { Category, FieldType, LocationGroup, Paginated, SportsField } from '../types/api'
 import { formatMoney } from '../utils/format'
 
 export function FieldsPage() {
@@ -32,6 +32,11 @@ export function FieldsPage() {
   const types = useQuery({
     queryKey: ['field-types'],
     queryFn: async () => (await api.get<{ data: FieldType[] }>('/field-types')).data.data,
+  })
+
+  const locations = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => (await api.get<{ data: LocationGroup[] }>('/fields/locations')).data.data,
   })
 
   useReveal([fields.data])
@@ -78,8 +83,16 @@ export function FieldsPage() {
   const activeTypeId = params.get('type_id') ?? ''
   const activeMaxPrice = params.get('max_price') ?? ''
   const activeKeyword = params.get('keyword') ?? ''
+  const activeCity = params.get('city') ?? ''
+  const activeDistrict = params.get('district') ?? ''
 
-  const hasFilters = Boolean(activeCategory || activeTypeId || activeMaxPrice || activeKeyword)
+  const hasFilters = Boolean(activeCategory || activeTypeId || activeMaxPrice || activeKeyword || activeCity || activeDistrict)
+
+  // Quận/huyện gợi ý theo thành phố đang chọn (chưa chọn thì gộp tất cả).
+  const districtOptions = useMemo(() => {
+    const groups = (locations.data ?? []).filter((l) => !activeCity || l.city === activeCity)
+    return [...new Set(groups.flatMap((l) => l.districts))]
+  }, [locations.data, activeCity])
 
   // Filter types by active category if selected
   const availableTypes = useMemo(() => {
@@ -128,9 +141,42 @@ export function FieldsPage() {
           <input
             value={keywordInput}
             onChange={(event) => setKeywordInput(event.target.value)}
-            placeholder="Tên sân, quận hoặc địa chỉ..."
+            placeholder="Tên sân, quận, địa chỉ... (gõ không dấu cũng được)"
           />
         </label>
+
+        <select
+          value={activeCity}
+          onChange={(event) => {
+            const next = new URLSearchParams(params)
+            if (event.target.value) next.set('city', event.target.value)
+            else next.delete('city')
+            next.delete('district')
+            next.delete('page')
+            setParams(next, { replace: true })
+          }}
+          aria-label="Thành phố"
+        >
+          <option value="">Tất cả thành phố</option>
+          {locations.data?.map((l) => (
+            <option value={l.city} key={l.city}>
+              {l.city}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={activeDistrict}
+          onChange={(event) => update('district', event.target.value)}
+          aria-label="Quận / Huyện"
+        >
+          <option value="">Tất cả quận / huyện</option>
+          {districtOptions.map((d) => (
+            <option value={d} key={d}>
+              {d}
+            </option>
+          ))}
+        </select>
 
         <select
           value={activeTypeId}
