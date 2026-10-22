@@ -1,6 +1,7 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   Building2,
   CalendarDays,
@@ -35,6 +36,7 @@ const ownerNav = [
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
   { to: '/owner/statements', label: 'Đối soát & Chi trả', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
+  { to: '/owner/complaints', label: 'Khiếu nại', icon: AlertCircle },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]
 

@@ -7,7 +7,7 @@ import { Modal } from '../../components/Modal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { digitsOnly } from '../../utils/input'
-import { formatDate, formatMoney } from '../../utils/format'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 import type { Complaint } from '../../types/api'
 import { PageTitle } from '../customer/CustomerPages'
 
@@ -17,6 +17,9 @@ const categoryLabels: Record<string, string> = {
   owner_cancelled: 'Chủ sân tự ý huỷ/không nhận',
   bad_behavior: 'Thái độ phục vụ/hành vi xấu',
   wrong_no_show: 'Đã đến sân nhưng bị ghi vắng mặt',
+  property_damage: 'Khách làm hư hỏng/mất tài sản',
+  customer_misconduct: 'Khách gây rối/thái độ không phù hợp',
+  overtime: 'Khách chơi quá giờ',
   other: 'Vấn đề khác',
 }
 
@@ -46,6 +49,7 @@ export function AdminComplaintsPage() {
   const [resolution, setResolution] = useState('')
   const [refundInput, setRefundInput] = useState('')
   const [confirmAttendance, setConfirmAttendance] = useState(false)
+  const [penaltyInput, setPenaltyInput] = useState('')
 
   const { data, isLoading, isError } = useQuery<{ data: Complaint[] }>({
     queryKey: ['admin', 'complaints', statusFilter, categoryFilter, keyword],
@@ -59,7 +63,7 @@ export function AdminComplaintsPage() {
   })
 
   const handleMutation = useMutation({
-    mutationFn: async (payload: { id: number; status: string; resolution: string; refund_amount?: number; confirm_attendance?: boolean }) => {
+    mutationFn: async (payload: { id: number; status: string; resolution: string; refund_amount?: number; confirm_attendance?: boolean; trust_penalty?: number }) => {
       const { id, ...body } = payload
       return (await api.patch(`/admin/complaints/${id}/handle`, body)).data
     },
@@ -69,6 +73,7 @@ export function AdminComplaintsPage() {
       setResolution('')
       setRefundInput('')
       setConfirmAttendance(false)
+      setPenaltyInput('')
       void client.invalidateQueries({ queryKey: ['admin', 'complaints'] })
       void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
     },
@@ -83,6 +88,7 @@ export function AdminComplaintsPage() {
     setResolution(c.resolution ?? '')
     setRefundInput('')
     setConfirmAttendance(false)
+    setPenaltyInput('')
   }
 
   const submitHandle = (e: React.FormEvent) => {
@@ -96,6 +102,7 @@ export function AdminComplaintsPage() {
       resolution,
       refund_amount: accepted && refund > 0 ? refund : undefined,
       confirm_attendance: accepted && confirmAttendance ? true : undefined,
+      trust_penalty: accepted && Number(penaltyInput) > 0 ? Number(penaltyInput) : undefined,
     })
   }
 
@@ -203,7 +210,13 @@ export function AdminComplaintsPage() {
                   <span>
                     <strong style={{ color: 'var(--ink)' }}>Người gửi:</strong>{' '}
                     {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
+                    {c.direction === 'owner_to_customer' ? ' · chủ sân' : c.user ? ' · khách' : ''}
                   </span>
+                  {c.against && (
+                    <span>
+                      <strong style={{ color: 'var(--ink)' }}>Bị khiếu nại:</strong> {c.against.name}
+                    </span>
+                  )}
                   {c.booking && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <strong style={{ color: 'var(--ink)' }}>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
@@ -226,11 +239,24 @@ export function AdminComplaintsPage() {
                 </button>
               </div>
 
+              {c.against && (
+                <div style={{ padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
+                  {c.response ? (
+                    <><strong>Phản hồi của bên bị khiếu nại ({c.responded_at ? formatDateTime(c.responded_at) : ''}):</strong> {c.response}</>
+                  ) : c.status === 'open' || c.status === 'processing' ? (
+                    <span style={{ color: 'var(--warn)' }}>Chưa có phản hồi{c.respond_by ? ` · hạn ${formatDateTime(c.respond_by)}` : ''}</span>
+                  ) : (
+                    <span style={{ color: 'var(--muted)' }}>Bên bị khiếu nại không phản hồi.</span>
+                  )}
+                </div>
+              )}
+
               {c.resolution && (
                 <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
                   <strong style={{ color: '#166534' }}>Phương án giải quyết ({c.handler?.name ?? 'Admin'}):</strong> {c.resolution}
                   {c.refund_amount ? <div>Đã hoàn thêm cho khách: <strong>{formatMoney(c.refund_amount)}</strong></div> : null}
                   {c.attendance_confirmed ? <div>Đã xác nhận khách có đến sân (gỡ vắng mặt, trả 25 điểm uy tín).</div> : null}
+                  {c.trust_penalty ? <div>Đã trừ khách <strong>{c.trust_penalty}</strong> điểm uy tín.</div> : null}
                 </div>
               )}
             </div>
@@ -261,6 +287,23 @@ export function AdminComplaintsPage() {
               </div>
             </div>
 
+            {activeComplaint.against && (
+              <div className="content-card" style={{ padding: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 13, display: 'grid', gap: 6 }}>
+                <div>
+                  <strong>Bên bị khiếu nại:</strong> {activeComplaint.against.name}
+                  {activeComplaint.parties?.respondent && (
+                    <span style={{ color: 'var(--muted)' }}>
+                      {' '}· huỷ đơn đã thanh toán 90 ngày: {activeComplaint.parties.respondent.owner_cancellations_90d} · vắng mặt: {activeComplaint.parties.respondent.no_shows} · khiếu nại đã nhận: {activeComplaint.parties.respondent.complaints_received} (đã chấp nhận {activeComplaint.parties.respondent.complaints_upheld})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>Phản hồi:</strong>{' '}
+                  {activeComplaint.response ? <em>"{activeComplaint.response}"</em> : <span style={{ color: 'var(--muted)' }}>chưa có{activeComplaint.respond_by ? ` (hạn ${formatDateTime(activeComplaint.respond_by)})` : ''}</span>}
+                </div>
+              </div>
+            )}
+
             {activeComplaint.booking && (
               <div className="content-card" style={{ padding: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 13 }}>
                 <div>
@@ -268,7 +311,7 @@ export function AdminComplaintsPage() {
                   {formatMoney(activeComplaint.booking.payment_amount ?? 0)}
                   {activeComplaint.booking.no_show ? ' · đang bị ghi nhận vắng mặt' : ''}
                 </div>
-                {activeComplaint.status !== 'resolved' && activeComplaint.status !== 'rejected' && (
+                {activeComplaint.status !== 'resolved' && activeComplaint.status !== 'rejected' && activeComplaint.direction !== 'owner_to_customer' && (
                   <div style={{ marginTop: 4, color: 'var(--muted)' }}>
                     Trong lúc khiếu nại chưa đóng, đơn này được giữ lại, chưa tính vào kỳ chi trả cho chủ sân.
                   </div>
@@ -297,7 +340,17 @@ export function AdminComplaintsPage() {
                 </select>
               </label>
 
-              {handleStatus === 'resolved' && activeComplaint.booking && (
+              {handleStatus === 'resolved' && activeComplaint.booking && activeComplaint.direction === 'owner_to_customer' && (
+                <fieldset style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '10px 12px', margin: 0 }}>
+                  <legend style={{ fontSize: 13, fontWeight: 600, padding: '0 6px' }}>Kết quả kèm theo (tuỳ chọn)</legend>
+                  <label>
+                    <span>Trừ điểm uy tín của khách (5–50 điểm)</span>
+                    <input inputMode="numeric" placeholder="Để trống nếu không trừ điểm" value={penaltyInput} onChange={(e) => setPenaltyInput(digitsOnly(e.target.value, 2))} />
+                  </label>
+                </fieldset>
+              )}
+
+              {handleStatus === 'resolved' && activeComplaint.booking && activeComplaint.direction !== 'owner_to_customer' && (
                 <fieldset style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '10px 12px', margin: 0 }}>
                   <legend style={{ fontSize: 13, fontWeight: 600, padding: '0 6px' }}>Kết quả kèm theo (tuỳ chọn)</legend>
                   {(activeComplaint.booking.refundable ?? 0) > 0 ? (

@@ -14,6 +14,7 @@ import { BookingPaymentPage } from './pages/customer/BookingPaymentPage'
 import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
 import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
+import { OwnerComplaintsPage } from './pages/owner/OwnerComplaintsPage'
 import { OwnerStatementsPage } from './pages/owner/OwnerStatementsPage'
 import { AdminBookingsPage, AdminCategoriesPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="owner/bookings" element={<OwnerBookingsPage />} />
           <Route path="owner/statements" element={<OwnerStatementsPage />} />
           <Route path="owner/reviews" element={<OwnerReviewsPage />} />
+          <Route path="owner/complaints" element={<OwnerComplaintsPage />} />
           <Route path="owner/profile" element={<OwnerProfilePage />} />
         </Route>
       </Route>

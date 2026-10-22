@@ -142,6 +142,20 @@ export interface Review {
   created_at: string
 }
 
+export interface ComplaintBrief {
+  id: number
+  category: string
+  status: 'open' | 'processing' | 'resolved' | 'rejected'
+  content: string
+  resolution: string | null
+  response: string | null
+  respond_by: string | null
+  refund_amount: number | null
+  attendance_confirmed: boolean
+  trust_penalty: number | null
+  can_respond: boolean
+}
+
 export interface Booking {
   id: number
   booking_date: string
@@ -158,14 +172,10 @@ export interface Booking {
   refund_if_cancelled?: number | null
   confirmed_at?: string | null
   no_show?: boolean
-  /** Khiếu nại gần nhất của khách về đơn này. */
-  complaint?: {
-    id: number
-    status: 'open' | 'processing' | 'resolved' | 'rejected'
-    resolution: string | null
-    refund_amount: number | null
-    attendance_confirmed: boolean
-  }
+  /** Khiếu nại gần nhất do chính người xem gửi về đơn này. */
+  complaint?: ComplaintBrief | null
+  /** Khiếu nại nhắm vào người xem (khách bị chủ sân khiếu nại, hoặc chủ sân bị khách khiếu nại). */
+  complaint_against?: ComplaintBrief | null
   check_in_code?: string | null
   checked_in_at?: string | null
   payment?: BookingPayment
@@ -427,6 +437,13 @@ export interface AdminLog {
   admin?: Pick<User, 'id' | 'name' | 'email'>
 }
 
+export interface ComplaintPartyStats {
+  owner_cancellations_90d: number
+  no_shows: number
+  complaints_received: number
+  complaints_upheld: number
+}
+
 export interface Complaint {
   id: number
   user_id: number | null
@@ -446,6 +463,16 @@ export interface Complaint {
     no_show?: boolean
     field_name?: string
   } | null
+  direction?: 'customer_to_owner' | 'owner_to_customer'
+  against_user_id?: number | null
+  against?: Pick<User, 'id' | 'name'> | null
+  /** Số liệu hai bên cho admin cân nhắc. */
+  parties?: { complainant: ComplaintPartyStats | null; respondent: ComplaintPartyStats | null }
+  response?: string | null
+  responded_at?: string | null
+  respond_by?: string | null
+  can_respond?: boolean
+  trust_penalty?: number | null
   subject_type: 'booking' | 'contact'
   subject_id: string | null
   category: string

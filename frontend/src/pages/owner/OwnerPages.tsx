@@ -1,6 +1,7 @@
 import { digitsOnly, toBankHolder } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircle,
   Building2,
   CalendarDays,
   CalendarX,
@@ -22,6 +23,7 @@ import { Link, useSearchParams } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
+import { ComplaintRespondModal } from '../../components/ComplaintRespond'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
@@ -1145,6 +1147,10 @@ export function OwnerBookingsPage() {
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectScope, setRejectScope] = useState<'single' | 'recurring'>('single')
+  const [complainingBooking, setComplainingBooking] = useState<Booking | null>(null)
+  const [complaintCategory, setComplaintCategory] = useState('property_damage')
+  const [complaintContent, setComplaintContent] = useState('')
+  const [respondingId, setRespondingId] = useState<number | null>(null)
 
   const bookings = useQuery({
     queryKey: ['owner', 'bookings', status, date, page],
@@ -1217,6 +1223,22 @@ export function OwnerBookingsPage() {
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [checkInInputCode, setCheckInInputCode] = useState('')
   const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
+
+  const complain = useMutation({
+    mutationFn: async () =>
+      api.post('/field-owner/complaints', {
+        booking_id: complainingBooking?.id,
+        category: complaintCategory,
+        content: complaintContent,
+      }),
+    onSuccess: () => {
+      toast.success('Đã gửi khiếu nại. Khách sẽ được báo và có thể phản hồi trước khi Ban quản trị quyết định.')
+      setComplainingBooking(null)
+      setComplaintContent('')
+      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
+    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể gửi khiếu nại'),
+  })
 
   const noShow = useMutation({
     mutationFn: async (booking: Booking) =>
@@ -1398,6 +1420,33 @@ export function OwnerBookingsPage() {
                     </button>
                   </>
                 )}
+                {(booking.status === 'confirmed' || booking.status === 'completed') && (() => {
+                  const started = !!booking.booking_date && !!booking.time_slot?.start_time && new Date(`${booking.booking_date}T${booking.time_slot.start_time}`).getTime() <= Date.now()
+                  if (booking.complaint_against?.can_respond) {
+                    return (
+                      <button className="button button--brand button--small" onClick={() => setRespondingId(booking.complaint_against!.id)} title="Khách đã khiếu nại về đơn này, bạn có một lần phản hồi">
+                        <AlertCircle size={13} /> Phản hồi khiếu nại
+                      </button>
+                    )
+                  }
+                  if (booking.complaint && (booking.complaint.status === 'open' || booking.complaint.status === 'processing')) {
+                    return <span className="badge badge--soft"><AlertCircle size={12} /> Đã khiếu nại khách</span>
+                  }
+                  if (!started) return null
+                  return (
+                    <button
+                      className="button button--ghost button--small"
+                      onClick={() => {
+                        setComplainingBooking(booking)
+                        setComplaintCategory('property_damage')
+                        setComplaintContent('')
+                      }}
+                      title="Khiếu nại về hành vi của khách trong đơn này"
+                    >
+                      <AlertCircle size={13} /> Khiếu nại khách
+                    </button>
+                  )
+                })()}
               </>
             )}
           />
@@ -1561,6 +1610,44 @@ export function OwnerBookingsPage() {
           </button>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={!!complainingBooking}
+        onClose={() => setComplainingBooking(null)}
+        title={`Khiếu nại khách · đơn #BK-${complainingBooking?.id ?? ''}`}
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          complain.mutate()
+        }}
+      >
+        <p className="form-help" style={{ marginTop: 0 }}>
+          Khách ({complainingBooking?.customer?.name ?? 'khách hàng'}) sẽ được báo và có một lần phản hồi. Ban quản trị xem xét ý kiến hai bên rồi quyết định, có thể trừ điểm uy tín của khách.
+        </p>
+        <div className="form-stack">
+          <label>
+            <span>Vấn đề gặp phải</span>
+            <select value={complaintCategory} onChange={(e) => setComplaintCategory(e.target.value)}>
+              <option value="property_damage">Khách làm hư hỏng / mất tài sản</option>
+              <option value="customer_misconduct">Khách gây rối / thái độ không phù hợp</option>
+              <option value="overtime">Khách chơi quá giờ</option>
+              <option value="other">Vấn đề khác</option>
+            </select>
+          </label>
+          <label>
+            <span>Mô tả chi tiết (5–3000 ký tự)</span>
+            <textarea required rows={4} minLength={5} maxLength={3000} value={complaintContent} onChange={(e) => setComplaintContent(e.target.value)} placeholder="Nêu rõ sự việc, thời điểm, thiệt hại (nếu có)..." />
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" className="button button--ghost" onClick={() => setComplainingBooking(null)}>Đóng</button>
+            <button type="submit" className="button button--brand" disabled={complain.isPending}>
+              {complain.isPending ? 'Đang gửi...' : 'Gửi khiếu nại'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <ComplaintRespondModal complaintId={respondingId} role="field-owner" onClose={() => setRespondingId(null)} />
 
       <ConfirmModal
         isOpen={!!noShowingBooking}

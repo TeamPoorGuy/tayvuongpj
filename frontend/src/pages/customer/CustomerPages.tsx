@@ -23,6 +23,7 @@ import { Link, useNavigate } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { ConfirmModal } from '../../components/ConfirmModal'
+import { ComplaintRespondModal } from '../../components/ComplaintRespond'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
@@ -31,6 +32,7 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
 import type { ApiEnvelope, Booking, BookingWaitlist, Paginated, User } from '../../types/api'
 import { getLocalTodayString } from '../../utils/date'
+import { complaintCategoryLabels } from '../../utils/complaint'
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
 
@@ -129,6 +131,7 @@ export function CustomerBookingsPage() {
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [complaintBooking, setComplaintBooking] = useState<Booking | null>(null)
+  const [respondingId, setRespondingId] = useState<number | null>(null)
   const [complaintCategory, setComplaintCategory] = useState('refund_pending')
   const [complaintContent, setComplaintContent] = useState('')
   const currentReview = reviewing ?? activeReviewing
@@ -460,6 +463,27 @@ export function CustomerBookingsPage() {
                   {booking.refund?.status === 'done' && (
                     <div className="notice notice--success" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
                       Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                    </div>
+                  )}
+                  {booking.complaint_against && (
+                    <div className={'notice notice--warn'} style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Chủ sân khiếu nại về đơn này ({complaintCategoryLabels[booking.complaint_against.category] ?? booking.complaint_against.category}):</strong> {booking.complaint_against.content}
+                      {booking.complaint_against.response && <div style={{ marginTop: 4 }}><strong>Phản hồi của bạn:</strong> {booking.complaint_against.response}</div>}
+                      {booking.complaint_against.can_respond && (
+                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                          <span>Bạn có một lần phản hồi trước khi Ban quản trị quyết định.</span>
+                          <button type="button" className="button button--brand button--small" onClick={() => setRespondingId(booking.complaint_against!.id)}>
+                            Phản hồi
+                          </button>
+                        </div>
+                      )}
+                      {(booking.complaint_against.status === 'resolved' || booking.complaint_against.status === 'rejected') && (
+                        <div style={{ marginTop: 4 }}>
+                          <strong>Kết luận:</strong> {booking.complaint_against.status === 'resolved' ? 'Khiếu nại được chấp nhận' : 'Khiếu nại không được chấp nhận'}
+                          {booking.complaint_against.resolution ? ` — ${booking.complaint_against.resolution}` : ''}
+                          {booking.complaint_against.trust_penalty ? ` Bạn bị trừ ${booking.complaint_against.trust_penalty} điểm uy tín.` : ''}
+                        </div>
+                      )}
                     </div>
                   )}
                   {booking.complaint && (booking.complaint.status === 'resolved' || booking.complaint.status === 'rejected') && (
@@ -849,6 +873,8 @@ export function CustomerBookingsPage() {
         danger={true}
         busy={cancelWaitlist.isPending}
       />
+
+      <ComplaintRespondModal complaintId={respondingId} role="customer" onClose={() => setRespondingId(null)} />
 
       <Modal
         isOpen={!!complaintBooking}
