@@ -45,6 +45,8 @@ class Booking extends Model
         'refunded_at',
         'commission_rate',
         'commission_amount',
+        'earning_amount',
+        'earning_released_at',
         'statement_id',
         'recurring_group_id',
     ];
@@ -65,6 +67,8 @@ class Booking extends Model
         'refunded_at' => 'datetime',
         'commission_rate' => 'decimal:2',
         'commission_amount' => 'decimal:2',
+        'earning_amount' => 'decimal:2',
+        'earning_released_at' => 'datetime',
     ];
 
     protected static function booted(): void
