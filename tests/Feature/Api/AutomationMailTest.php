@@ -2,14 +2,22 @@
 
 namespace Tests\Feature\Api;
 
+use App\Mail\ComplaintFiled;
+use App\Mail\ComplaintHandled;
 use App\Mail\Notice;
+use App\Mail\StatementReminder;
+use App\Mail\WalletCredited;
+use App\Mail\WithdrawalProcessed;
 use App\Models\Booking;
+use App\Models\Complaint;
 use App\Models\FieldOwnerProfile;
 use App\Models\FieldType;
+use App\Models\OwnerStatement;
 use App\Models\Payment;
 use App\Models\SportCategory;
 use App\Models\SportsField;
 use App\Models\User;
+use App\Models\Withdrawal;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -113,5 +121,57 @@ class AutomationMailTest extends TestCase
         Mail::assertQueued(Notice::class, 1);
         Mail::assertQueued(Notice::class, fn ($m) => str_contains($m->lines[1], $soon->check_in_code));
         $this->assertNotNull($soon->fresh()->reminded_at);
+    }
+
+    public function test_all_automation_mail_templates_render_successfully(): void
+    {
+        $noticeHtml = (new Notice('Tiêu đề test', ['Dòng 1', 'Dòng 2'], 'Xem ngay', '/customer/wallet'))->render();
+        $this->assertStringContainsString('Tiêu đề test', $noticeHtml);
+        $this->assertStringContainsString('Dòng 1', $noticeHtml);
+
+        $walletHtml = (new WalletCredited($this->customer, 50000, 'Hoàn tiền huỷ sân'))->render();
+        $this->assertStringContainsString('50.000', $walletHtml);
+        $this->assertStringContainsString('Hoàn tiền huỷ sân', $walletHtml);
+
+        $withdrawal = Withdrawal::create([
+            'user_id' => $this->customer->id,
+            'amount' => 100000,
+            'bank_bin' => '970422',
+            'bank_name' => 'MB Bank',
+            'account_number' => '0123456789',
+            'account_holder' => 'NGUYEN VAN A',
+            'status' => 'paid',
+            'reference' => 'AUTO-123456',
+        ]);
+        $withdrawalHtml = (new WithdrawalProcessed($withdrawal))->render();
+        $this->assertStringContainsString('100.000', $withdrawalHtml);
+        $this->assertStringContainsString('đã được chuyển', $withdrawalHtml);
+
+        $withdrawal->update(['status' => 'rejected', 'reason' => 'Tên không khớp']);
+        $rejectHtml = (new WithdrawalProcessed($withdrawal->fresh()))->render();
+        $this->assertStringContainsString('bị từ chối', $rejectHtml);
+        $this->assertStringContainsString('Tên không khớp', $rejectHtml);
+    }
+
+    public function test_complaint_and_statement_mail_templates_changed_by_this_work_render(): void
+    {
+        $complaint = Complaint::create([
+            'user_id' => $this->customer->id, 'direction' => 'customer_to_owner', 'against_user_id' => $this->owner->id,
+            'category' => 'field_mismatch', 'content' => 'Sân không đúng mô tả.', 'status' => 'resolved', 'resolution' => 'Hoàn một phần.',
+            'refund_amount' => 20000, 'attendance_confirmed' => true, 'trust_penalty' => 10, 'respond_by' => now()->addDay(),
+        ])->load(['user', 'against']);
+
+        $this->assertStringContainsString('một phản hồi', (new ComplaintFiled($complaint))->render());
+        $mine = (new ComplaintHandled($complaint))->render();
+        $this->assertStringContainsString('20.000', $mine);
+        $respondent = (new ComplaintHandled($complaint, asRespondent: true))->render();
+        $this->assertStringContainsString('Khiếu nại được chấp nhận', $respondent);
+
+        $statement = OwnerStatement::create([
+            'owner_profile_id' => $this->owner->fieldOwnerProfile->id, 'period' => '2026-09', 'booking_count' => 1, 'gmv' => 200000,
+            'collected_amount' => 60000, 'refunded_amount' => 0, 'commission_amount' => 16000, 'payout_amount' => 44000,
+            'status' => 'paid', 'transfer_code' => 'TEST',
+        ]);
+        $this->assertStringContainsString('ví', (new StatementReminder($statement, 'issued'))->render());
     }
 }
