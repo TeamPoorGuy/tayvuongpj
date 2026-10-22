@@ -29,6 +29,12 @@ class ComplaintResource extends JsonResource
                 'complainant' => $this->user ? app(\App\Services\ComplaintService::class)->partyStats($this->user) : null,
                 'respondent' => $this->against ? app(\App\Services\ComplaintService::class)->partyStats($this->against) : null,
             ]),
+            'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->original_name,
+                'url' => url("/api/v1/complaint-attachments/{$a->id}"),
+                'by' => $a->user_id === $this->user_id ? 'complainant' : 'respondent',
+            ])->values()),
             'response' => $this->response,
             'responded_at' => $this->responded_at?->toISOString(),
             'respond_by' => $this->respond_by?->toISOString(),

@@ -22,6 +22,8 @@ return [
     'free_cancel_hours' => (int) env('BOOKING_FREE_CANCEL_HOURS', 4),
     // Bên bị khiếu nại có N giờ để phản hồi một lần trước khi admin quyết định.
     'complaint_response_hours' => (int) env('BOOKING_COMPLAINT_RESPONSE_HOURS', 48),
+    // Khách bị ghi vắng mặt có N giờ để khiếu nại "tôi đã đến sân".
+    'no_show_appeal_hours' => (int) env('BOOKING_NO_SHOW_APPEAL_HOURS', 48),
     // Tỉ lệ hoa hồng nền tảng mặc định (%)
     'commission_percent' => (int) env('PLATFORM_COMMISSION_PERCENT', 8),
     // Số ngày chủ sân cần thanh toán đối soát kể từ ngày xuất bảng

@@ -30,7 +30,7 @@ class ComplaintController extends Controller
 
     public function show(Complaint $complaint): ComplaintResource
     {
-        $complaint->load(['user', 'against', 'booking.sportsField', 'handler']);
+        $complaint->load(['user', 'against', 'attachments', 'booking.sportsField', 'handler']);
 
         return new ComplaintResource($complaint);
     }

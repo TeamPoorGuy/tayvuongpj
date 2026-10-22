@@ -28,6 +28,8 @@ class BookingResource extends JsonResource
             'check_in_code' => $this->check_in_code,
             'checked_in_at' => $this->checked_in_at?->toISOString(),
             'no_show' => $this->no_show_at !== null,
+            // Hạn khách khiếu nại "tôi đã đến sân" khi bị ghi nhận vắng mặt (null khi không phải đơn vắng mặt).
+            'no_show_appeal_until' => $this->no_show_at?->copy()->addHours(config('booking.no_show_appeal_hours'))->toISOString(),
             'recurring_group_id' => $this->recurring_group_id,
             // Khiếu nại gần nhất của đơn do chính người xem gửi, và khiếu nại nhắm vào người xem (cần phản hồi).
             'complaint' => $this->complaintBrief($this->complaintsOf($request, 'user_id')),
@@ -98,6 +100,12 @@ class BookingResource extends JsonResource
             'refund_amount' => $complaint->refund_amount !== null ? (float) $complaint->refund_amount : null,
             'attendance_confirmed' => (bool) $complaint->attendance_confirmed,
             'trust_penalty' => $complaint->trust_penalty,
+            'attachments' => $complaint->relationLoaded('attachments') ? $complaint->attachments->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->original_name,
+                'url' => url("/api/v1/complaint-attachments/{$a->id}"),
+                'by' => $a->user_id === $complaint->user_id ? 'complainant' : 'respondent',
+            ])->values() : [],
             'can_respond' => $request !== null
                 && in_array($complaint->status, ['open', 'processing'], true)
                 && $complaint->response === null,

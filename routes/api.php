@@ -55,6 +55,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+        Route::get('/complaint-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ComplaintAttachmentController::class, 'show']);
 
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/complaints', [Customer\ComplaintController::class, 'index']);

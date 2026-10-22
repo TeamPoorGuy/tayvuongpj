@@ -10,9 +10,11 @@ use App\Mail\ComplaintHandled;
 use App\Models\AdminLog;
 use App\Models\Booking;
 use App\Models\Complaint;
+use App\Models\ComplaintAttachment;
 use App\Models\User;
 use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 class ComplaintService
@@ -24,7 +26,8 @@ class ComplaintService
      * Khách khiếu nại chủ sân, hoặc chủ sân khiếu nại khách của mình. Khiếu nại gắn với đơn thì có bên bị khiếu nại:
      * bên đó được báo qua mail và phản hồi một lần trước khi admin quyết định.
      */
-    public function create(array $data, ?User $user = null): Complaint
+    /** @param  list<UploadedFile>  $photos  Ảnh chứng cứ (tối đa 3 mỗi bên). */
+    public function create(array $data, ?User $user = null, array $photos = []): Complaint
     {
         $bookingId = $data['booking_id'] ?? null;
         $booking = null;
@@ -61,6 +64,13 @@ class ComplaintService
             throw new DomainException('Loại khiếu nại này chỉ dành cho chủ sân.');
         }
 
+        if ($data['category'] === 'wrong_no_show') {
+            $this->assertNoShowAppealable($booking);
+        }
+        if ($photos && ! $user) {
+            throw new DomainException('Vui lòng đăng nhập để đính kèm ảnh chứng cứ.');
+        }
+
         // Mỗi người chỉ có một khiếu nại đang xử lý trên một đơn; gửi trùng chỉ làm admin xử lý lặp.
         if ($bookingId && Complaint::active()->where('booking_id', $bookingId)->where('user_id', $user?->id)->exists()) {
             throw new ConflictException('Đơn này đã có khiếu nại của bạn đang được xử lý. Vui lòng chờ kết quả.');
@@ -84,7 +94,9 @@ class ComplaintService
             app(StatementService::class)->refreshFor($booking);
         }
 
-        $complaint->load(['user', 'booking', 'against']);
+        $this->storeAttachments($complaint, $user, $photos);
+
+        $complaint->load(['user', 'booking', 'against', 'attachments']);
         if ($complaint->against?->email) {
             SafeMail::queue($complaint->against->email, new ComplaintFiled($complaint));
         }
@@ -93,7 +105,8 @@ class ComplaintService
     }
 
     /** Bên bị khiếu nại phản hồi đúng một lần khi khiếu nại còn đang xử lý. */
-    public function respond(Complaint $complaint, User $user, string $response): Complaint
+    /** @param  list<UploadedFile>  $photos */
+    public function respond(Complaint $complaint, User $user, string $response, array $photos = []): Complaint
     {
         if ($complaint->against_user_id !== $user->id) {
             throw new ForbiddenException('Chỉ bên bị khiếu nại mới được phản hồi.');
@@ -105,15 +118,51 @@ class ComplaintService
             throw new ConflictException('Bạn đã phản hồi khiếu nại này rồi.');
         }
 
+        $this->storeAttachments($complaint, $user, $photos);
         $complaint->update(['response' => $response, 'responded_at' => now()]);
 
-        return $complaint->load(['user', 'against', 'booking.sportsField']);
+        return $complaint->load(['user', 'against', 'booking.sportsField', 'attachments']);
+    }
+
+    /** Chỉ khiếu nại "đã đến sân" cho đơn thật sự bị ghi vắng mặt và còn trong hạn kháng cáo. */
+    private function assertNoShowAppealable(?Booking $booking): void
+    {
+        if (! $booking || $booking->no_show_at === null) {
+            throw new DomainException('Đơn này không bị ghi nhận vắng mặt nên không thể khiếu nại loại này.');
+        }
+
+        $hours = config('booking.no_show_appeal_hours');
+        if ($booking->no_show_at->addHours($hours)->isPast()) {
+            throw new DomainException("Đã quá {$hours} giờ kể từ khi đơn bị ghi nhận vắng mặt nên không thể kháng cáo. Vui lòng liên hệ hỗ trợ.");
+        }
+    }
+
+    /** Lưu ảnh chứng cứ của một bên; tối đa 3 ảnh mỗi bên trên một khiếu nại. */
+    private function storeAttachments(Complaint $complaint, ?User $user, array $photos): void
+    {
+        if (! $photos || ! $user) {
+            return;
+        }
+
+        $already = ComplaintAttachment::where('complaint_id', $complaint->id)->where('user_id', $user->id)->count();
+        if ($already + count($photos) > 3) {
+            throw new DomainException('Mỗi bên chỉ đính kèm tối đa 3 ảnh chứng cứ cho một khiếu nại.');
+        }
+
+        foreach ($photos as $photo) {
+            ComplaintAttachment::create([
+                'complaint_id' => $complaint->id,
+                'user_id' => $user->id,
+                'path' => $photo->store("complaints/{$complaint->id}", 'local'),
+                'original_name' => $photo->getClientOriginalName(),
+            ]);
+        }
     }
 
     /** Khiếu nại liên quan tới người dùng: do họ gửi hoặc họ là bên bị khiếu nại. */
     public function involving(User $user): LengthAwarePaginator
     {
-        return Complaint::with(['user', 'against', 'booking.sportsField'])
+        return Complaint::with(['user', 'against', 'attachments', 'booking.sportsField'])
             ->where(fn ($q) => $q->where('user_id', $user->id)->orWhere('against_user_id', $user->id))
             ->latest()
             ->paginate(15);
@@ -140,7 +189,7 @@ class ComplaintService
 
     public function list(array $filters = []): LengthAwarePaginator
     {
-        return Complaint::with(['user', 'against', 'booking.sportsField', 'handler'])
+        return Complaint::with(['user', 'against', 'attachments', 'booking.sportsField', 'handler'])
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['category'] ?? null, fn ($query, $category) => $query->where('category', $category))
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where(fn ($inner) => $inner
@@ -154,7 +203,7 @@ class ComplaintService
 
     public function userComplaints(User $user): LengthAwarePaginator
     {
-        return Complaint::with(['booking.sportsField', 'user', 'against'])
+        return Complaint::with(['booking.sportsField', 'user', 'against', 'attachments'])
             ->where(fn ($q) => $q->where('user_id', $user->id)->orWhere('against_user_id', $user->id))
             ->latest()
             ->paginate(15);
@@ -248,7 +297,7 @@ class ComplaintService
             SafeMail::queue($complaint->against->email, new ComplaintHandled($complaint, asRespondent: true));
         }
 
-        return $complaint->fresh(['user', 'against', 'booking.sportsField', 'handler']);
+        return $complaint->fresh(['user', 'against', 'attachments', 'booking.sportsField', 'handler']);
     }
 
     /** Hoàn thêm cho khách, cộng dồn vào khoản đã hoàn của đơn và không vượt số khách đã trả. */

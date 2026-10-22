@@ -104,7 +104,7 @@ class ComplaintResolutionTest extends TestCase
 
     public function test_customer_can_dispute_a_wrongful_no_show(): void
     {
-        $booking = $this->playedBooking(['checked_in_at' => null, 'no_show_at' => now()->subMonth()]);
+        $booking = $this->playedBooking(['checked_in_at' => null, 'no_show_at' => now()->subHours(2)]);
         Sanctum::actingAs($this->customer);
 
         $this->postJson('/api/v1/customer/complaints', ['booking_id' => $booking->id, 'category' => 'wrong_no_show', 'content' => 'Tôi đã đến sân đúng giờ.'])

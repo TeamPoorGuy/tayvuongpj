@@ -24,14 +24,14 @@ class ComplaintController extends Controller
 
     public function store(StoreComplaintRequest $request): JsonResponse
     {
-        $complaint = $this->service->create($request->validated(), $request->user());
+        $complaint = $this->service->create($request->validated(), $request->user(), $request->file('photos', []));
 
         return (new ComplaintResource($complaint))->response()->setStatusCode(201);
     }
 
     public function respond(RespondComplaintRequest $request, Complaint $complaint): JsonResponse
     {
-        $updated = $this->service->respond($complaint, $request->user(), $request->validated('response'));
+        $updated = $this->service->respond($complaint, $request->user(), $request->validated('response'), $request->file('photos', []));
 
         return response()->json([
             'message' => 'Đã gửi phản hồi của bạn tới Ban quản trị.',

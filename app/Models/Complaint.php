@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Complaint extends Model
 {
@@ -45,6 +46,11 @@ class Complaint extends Model
     public function scopeHoldingPayout($query)
     {
         return $query->active()->where('direction', 'customer_to_owner');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ComplaintAttachment::class)->orderBy('id');
     }
 
     public function against(): BelongsTo

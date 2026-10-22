@@ -202,7 +202,7 @@ class Booking extends Model
             'sportsField.owner.fieldOwnerProfile',
             'payment',
             'review',
-            'complaints',
+            'complaints.attachments',
         ];
         if ($withCustomer) {
             $relations[] = 'customer';
