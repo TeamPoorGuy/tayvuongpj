@@ -43,7 +43,7 @@ class PaymentController extends Controller
         $payment = $this->payments->markPaid($payment, 'admin', $bankRef, $request->user());
 
         return response()->json([
-            'message' => $payment->status === 'paid' ? 'Đã ghi nhận tiền và xác nhận đơn.' : 'Đã ghi nhận tiền; chỗ đã bị người khác đặt nên cần hoàn tiền cho khách.',
+            'message' => $payment->status === 'paid' ? 'Đã ghi nhận tiền và xác nhận đơn.' : 'Đã ghi nhận tiền; chỗ đã bị người khác đặt nên tiền được hoàn vào ví của khách.',
             'data' => new PaymentResource($payment->load('bookings')),
         ]);
     }

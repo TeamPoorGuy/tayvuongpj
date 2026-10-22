@@ -57,6 +57,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
         // Ví SportHub: dùng chung cho khách và chủ sân.
         Route::get('/wallet', [\App\Http\Controllers\Api\V1\WalletController::class, 'show']);
+        Route::get('/wallet/withdrawals', [\App\Http\Controllers\Api\V1\WalletController::class, 'withdrawals']);
+        Route::post('/wallet/withdrawals', [\App\Http\Controllers\Api\V1\WalletController::class, 'withdraw'])->middleware('throttle:writes');
         Route::post('/wallet/topups', [\App\Http\Controllers\Api\V1\WalletController::class, 'topup'])->middleware('throttle:writes');
         Route::get('/complaint-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ComplaintAttachmentController::class, 'show']);
 
@@ -182,6 +184,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
             Route::get('/payments', [Admin\PaymentController::class, 'index']);
             Route::post('/payments/{payment}/confirm', [Admin\PaymentController::class, 'confirm'])->middleware('throttle:writes');
+            Route::get('/withdrawals', [Admin\WithdrawalController::class, 'index']);
+            Route::post('/withdrawals/{withdrawal}/paid', [Admin\WithdrawalController::class, 'paid'])->middleware('throttle:writes');
+            Route::post('/withdrawals/{withdrawal}/reject', [Admin\WithdrawalController::class, 'reject'])->middleware('throttle:writes');
             Route::get('/users', [Admin\UserController::class, 'index']);
             Route::get('/users/{user}/detail', [Admin\UserController::class, 'detail']);
             Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);

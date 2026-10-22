@@ -348,16 +348,11 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertStatus(422); // Validation error
     }
 
-    public function test_owner_cannot_change_bank_account_when_active_payments_exist(): void
+    public function test_owner_cannot_change_bank_account_while_a_withdrawal_is_pending(): void
     {
-        Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => today()->addDay()->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 450000,
-            'payment_status' => 'awaiting',
+        \App\Models\Withdrawal::create([
+            'user_id' => $this->owner->id, 'amount' => 3000000, 'bank_bin' => '970436', 'bank_name' => 'Vietcombank',
+            'account_number' => '1234567890', 'account_holder' => 'NGUYEN CHU SAN', 'status' => 'pending',
         ]);
 
         Sanctum::actingAs($this->owner);
@@ -371,7 +366,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
 
         $res->assertStatus(409);
-        $res->assertJsonFragment(['message' => 'Không thể thay đổi thông tin tài khoản ngân hàng khi đang có đơn chờ thanh toán hoặc đang xác nhận chuyển khoản.']);
+        $res->assertJsonFragment(['message' => 'Không thể đổi tài khoản ngân hàng khi đang có lệnh rút tiền chờ xử lý.']);
     }
 
     public function test_cannot_deactivate_field_or_slot_with_upcoming_bookings(): void

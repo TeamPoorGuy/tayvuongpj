@@ -24,6 +24,8 @@ return [
     'complaint_response_hours' => (int) env('BOOKING_COMPLAINT_RESPONSE_HOURS', 48),
     // Khách bị ghi vắng mặt có N giờ để khiếu nại "tôi đã đến sân".
     'no_show_appeal_hours' => (int) env('BOOKING_NO_SHOW_APPEAL_HOURS', 48),
+    // Lệnh rút ví từ mức này trở xuống tự được duyệt (đ); lớn hơn chờ admin chuyển khoản.
+    'withdraw_auto_limit' => (int) env('BOOKING_WITHDRAW_AUTO_LIMIT', 2000000),
     // Tỉ lệ hoa hồng nền tảng mặc định (%)
     'commission_percent' => (int) env('PLATFORM_COMMISSION_PERCENT', 8),
     // Số ngày chủ sân cần thanh toán đối soát kể từ ngày xuất bảng

@@ -36,6 +36,7 @@ class SettingController extends Controller
             'free_cancel_hours' => ['sometimes', 'required', 'integer', 'between:1,72'],
             'max_pending_bookings' => ['sometimes', 'required', 'integer', 'between:1,20'],
             'max_advance_days' => ['sometimes', 'required', 'integer', 'between:1,365'],
+            'withdraw_auto_limit' => ['sometimes', 'required', 'integer', 'between:0,100000000'],
             'platform_bank_name' => ['sometimes', 'required', 'string', 'max:100'],
             'platform_bank_code' => ['sometimes', 'required', 'alpha_num', 'max:20'],
             'platform_bank_account' => ['sometimes', 'required', InputRules::BANK_ACCOUNT],
