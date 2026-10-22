@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1\FieldOwner;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\ReviewResource;
+use App\Models\Review;
 use App\Services\FieldOwnerService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -17,7 +19,7 @@ class ReviewController extends Controller
         return ReviewResource::collection($this->service->reviews($request->user()));
     }
 
-    public function reply(Request $request, \App\Models\Review $review): \Illuminate\Http\JsonResponse
+    public function reply(Request $request, Review $review): JsonResponse
     {
         $validated = $request->validate([
             'reply' => ['required', 'string', 'max:1000'],
