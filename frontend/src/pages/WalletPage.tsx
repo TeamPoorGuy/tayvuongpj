@@ -246,7 +246,7 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
           <p className="form-help" style={{ margin: 0 }}>
             {goesToAdmin
               ? `Lệnh trên ${formatMoney(autoLimit)} cần Ban quản trị chuyển khoản. Tiền được giữ khỏi ví ngay, bị từ chối sẽ hoàn lại.`
-              : 'Lệnh này được duyệt tự động và chuyển ngay.'}
+              : `Lệnh dưới hạn mức thường được duyệt tự động và chuyển ngay (tổng tự duyệt tối đa ${formatMoney(autoLimit)} trong 24 giờ).`}
           </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button type="button" className="button button--ghost" onClick={() => setWithdrawOpen(false)}>Đóng</button>

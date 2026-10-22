@@ -98,6 +98,21 @@ class WithdrawalTest extends TestCase
         $this->withdraw($this->customer, ['amount' => 200000] + $this->bank)->assertCreated()->assertJsonPath('data.status', 'pending');
     }
 
+    public function test_auto_approval_is_capped_per_24_hours_so_small_withdrawals_cannot_drain_a_wallet(): void
+    {
+        Settings::set('withdraw_auto_limit', 300000);
+        $this->fund($this->customer, 2000000);
+
+        $this->withdraw($this->customer, ['amount' => 200000] + $this->bank)->assertCreated()->assertJsonPath('data.status', 'paid');
+        // Lệnh thứ hai làm tổng tự duyệt trong ngày vượt hạn mức: chờ admin.
+        $this->withdraw($this->customer, ['amount' => 200000] + $this->bank)->assertCreated()->assertJsonPath('data.status', 'pending');
+
+        // Sau 24 giờ hạn mức tự duyệt được tính lại.
+        Withdrawal::where('status', 'pending')->delete();
+        $this->travel(25)->hours();
+        $this->withdraw($this->customer, ['amount' => 200000] + $this->bank)->assertCreated()->assertJsonPath('data.status', 'paid');
+    }
+
     public function test_rejecting_returns_the_money_to_the_wallet(): void
     {
         $this->fund($this->customer, 5000000);

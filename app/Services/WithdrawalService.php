@@ -104,10 +104,15 @@ class WithdrawalService
         return $rejected;
     }
 
-    /** Tự duyệt khi dưới ngưỡng và người rút không có khiếu nại đang mở (kể cả vai bị khiếu nại). */
+    /**
+     * Tự duyệt khi tổng các lệnh tự duyệt trong 24 giờ (kể cả lệnh này) không vượt ngưỡng và người rút không có khiếu nại
+     * đang mở (kể cả vai bị khiếu nại). Tính theo 24 giờ để tài khoản bị chiếm không rút cạn bằng nhiều lệnh nhỏ liên tiếp.
+     */
     private function canAutoApprove(User $user, float $amount): bool
     {
-        if ($amount > Settings::getInt('withdraw_auto_limit', 2000000)) {
+        $limit = Settings::getInt('withdraw_auto_limit', 2000000);
+        $alreadyAuto = (float) Withdrawal::where('user_id', $user->id)->where('auto', true)->where('processed_at', '>=', now()->subDay())->sum('amount');
+        if ($amount + $alreadyAuto > $limit) {
             return false;
         }
 

@@ -88,7 +88,7 @@ export function AdminSettingsPage() {
             </label>
 
             <label style={{ margin: 0 }}>
-              <span>Lệnh rút tự duyệt đến (đ)</span>
+              <span>Hạn mức rút tự duyệt mỗi 24 giờ (đ)</span>
               <input
                 type="number"
                 min="0"
@@ -97,7 +97,7 @@ export function AdminSettingsPage() {
                 value={formData.withdraw_auto_limit ?? 2000000}
                 onChange={(e) => handleChange('withdraw_auto_limit', e.target.value === '' ? '' : Number(e.target.value))}
               />
-              <small style={{ color: 'var(--muted)', fontSize: 12 }}>Lệnh rút ví lớn hơn mức này chờ admin chuyển khoản</small>
+              <small style={{ color: 'var(--muted)', fontSize: 12 }}>Tổng các lệnh rút tự duyệt của một người trong 24 giờ không vượt mức này; vượt thì chờ admin chuyển khoản</small>
             </label>
 
             <label style={{ margin: 0 }}>
