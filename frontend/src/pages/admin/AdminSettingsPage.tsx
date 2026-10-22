@@ -88,6 +88,19 @@ export function AdminSettingsPage() {
             </label>
 
             <label style={{ margin: 0 }}>
+              <span>Lệnh rút tự duyệt đến (đ)</span>
+              <input
+                type="number"
+                min="0"
+                max="100000000"
+                step="100000"
+                value={formData.withdraw_auto_limit ?? 2000000}
+                onChange={(e) => handleChange('withdraw_auto_limit', e.target.value === '' ? '' : Number(e.target.value))}
+              />
+              <small style={{ color: 'var(--muted)', fontSize: 12 }}>Lệnh rút ví lớn hơn mức này chờ admin chuyển khoản</small>
+            </label>
+
+            <label style={{ margin: 0 }}>
               <span>Thời gian giữ chỗ chờ chuyển khoản (phút)</span>
               <input
                 type="number"

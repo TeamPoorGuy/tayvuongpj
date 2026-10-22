@@ -533,8 +533,7 @@ export interface AdminDashboardData {
     pending_owners: number
     pending_fields: number
     open_complaints: number
-    pending_payouts: number
-    pending_refunds: number
+    pending_withdrawals: number
   }
   total_gmv?: number
   total_commission_collected?: number

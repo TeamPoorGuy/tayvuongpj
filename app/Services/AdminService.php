@@ -115,8 +115,7 @@ class AdminService
             'pending_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Pending)->count(),
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'open_complaints' => \App\Models\Complaint::where('status', 'open')->count(),
-            'pending_payouts' => \App\Models\OwnerStatement::where('status', 'unpaid')->where('payout_amount', '>', 0)->count(),
-            'pending_refunds' => Booking::where('refund_status', 'pending')->count(),
+            'pending_withdrawals' => \App\Models\Withdrawal::where('status', 'pending')->count(),
         ];
 
         return [

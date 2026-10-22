@@ -115,8 +115,7 @@ class PhaseFourDashboardTest extends TestCase
                     'pending_owners',
                     'pending_fields',
                     'open_complaints',
-                    'pending_payouts',
-                    'pending_refunds',
+                    'pending_withdrawals',
                 ],
             ],
         ]);

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, Clock, Download, FileText, Receipt } from 'lucide-react'
+import { CheckCircle2, Download, FileText, Receipt } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { Modal } from '../../components/Modal'
@@ -7,9 +7,9 @@ import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
 import type { ApiEnvelope, CurrentStatementSummary, OwnerStatement, StatementList } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
-import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
+import { formatDate, formatMoney } from '../../utils/format'
 
-/** Đối soát thu hộ: SportHub giữ tiền khách trả, cuối kỳ chuyển cho chủ sân sau khi trừ hoàn tiền và hoa hồng. */
+/** Báo cáo đối soát thu hộ: tiền từng đơn đã tự về ví chủ sân sau khi trừ hoàn tiền và hoa hồng; trang này chỉ tổng hợp theo tháng. */
 export function OwnerStatementsPage() {
   const [page, setPage] = useState(1)
   const [selectedStatement, setSelectedStatement] = useState<OwnerStatement | null>(null)
@@ -37,15 +37,7 @@ export function OwnerStatementsPage() {
   const list = statementsQuery.data?.data ?? []
   const totals = statementsQuery.data?.meta?.totals
 
-  const renderStatus = (st: OwnerStatement) => {
-    if (st.status === 'paid') {
-      return <span className="status-pill status-pill--confirmed"><CheckCircle2 size={13} /> Đã nhận tiền</span>
-    }
-    if (st.is_overdue) {
-      return <span className="status-pill status-pill--cancelled"><AlertTriangle size={13} /> SportHub chậm chi trả</span>
-    }
-    return <span className="status-pill status-pill--pending"><Clock size={13} /> Chờ SportHub chuyển</span>
-  }
+  const renderStatus = () => <span className="status-pill status-pill--confirmed"><CheckCircle2 size={13} /> Đã cộng vào ví</span>
 
   const row = (label: string, value: string, strong = false) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -59,15 +51,15 @@ export function OwnerStatementsPage() {
       <PageTitle
         icon={<Receipt />}
         kicker="Tài chính"
-        title="Đối soát & Chi trả"
-        copy="Khách thanh toán qua SportHub; cuối mỗi tháng SportHub chuyển cho bạn số tiền đã thu sau khi trừ tiền hoàn cho khách và hoa hồng nền tảng."
+        title="Báo cáo đối soát"
+        copy="Khách thanh toán qua SportHub; tiền từng đơn tự về ví của bạn sau 48 giờ (trừ tiền hoàn cho khách và hoa hồng nền tảng). Bạn rút về ngân hàng ở mục Ví & Rút tiền, không cần 'thanh toán hoa hồng' riêng."
       />
 
       <section className="data-panel" style={{ marginBottom: 24 }}>
         <div className="data-panel__head">
           <div>
             <span>Ước tính tháng này ({summary?.period || 'Đang tải...'})</span>
-            <h2>Tiền sẽ được chi trả</h2>
+            <h2>Tiền sẽ về ví</h2>
           </div>
           {summary && <span className="badge badge--brand">Hoa hồng nền tảng: {summary.commission_rate}%</span>}
         </div>
@@ -88,36 +80,26 @@ export function OwnerStatementsPage() {
               </small>
             </div>
             <div className="stat-card stat-card--highlight">
-              <span className="stat-card__label">Dự kiến bạn nhận</span>
+              <span className="stat-card__label">Dự kiến về ví</span>
               <strong className="stat-card__val">{formatMoney(summary?.estimated_payout ?? 0)}</strong>
-              <small className="stat-card__note">Chi trả sau khi chốt đối soát ngày 01 tháng sau</small>
+              <small className="stat-card__note">Mỗi đơn tự về ví sau 48 giờ nếu không có khiếu nại</small>
             </div>
           </div>
         </div>
       </section>
 
       <div className="stats-grid-3">
-        <div className="stat-card">
-          <span className="stat-card__label">Chờ SportHub chuyển</span>
-          <strong className="stat-card__val" style={{ color: 'var(--warn, #e29a0c)' }}>{formatMoney(totals?.unpaid_amount ?? 0)}</strong>
-          <small className="stat-card__note">{totals?.unpaid_count ?? 0} kỳ đã chốt, chưa chi trả</small>
-        </div>
         <div className="stat-card stat-card--highlight">
-          <span className="stat-card__label">Đã nhận</span>
+          <span className="stat-card__label">Tổng đã về ví</span>
           <strong className="stat-card__val">{formatMoney(totals?.paid_amount ?? 0)}</strong>
-          <small className="stat-card__note">{totals?.paid_count ?? 0} kỳ đã chuyển khoản</small>
-        </div>
-        <div className="stat-card">
-          <span className="stat-card__label">Tổng được chi trả</span>
-          <strong className="stat-card__val">{formatMoney((totals?.unpaid_amount ?? 0) + (totals?.paid_amount ?? 0))}</strong>
-          <small className="stat-card__note">Về tài khoản ngân hàng khai trong hồ sơ cơ sở</small>
+          <small className="stat-card__note">{totals?.paid_count ?? 0} báo cáo kỳ · rút ở mục Ví & Rút tiền</small>
         </div>
       </div>
 
       <section className="data-panel">
         <div className="data-panel__head">
           <div>
-            <span>Lịch sử chi trả</span>
+            <span>Lịch sử</span>
             <h2>Đối soát theo tháng</h2>
           </div>
         </div>
@@ -126,7 +108,7 @@ export function OwnerStatementsPage() {
           isPending={statementsQuery.isPending}
           isError={statementsQuery.isError}
           isEmpty={list.length === 0}
-          empty={<Empty text="Bảng đối soát được hệ thống tự lập vào ngày 01 của tháng kế tiếp." />}
+          empty={<Empty text="Báo cáo đối soát được hệ thống tự lập vào ngày 01 của tháng kế tiếp." />}
         >
           <div className="table-wrap">
             <table>
@@ -137,8 +119,7 @@ export function OwnerStatementsPage() {
                   <th>Đã thu hộ</th>
                   <th>Hoàn khách</th>
                   <th>Hoa hồng</th>
-                  <th>Bạn nhận</th>
-                  <th>Hạn chi trả</th>
+                  <th>Về ví</th>
                   <th>Trạng thái</th>
                   <th />
                 </tr>
@@ -152,8 +133,7 @@ export function OwnerStatementsPage() {
                     <td>{formatMoney(st.refunded_amount)}</td>
                     <td>{formatMoney(st.commission_amount)}</td>
                     <td><strong style={{ color: 'var(--pitch)' }}>{formatMoney(st.payout_amount)}</strong></td>
-                    <td>{st.due_at ? formatDate(st.due_at) : '—'}</td>
-                    <td>{renderStatus(st)}</td>
+                    <td>{renderStatus()}</td>
                     <td>
                       <button type="button" className="button button--small button--ghost" onClick={() => setSelectedStatement(st)}>
                         <FileText size={14} /> Chi tiết
@@ -179,25 +159,13 @@ export function OwnerStatementsPage() {
             <div style={{ background: 'var(--surface)', padding: 16, borderRadius: 8, marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span>Trạng thái:</span>
-                {renderStatus(activeStatement)}
+                {renderStatus()}
               </div>
               {row('SportHub đã thu hộ:', formatMoney(activeStatement.collected_amount))}
               {row('Hoàn tiền cho khách:', `− ${formatMoney(activeStatement.refunded_amount)}`)}
               {row('Hoa hồng nền tảng:', `− ${formatMoney(activeStatement.commission_amount)}`)}
-              {row('Số tiền bạn nhận:', formatMoney(activeStatement.payout_amount), true)}
-              {row('Nội dung chuyển khoản:', activeStatement.transfer_code)}
-              {activeStatement.status === 'paid'
-                ? row('Đã chuyển lúc:', activeStatement.paid_at ? formatDateTime(activeStatement.paid_at) : '—')
-                : row('Hạn chi trả:', activeStatement.due_at ? formatDate(activeStatement.due_at) : '—')}
-              {activeStatement.payout_ref && row('Mã giao dịch ngân hàng:', activeStatement.payout_ref)}
+              {row('Tiền về ví của bạn:', formatMoney(activeStatement.payout_amount), true)}
             </div>
-
-            {activeStatement.status === 'unpaid' && (
-              <p className="form-help">
-                SportHub sẽ chuyển vào tài khoản {activeStatement.payout_bank?.account_number ?? 'khai trong hồ sơ cơ sở'}
-                {activeStatement.payout_bank?.bank_name ? ` (${activeStatement.payout_bank.bank_name})` : ''}. Hãy kiểm tra thông tin ngân hàng ở mục Hồ sơ cơ sở.
-              </p>
-            )}
 
             <div style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

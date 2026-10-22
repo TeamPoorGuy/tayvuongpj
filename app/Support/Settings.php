@@ -101,6 +101,7 @@ class Settings
             'free_cancel_hours' => static::getInt('free_cancel_hours', static::getInt('late_cancel_hours', 4)),
             'max_pending_bookings' => static::getInt('max_pending_bookings', 3),
             'max_advance_days' => static::getInt('max_advance_days', 30),
+            'withdraw_auto_limit' => static::getInt('withdraw_auto_limit', 2000000),
             'platform_bank_name' => static::getString('platform_bank_name', 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)'),
             'platform_bank_code' => static::getString('platform_bank_code', 'VCB'),
             'platform_bank_account' => static::getString('platform_bank_account', '1234567890'),

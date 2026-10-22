@@ -48,12 +48,13 @@ import type {
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { Avatar } from '../../components/Avatar'
+import { useWallet } from '../../hooks/useWallet'
 import { VIETNAMESE_BANKS } from '../../utils/banks'
 import { getLocalTodayString } from '../../utils/date'
 import { formatDate, formatMoney } from '../../utils/format'
 
 export function OwnerDashboardPage() {
-
+  const wallet = useWallet(1).data?.data
   const dashboard = useQuery({
     queryKey: ['owner', 'dashboard'],
     refetchInterval: 60_000,
@@ -116,9 +117,15 @@ export function OwnerDashboardPage() {
           note={`GMV: ${formatMoney(data?.current_month_gmv ?? 0)}`}
         />
         <Stat
+          label="Ví SportHub"
+          value={formatMoney(wallet?.balance ?? 0)}
+          note={wallet?.pending_earnings ? `Sắp về ví: ${formatMoney(wallet.pending_earnings)} · bấm để rút` : 'Tiền đơn tự về ví sau 48 giờ · bấm để rút'}
+          to="/owner/wallet"
+        />
+        <Stat
           label="Hoa hồng ước tính"
           value={formatMoney(data?.current_month_commission ?? 0)}
-          note="Xem chi tiết đối soát"
+          note="Đã tự trừ khi tiền về ví"
           to="/owner/statements"
         />
       </div>

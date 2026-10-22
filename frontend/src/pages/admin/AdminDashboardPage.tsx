@@ -9,7 +9,6 @@ import {
   Coins,
   Inbox,
   Receipt,
-  RotateCcw,
   ShieldCheck,
   TrendingUp,
 } from 'lucide-react'
@@ -110,23 +109,13 @@ export function AdminDashboardPage() {
             </strong>
           </Link>
 
-          <Link to="/admin/statements" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to="/admin/withdrawals" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Kỳ chờ chi trả chủ sân</span>
-              <Receipt size={16} style={{ color: queue.pending_payouts > 0 ? 'var(--pitch)' : 'var(--muted)' }} />
+              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Lệnh rút chờ chuyển khoản</span>
+              <Receipt size={16} style={{ color: queue.pending_withdrawals > 0 ? 'var(--danger)' : 'var(--muted)' }} />
             </div>
-            <strong style={{ fontSize: 20, color: queue.pending_payouts > 0 ? 'var(--pitch)' : 'var(--forest)' }}>
-              {queue.pending_payouts}
-            </strong>
-          </Link>
-
-          <Link to="/admin/bookings" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Đơn cần hoàn tiền</span>
-              <RotateCcw size={16} style={{ color: queue.pending_refunds > 0 ? 'var(--danger)' : 'var(--muted)' }} />
-            </div>
-            <strong style={{ fontSize: 20, color: queue.pending_refunds > 0 ? 'var(--danger)' : 'var(--forest)' }}>
-              {queue.pending_refunds}
+            <strong style={{ fontSize: 20, color: queue.pending_withdrawals > 0 ? 'var(--danger)' : 'var(--forest)' }}>
+              {queue.pending_withdrawals}
             </strong>
           </Link>
         </div>

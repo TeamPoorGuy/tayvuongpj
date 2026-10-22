@@ -24,6 +24,7 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
 import { AdminLogsPage } from './pages/admin/AdminLogsPage'
 import { AdminStatementsPage } from './pages/admin/AdminStatementsPage'
 import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage'
+import { AdminWithdrawalsPage } from './pages/admin/AdminWithdrawalsPage'
 import {
   AboutPage,
   ContactPage,
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="admin/complaints" element={<AdminComplaintsPage />} />
           <Route path="admin/statements" element={<AdminStatementsPage />} />
           <Route path="admin/payments" element={<AdminPaymentsPage />} />
+          <Route path="admin/withdrawals" element={<AdminWithdrawalsPage />} />
           <Route path="admin/matches" element={<AdminMatchesPage />} />
           <Route path="admin/reviews" element={<AdminReviewsPage />} />
           <Route path="admin/categories" element={<AdminCategoriesPage />} />
