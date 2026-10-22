@@ -318,11 +318,8 @@ class ComplaintService
             throw new DomainException('Số tiền hoàn tối đa còn lại của đơn này là '.number_format($room, 0, ',', '.').'đ.');
         }
 
-        $booking->update([
-            'refund_status' => 'pending',
-            'refund_amount' => $already + $amount,
-            'refunded_at' => null,
-        ]);
+        $booking->update(['refund_amount' => $already + $amount]);
+        app(WalletService::class)->refundBooking($booking, $amount, "Hoàn tiền theo khiếu nại đơn #BK-{$booking->id}");
     }
 
     /** Khách thực tế đã đến sân: gỡ vắng mặt, ghi nhận có mặt và trả điểm uy tín đã trừ. */

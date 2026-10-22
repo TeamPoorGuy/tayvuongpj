@@ -131,14 +131,38 @@ class PaymentFlowTest extends TestCase
         $this->webhook($payload)->assertOk()->assertJsonPath('matched', null);
     }
 
-    public function test_webhook_rejects_wrong_key_and_ignores_short_transfers(): void
+    public function test_webhook_rejects_wrong_key_and_short_transfers_go_to_the_wallet_once(): void
     {
         $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
 
         $this->webhook(['transferAmount' => 30000, 'content' => $payment->code], 'sai-khoa')->assertStatus(401);
         $this->webhook(['transferAmount' => 10000, 'content' => $payment->code, 'referenceCode' => 'FT2'])->assertOk();
+        // Ngân hàng gửi lặp cùng mã giao dịch: không cộng thêm.
+        $this->webhook(['transferAmount' => 10000, 'content' => $payment->code, 'referenceCode' => 'FT2'])->assertOk();
 
-        $this->assertSame('awaiting', $payment->fresh()->status);
+        $this->assertSame('awaiting', $payment->fresh()->status, 'Chuyển thiếu không tự xác nhận.');
+        $this->assertEquals(10000, $payment->user->fresh()->wallet_balance);
+        $this->assertDatabaseHas('wallet_transactions', ['user_id' => $payment->user_id, 'payment_id' => $payment->id, 'bank_ref' => 'FT2', 'amount' => 10000]);
+    }
+
+    public function test_overpayment_confirms_and_the_excess_goes_to_the_wallet(): void
+    {
+        $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
+
+        $this->webhook(['transferAmount' => 50000, 'content' => $payment->code, 'referenceCode' => 'FT3'])->assertOk();
+
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertEquals(20000, $payment->user->fresh()->wallet_balance);
+    }
+
+    public function test_transfer_to_an_already_paid_payment_goes_to_the_wallet(): void
+    {
+        $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
+        $this->webhook(['transferAmount' => 30000, 'content' => $payment->code, 'referenceCode' => 'FT4'])->assertOk();
+        $this->webhook(['transferAmount' => 30000, 'content' => $payment->code, 'referenceCode' => 'FT5'])->assertOk();
+
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertEquals(30000, $payment->user->fresh()->wallet_balance, 'Chuyển lần hai cho lượt đã trả không được mất.');
     }
 
     public function test_unpaid_hold_expires_and_frees_the_courts(): void
@@ -156,7 +180,7 @@ class PaymentFlowTest extends TestCase
         $this->postJson('/api/v1/customer/bookings', ['booking_date' => $this->date, 'items' => [$this->item($this->courtA, '18:00', '19:00')]])->assertCreated();
     }
 
-    public function test_late_money_confirms_if_still_free_otherwise_needs_refund(): void
+    public function test_late_money_confirms_if_still_free_otherwise_goes_to_wallet(): void
     {
         $first = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
         $second = Payment::findOrFail($this->checkout([$this->item($this->courtB, '18:00', '19:00')])->json('payment.id'));
@@ -172,8 +196,10 @@ class PaymentFlowTest extends TestCase
 
         $this->assertSame('paid', $first->fresh()->status);
         $this->assertSame('confirmed', $first->bookings()->first()->status->value);
-        $this->assertSame('refund_required', $second->fresh()->status);
-        $this->assertSame('pending', $second->bookings()->first()->refund_status);
+        $this->assertSame('refunded', $second->fresh()->status);
+        $this->assertSame('done', $second->bookings()->first()->refund_status);
+        // Tiền về muộn khi chỗ đã mất: vào thẳng ví khách.
+        $this->assertEquals(30000, $second->user->fresh()->wallet_balance);
     }
 
     public function test_admin_can_confirm_a_payment_by_hand(): void

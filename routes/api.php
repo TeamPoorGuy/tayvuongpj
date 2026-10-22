@@ -193,7 +193,6 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/bookings', [Admin\BookingController::class, 'index']);
             Route::get('/bookings/export-csv', [Admin\BookingController::class, 'exportCsv']);
             Route::post('/bookings/{booking}/cancel', [Admin\BookingController::class, 'cancel'])->middleware('throttle:writes');
-            Route::patch('/bookings/{booking}/refund', [Admin\BookingController::class, 'updateRefund'])->middleware('throttle:writes');
             Route::get('/matches', [Admin\MatchController::class, 'index']);
             Route::delete('/matches/{id}', [Admin\MatchController::class, 'cancel']);
             Route::get('/reviews', [Admin\ReviewController::class, 'index']);

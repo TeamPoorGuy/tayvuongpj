@@ -454,32 +454,6 @@ class AdminService
         return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
     }
 
-    public function updateBookingRefund(Booking $booking, string $refundStatus, ?float $refundAmount, User $admin): Booking
-    {
-        // Đơn đã chơi xong chỉ có khoản hoàn khi khiếu nại được chấp nhận (đã đặt refund_status).
-        $hasRefund = in_array($booking->refund_status, ['pending', 'done'], true);
-        if ($booking->status !== BookingStatus::Cancelled && $booking->status !== BookingStatus::Rejected && ! $hasRefund) {
-            throw new ConflictException('Chỉ có thể cập nhật trạng thái hoàn tiền cho đơn đã huỷ, bị từ chối hoặc đơn có khoản hoàn từ khiếu nại.');
-        }
-
-        $fill = [
-            'refund_status' => $refundStatus,
-            'refunded_at' => $refundStatus === 'done' ? now() : null,
-        ];
-        if ($refundAmount !== null) {
-            $fill['refund_amount'] = $refundAmount;
-        }
-
-        $booking->update($fill);
-
-        AdminLog::record('update_booking_refund', $booking, [
-            'refund_status' => $refundStatus,
-            'refund_amount' => $booking->refund_amount,
-        ], $admin);
-
-        return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
-    }
-
     public function exportBookingsCsv(?string $status = null, ?string $keyword = null, ?string $date = null): string
     {
         $bookings = Booking::with(Booking::resourceRelations(withCustomer: true))

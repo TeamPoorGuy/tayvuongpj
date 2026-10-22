@@ -80,7 +80,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
     }
 
-    public function test_customer_free_cancellation_records_pending_refund_and_no_penalty(): void
+    public function test_customer_free_cancellation_refunds_to_wallet_and_no_penalty(): void
     {
         // Trận đấu ngày mai 17:00
         $bookingDate = today()->addDay()->toDateString();
@@ -105,8 +105,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertOk();
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertSame(100, $this->customer->fresh()->trust_score);
     }
 
@@ -165,8 +166,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertOk();
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertSame(100, $this->customer->fresh()->trust_score); // Khách không có lỗi
     }
 
@@ -425,8 +427,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
 
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertStringContainsString('Chủ sân đã bị tạm khoá tài khoản', $fresh->cancel_reason);
     }
 
@@ -458,8 +461,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
 
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertStringContainsString('Chủ sân đã bị đình chỉ', $fresh->cancel_reason);
     }
 

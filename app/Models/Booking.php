@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\BookingStatus;
 use App\Models\Concerns\HasTimeRange;
+use App\Services\WalletService;
 use App\Support\Settings;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -311,6 +312,11 @@ class Booking extends Model
             'refund_status' => $refundAmount > 0 ? 'pending' : null,
             'refund_amount' => $refundAmount > 0 ? $refundAmount : null,
         ]);
+
+        // Tiền hoàn vào thẳng ví khách, không chờ ai chuyển khoản.
+        if ($refundAmount > 0) {
+            app(WalletService::class)->refundBooking($this, $refundAmount, "Hoàn tiền huỷ đơn #BK-{$this->id}");
+        }
 
         return $this;
     }

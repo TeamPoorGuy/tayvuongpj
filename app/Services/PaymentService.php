@@ -6,10 +6,12 @@ use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Mail\BookingStatusChanged;
 use App\Mail\NewBookingRequest;
+use App\Mail\WalletCredited;
 use App\Models\AdminLog;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
+use App\Models\WalletTransaction;
 use App\Support\SafeMail;
 use App\Support\Settings;
 use Illuminate\Support\Collection;
@@ -76,7 +78,8 @@ class PaymentService
      */
     public function markPaid(Payment $payment, string $source, ?string $bankRef = null, ?User $admin = null): Payment
     {
-        $confirmed = DB::transaction(function () use ($payment, $source, $bankRef, $admin) {
+        $lateRefund = null;
+        $confirmed = DB::transaction(function () use ($payment, $source, $bankRef, $admin, &$lateRefund) {
             $payment = Payment::lockForUpdate()->findOrFail($payment->id);
             if (in_array($payment->status, ['paid', 'refund_required'], true)) {
                 return null; // đã ghi nhận rồi
@@ -85,11 +88,16 @@ class PaymentService
             $bookings = $payment->bookings()->with('sportsField')->lockForUpdate()->get();
             $attributes = ['paid_at' => now(), 'source' => $source, 'bank_ref' => $bankRef, 'confirmed_by' => $admin?->id];
 
-            // Khách đã tự huỷ, hoặc hết hạn mà chỗ đã bị người khác lấy: giữ tiền lại để admin hoàn trả.
+            // Khách đã tự huỷ, hoặc hết hạn mà chỗ đã bị người khác lấy: tiền vào thẳng ví khách.
             if ($payment->status === 'cancelled' || ($payment->status === 'expired' && ! $this->stillAvailable($bookings))) {
-                $payment->update($attributes + ['status' => 'refund_required']);
+                $payment->update($attributes + ['status' => 'refunded']);
                 foreach ($bookings as $booking) {
-                    $booking->update(['payment_status' => 'paid', 'paid_at' => now(), 'refund_status' => 'pending', 'refund_amount' => $booking->payment_amount]);
+                    $booking->update(['payment_status' => 'paid', 'paid_at' => now(), 'refund_amount' => $booking->payment_amount]);
+                }
+                $lateRefund = $payment->dueAmount();
+                app(WalletService::class)->credit($payment->user, $lateRefund, 'refund', "Hoàn tiền chuyển khoản muộn {$payment->code}", ['payment_id' => $payment->id]);
+                foreach ($bookings as $booking) {
+                    $booking->update(['refund_status' => 'done', 'refunded_at' => now()]);
                 }
 
                 return null;
@@ -112,6 +120,10 @@ class PaymentService
 
         if ($admin) {
             AdminLog::record('confirm_payment', $payment, ['code' => $payment->code, 'amount' => (float) $payment->amount], $admin);
+        }
+
+        if ($lateRefund && $payment->user?->email) {
+            SafeMail::queue($payment->user->email, new WalletCredited($payment->user->refresh(), $lateRefund, "Tiền chuyển khoản {$payment->code} đến sau khi giữ chỗ đã hết hạn nên được hoàn vào ví."));
         }
 
         foreach ($confirmed ?? [] as $booking) {
@@ -137,7 +149,7 @@ class PaymentService
         }
 
         $bankRef = (string) ($payload['referenceCode'] ?? $payload['id'] ?? '');
-        if ($bankRef !== '' && Payment::where('bank_ref', $bankRef)->exists()) {
+        if ($bankRef !== '' && (Payment::where('bank_ref', $bankRef)->exists() || WalletTransaction::where('bank_ref', $bankRef)->exists())) {
             return null; // ngân hàng gửi lặp
         }
 
@@ -150,14 +162,35 @@ class PaymentService
             return null;
         }
 
-        if ((float) ($payload['transferAmount'] ?? 0) < (float) $payment->amount) {
-            // Chuyển thiếu: không tự xác nhận, admin xem và xử lý tay.
-            Log::warning('Chuyển khoản thiếu tiền', ['code' => $payment->code, 'payload' => $payload]);
+        $received = (float) ($payload['transferAmount'] ?? 0);
+        $due = $payment->dueAmount();
+
+        // Chuyển thiếu, hoặc chuyển cho lượt đã thanh toán: không tự xác nhận, tiền vào ví để khách tự dùng hoặc rút.
+        if (! in_array($payment->status, ['awaiting', 'expired', 'cancelled'], true) || $received < $due) {
+            $this->creditStray($payment, $received, $bankRef, $received < $due && $payment->status === 'awaiting'
+                ? "Chuyển khoản {$payment->code} thiếu so với số cần trả nên được cộng vào ví."
+                : "Chuyển khoản {$payment->code} cho lượt đã xử lý nên được cộng vào ví.");
 
             return null;
         }
 
-        return $this->markPaid($payment, 'webhook', $bankRef ?: null);
+        $confirmed = $this->markPaid($payment, 'webhook', $bankRef ?: null);
+        if ($received > $due) {
+            $this->creditStray($payment, $received - $due, null, "Chuyển khoản {$payment->code} dư so với số cần trả nên phần dư được cộng vào ví.");
+        }
+
+        return $confirmed;
+    }
+
+    /** Tiền khách chuyển mà không khớp lượt nào: cộng vào ví khách, ghi mã giao dịch để không cộng trùng. */
+    private function creditStray(Payment $payment, float $amount, ?string $bankRef, string $reason): void
+    {
+        if ($amount <= 0 || ! $payment->user) {
+            return;
+        }
+
+        app(WalletService::class)->credit($payment->user, $amount, 'refund', $reason, ['payment_id' => $payment->id, 'bank_ref' => $bankRef ?: null]);
+        SafeMail::queue($payment->user->email, new WalletCredited($payment->user->refresh(), $amount, $reason));
     }
 
     /** Chạy định kỳ: lượt thanh toán quá hạn giữ chỗ → huỷ các đơn, nhả chỗ cho người khác. */

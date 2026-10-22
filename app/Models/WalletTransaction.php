@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Một dòng sổ cái ví: số dư người dùng luôn bằng tổng các dòng của họ. */
 class WalletTransaction extends Model
 {
-    protected $fillable = ['user_id', 'type', 'amount', 'balance_after', 'booking_id', 'payment_id', 'withdrawal_id', 'description'];
+    protected $fillable = ['user_id', 'type', 'amount', 'balance_after', 'booking_id', 'payment_id', 'withdrawal_id', 'bank_ref', 'description'];
 
     protected $casts = [
         'amount' => 'decimal:2',

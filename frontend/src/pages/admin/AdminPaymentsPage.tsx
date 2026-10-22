@@ -15,7 +15,7 @@ const STATUS_LABELS: Record<Payment['status'], string> = {
   paid: 'Đã nhận tiền',
   expired: 'Hết hạn giữ chỗ',
   cancelled: 'Khách đã huỷ',
-  refund_required: 'Cần hoàn tiền',
+  refunded: 'Đã hoàn vào ví',
 }
 
 /** Giao dịch thu hộ: đối chiếu tay khi webhook ngân hàng không khớp (khách ghi sai nội dung…). */

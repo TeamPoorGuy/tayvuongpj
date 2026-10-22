@@ -20,7 +20,7 @@ class PaymentController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
-            'status' => ['nullable', 'in:awaiting,paid,expired,cancelled,refund_required'],
+            'status' => ['nullable', 'in:awaiting,paid,expired,cancelled,refunded'],
             'keyword' => ['nullable', 'string', 'max:50'],
         ]);
 

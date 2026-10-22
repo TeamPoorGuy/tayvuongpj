@@ -218,7 +218,7 @@ export interface Payment {
   total: number
   amount: number
   deposit_percent: number
-  status: 'awaiting' | 'paid' | 'expired' | 'cancelled' | 'refund_required'
+  status: 'awaiting' | 'paid' | 'expired' | 'cancelled' | 'refunded'
   due_at: string
   paid_at: string | null
   source: 'webhook' | 'admin' | null

@@ -50,29 +50,6 @@ class BookingController extends Controller
         ]);
     }
 
-    public function updateRefund(Request $request, Booking $booking): JsonResponse
-    {
-        $request->validate([
-            'refund_status' => ['required', 'in:pending,done,waived'],
-            'refund_amount' => ['nullable', 'integer', 'min:0', 'max:'.(int) ($booking->payment_amount ?? $booking->total_price)],
-        ], [
-            'refund_status.required' => 'Vui lòng chọn trạng thái hoàn tiền.',
-            'refund_status.in' => 'Trạng thái hoàn tiền không hợp lệ.',
-        ]);
-
-        $updated = $this->service->updateBookingRefund(
-            $booking,
-            $request->input('refund_status'),
-            $request->has('refund_amount') ? (float) $request->input('refund_amount') : null,
-            $request->user()
-        );
-
-        return response()->json([
-            'message' => 'Cập nhật trạng thái hoàn tiền thành công.',
-            'data' => new BookingResource($updated),
-        ]);
-    }
-
     public function exportCsv(Request $request): Response
     {
         $csv = $this->service->exportBookingsCsv(

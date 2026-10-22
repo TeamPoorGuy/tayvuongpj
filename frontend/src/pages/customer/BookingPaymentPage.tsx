@@ -215,15 +215,15 @@ export function BookingPaymentPage() {
           </div>
         )}
 
-        {payment.status === 'refund_required' && (
+        {payment.status === 'refunded' && (
           <div className="notice notice--warn">
-            SportHub đã nhận tiền nhưng giữ chỗ đã hết hạn và sân đã có người khác đặt. Khoản tiền sẽ được hoàn lại cho bạn; bạn có thể theo dõi ở mục Đơn đặt của tôi.
+            SportHub đã nhận tiền nhưng giữ chỗ đã hết hạn và sân đã có người khác đặt. Khoản tiền đã được hoàn vào ví SportHub của bạn.
           </div>
         )}
 
         {(payment.status === 'expired' || payment.status === 'cancelled') && (
           <div className="notice notice--error">
-            {payment.status === 'expired' ? 'Đã hết thời gian giữ chỗ nên đơn tự huỷ.' : 'Bạn đã huỷ giữ chỗ.'} Nếu bạn lỡ chuyển khoản, hãy liên hệ hỗ trợ kèm mã {payment.code}.
+            {payment.status === 'expired' ? 'Đã hết thời gian giữ chỗ nên đơn tự huỷ.' : 'Bạn đã huỷ giữ chỗ.'} Nếu bạn lỡ chuyển khoản, hệ thống tự xác nhận đơn khi sân còn trống, nếu không thì hoàn tiền vào ví SportHub của bạn.
           </div>
         )}
       </section>

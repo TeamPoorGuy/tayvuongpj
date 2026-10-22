@@ -135,12 +135,11 @@ class ComplaintResolutionTest extends TestCase
             ->assertOk()->assertJsonPath('data.refund_amount', 20000)->assertJsonPath('data.booking.refundable', 40000);
 
         $booking->refresh();
-        $this->assertSame('pending', $booking->refund_status);
+        $this->assertSame('done', $booking->refund_status);
         $this->assertEquals(20000, $booking->refund_amount);
+        $this->assertEquals(20000, $this->customer->refresh()->wallet_balance, 'Tiền hoàn vào thẳng ví khách.');
+        $this->assertDatabaseHas('wallet_transactions', ['user_id' => $this->customer->id, 'booking_id' => $booking->id, 'type' => 'refund', 'amount' => 20000]);
         $this->assertDatabaseHas('admin_logs', ['action' => 'handle_complaint']);
-
-        // Admin ghi nhận đã chuyển hoàn: đơn đã hoàn tất vẫn cập nhật được vì có khoản hoàn từ khiếu nại.
-        $this->patchJson("/api/v1/admin/bookings/{$booking->id}/refund", ['refund_status' => 'done'])->assertOk();
     }
 
     public function test_refund_and_attendance_need_an_accepted_complaint_tied_to_a_booking(): void
