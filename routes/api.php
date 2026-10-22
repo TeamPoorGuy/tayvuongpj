@@ -55,6 +55,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+        // Ví SportHub: dùng chung cho khách và chủ sân.
+        Route::get('/wallet', [\App\Http\Controllers\Api\V1\WalletController::class, 'show']);
+        Route::post('/wallet/topups', [\App\Http\Controllers\Api\V1\WalletController::class, 'topup'])->middleware('throttle:writes');
         Route::get('/complaint-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ComplaintAttachmentController::class, 'show']);
 
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
@@ -69,6 +72,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/payments/{payment}', [Customer\PaymentController::class, 'show']);
             Route::patch('/payments/{payment}', [Customer\PaymentController::class, 'update'])->middleware('throttle:writes');
             Route::post('/payments/{payment}/cancel', [Customer\PaymentController::class, 'cancel'])->middleware('throttle:writes');
+            Route::post('/payments/{payment}/use-wallet', [Customer\PaymentController::class, 'useWallet'])->middleware('throttle:writes');
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);

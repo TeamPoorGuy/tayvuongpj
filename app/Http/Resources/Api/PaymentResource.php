@@ -15,10 +15,14 @@ class PaymentResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'purpose' => $this->purpose ?? 'booking',
             'code' => $this->code,
             'option' => $this->option,
             'total' => (float) $this->total,
             'amount' => (float) $this->amount,
+            // Phần đã trừ từ ví và phần còn phải chuyển khoản.
+            'wallet_amount' => (float) $this->wallet_amount,
+            'due_amount' => $this->dueAmount(),
             'deposit_percent' => Settings::getInt('deposit_percent', 30),
             'status' => $this->status,
             'due_at' => $this->due_at?->toISOString(),
@@ -32,7 +36,7 @@ class PaymentResource extends JsonResource
                 'account_number' => $account,
                 'account_holder' => Settings::getString('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM'),
                 'qr_url' => $this->status === 'awaiting'
-                    ? "https://img.vietqr.io/image/{$bankCode}-{$account}-compact2.png?amount=".(int) $this->amount.'&addInfo='.$this->code
+                    ? "https://img.vietqr.io/image/{$bankCode}-{$account}-compact2.png?amount=".(int) $this->dueAmount().'&addInfo='.$this->code
                     : null,
             ],
             'customer' => $this->whenLoaded('user', fn () => new UserResource($this->user)),

@@ -32,7 +32,9 @@ class BookingController extends Controller
         $payment->load(['bookings' => fn ($q) => $q->with(Booking::resourceRelations())]);
 
         return response()->json([
-            'message' => 'Đã giữ chỗ. Vui lòng chuyển khoản trước '.$payment->due_at->format('H:i').' để hoàn tất đặt sân.',
+            'message' => $payment->status === 'paid'
+                ? 'Đã đặt sân thành công, thanh toán bằng số dư ví SportHub.'
+                : 'Đã giữ chỗ. Vui lòng chuyển khoản trước '.$payment->due_at->format('H:i').' để hoàn tất đặt sân.',
             'data' => new BookingResource($payment->bookings->first()),
             'payment' => new PaymentResource($payment),
         ], 201);
@@ -66,6 +68,7 @@ class BookingController extends Controller
             'weeks' => ['required', 'integer', 'min:2', 'max:8'],
             'skip_conflicts' => ['nullable', 'boolean'],
             'payment_option' => ['sometimes', 'in:deposit,full'],
+            'use_wallet' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
         ], [
             'sports_field_id.required' => 'Vui lòng chọn sân.',
@@ -82,7 +85,9 @@ class BookingController extends Controller
         }
 
         return response()->json([
-            'message' => 'Đã giữ chỗ '.$result['total_bookings'].' buổi cố định. Vui lòng thanh toán một lần cho cả chuỗi.',
+            'message' => $result['payment']->status === 'paid'
+                ? 'Đã đặt '.$result['total_bookings'].' buổi cố định, thanh toán bằng số dư ví SportHub.'
+                : 'Đã giữ chỗ '.$result['total_bookings'].' buổi cố định. Vui lòng thanh toán một lần cho cả chuỗi.',
             'data' => [
                 'recurring_group_id' => $result['recurring_group_id'],
                 'payment' => new PaymentResource($result['payment']),

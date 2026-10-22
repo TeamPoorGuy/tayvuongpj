@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
@@ -34,5 +35,18 @@ class PaymentController extends Controller
         $payment = $this->payments->cancelAwaiting($request->user(), $payment);
 
         return response()->json(['message' => 'Đã huỷ giữ chỗ.', 'data' => new PaymentResource($payment)]);
+    }
+
+    /** Trả (nốt) bằng số dư ví cho lượt đang chờ, ví dụ sau khi nạp thêm hoặc khi tiền chuyển thiếu đã vào ví. */
+    public function useWallet(Request $request, Payment $payment): JsonResponse
+    {
+        abort_unless($payment->user_id === $request->user()->id, 404);
+
+        $payment = DB::transaction(fn () => $this->payments->applyWallet($payment));
+
+        return response()->json([
+            'message' => $payment->status === 'paid' ? 'Đã thanh toán bằng ví, đơn đặt sân được xác nhận.' : 'Đã trừ số dư ví, còn phần cần chuyển khoản.',
+            'data' => new PaymentResource($payment->load(['bookings' => fn ($q) => $q->with(Booking::resourceRelations())])),
+        ]);
     }
 }

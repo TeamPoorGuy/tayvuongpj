@@ -28,6 +28,8 @@ class CreateBookingRequest extends FormRequest
             'items.*.end_time' => ['required', 'date_format:H:i', 'after:items.*.start_time', InputRules::HALF_HOUR],
             'booking_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:'.$maxDate],
             'payment_option' => ['sometimes', 'in:deposit,full'],
+            // Trừ số dư ví trước (mặc định bật); thiếu thì quét QR phần còn lại.
+            'use_wallet' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

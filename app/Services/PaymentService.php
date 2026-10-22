@@ -26,7 +26,7 @@ use Illuminate\Support\Str;
 class PaymentService
 {
     /** Tạo một lần thanh toán cho các đơn vừa giữ chỗ (gọi trong transaction tạo đơn). */
-    public function createFor(User $user, iterable $bookings, string $option): Payment
+    public function createFor(User $user, iterable $bookings, string $option, bool $useWallet = true): Payment
     {
         $bookings = collect($bookings);
         $total = (float) $bookings->sum('total_price');
@@ -43,8 +43,33 @@ class PaymentService
         ]);
 
         $this->allocate($payment, $bookings);
+        if ($useWallet) {
+            $this->applyWallet($payment);
+        }
 
-        return $payment;
+        return $payment->refresh();
+    }
+
+    /**
+     * Trừ số dư ví vào lượt thanh toán đang chờ: đủ thì đơn được xác nhận ngay, thiếu thì QR chỉ còn phần chưa trả.
+     * Gọi lại được (cộng dồn vào wallet_amount) khi khách nạp thêm tiền rồi bấm trả bằng ví.
+     */
+    public function applyWallet(Payment $payment): Payment
+    {
+        $payment = Payment::lockForUpdate()->findOrFail($payment->id);
+        if ($payment->status !== 'awaiting' || $payment->purpose !== 'booking') {
+            return $payment;
+        }
+
+        $use = min((float) $payment->user->refresh()->wallet_balance, $payment->dueAmount());
+        if ($use <= 0) {
+            return $payment;
+        }
+
+        app(WalletService::class)->debit($payment->user, $use, 'booking_payment', "Thanh toán {$payment->code} bằng ví", ['payment_id' => $payment->id]);
+        $payment->update(['wallet_amount' => (float) $payment->wallet_amount + $use]);
+
+        return $payment->dueAmount() <= 0 ? $this->markPaid($payment, 'wallet') : $payment->refresh();
     }
 
     /** Khách đổi giữa trả cọc và trả đủ khi chưa chuyển khoản. */
@@ -57,10 +82,12 @@ class PaymentService
                 throw new ConflictException('Lượt thanh toán này không còn chờ chuyển khoản.');
             }
 
-            $payment->update(['option' => $option, 'amount' => $this->amountFor((float) $payment->total, $option)]);
+            // Hoàn phần đã trừ ví về ví rồi tính lại theo số tiền mới (ví được trừ lại nếu còn đủ).
+            $this->returnWallet($payment);
+            $payment->update(['option' => $option, 'amount' => $this->amountFor((float) $payment->total, $option), 'wallet_amount' => 0]);
             $this->allocate($payment, $payment->bookings()->get());
 
-            return $payment;
+            return $this->applyWallet($payment);
         });
     }
 
@@ -81,15 +108,22 @@ class PaymentService
         $lateRefund = null;
         $confirmed = DB::transaction(function () use ($payment, $source, $bankRef, $admin, &$lateRefund) {
             $payment = Payment::lockForUpdate()->findOrFail($payment->id);
-            if (in_array($payment->status, ['paid', 'refund_required'], true)) {
+            if (in_array($payment->status, ['paid', 'refunded'], true)) {
                 return null; // đã ghi nhận rồi
+            }
+
+            if ($payment->purpose === 'topup') {
+                $this->creditTopup($payment, (float) $payment->amount, ['paid_at' => now(), 'source' => $source, 'bank_ref' => $bankRef, 'confirmed_by' => $admin?->id]);
+
+                return null;
             }
 
             $bookings = $payment->bookings()->with('sportsField')->lockForUpdate()->get();
             $attributes = ['paid_at' => now(), 'source' => $source, 'bank_ref' => $bankRef, 'confirmed_by' => $admin?->id];
 
             // Khách đã tự huỷ, hoặc hết hạn mà chỗ đã bị người khác lấy: tiền vào thẳng ví khách.
-            if ($payment->status === 'cancelled' || ($payment->status === 'expired' && ! $this->stillAvailable($bookings))) {
+            // Hết hạn mà đã trừ ví thì phần ví đã được trả lại, nên tiền ngân hàng đến muộn chỉ hoàn lại chứ không tự xác nhận.
+            if ($payment->status === 'cancelled' || ($payment->status === 'expired' && ($payment->wallet_amount > 0 || ! $this->stillAvailable($bookings)))) {
                 $payment->update($attributes + ['status' => 'refunded']);
                 foreach ($bookings as $booking) {
                     $booking->update(['payment_status' => 'paid', 'paid_at' => now(), 'refund_amount' => $booking->payment_amount]);
@@ -165,6 +199,17 @@ class PaymentService
         $received = (float) ($payload['transferAmount'] ?? 0);
         $due = $payment->dueAmount();
 
+        // Nạp ví: số tiền thực nhận (bất kể thiếu hay dư) vào ví; chuyển lần hai cho lượt đã nạp cũng vào ví.
+        if ($payment->purpose === 'topup') {
+            if ($payment->status === 'paid') {
+                $this->creditStray($payment, $received, $bankRef, "Chuyển khoản {$payment->code} thêm một lần nữa nên được cộng vào ví.");
+            } elseif ($received > 0) {
+                DB::transaction(fn () => $this->creditTopup(Payment::lockForUpdate()->findOrFail($payment->id), $received, ['paid_at' => now(), 'source' => 'webhook', 'bank_ref' => $bankRef ?: null]));
+            }
+
+            return null;
+        }
+
         // Chuyển thiếu, hoặc chuyển cho lượt đã thanh toán: không tự xác nhận, tiền vào ví để khách tự dùng hoặc rút.
         if (! in_array($payment->status, ['awaiting', 'expired', 'cancelled'], true) || $received < $due) {
             $this->creditStray($payment, $received, $bankRef, $received < $due && $payment->status === 'awaiting'
@@ -180,6 +225,37 @@ class PaymentService
         }
 
         return $confirmed;
+    }
+
+    /** Trả phần đã trừ ví của một lượt chưa thanh toán xong về ví khách (huỷ, hết hạn hoặc đổi số tiền). */
+    private function returnWallet(Payment $payment): void
+    {
+        if ((float) $payment->wallet_amount > 0) {
+            app(WalletService::class)->credit($payment->user, (float) $payment->wallet_amount, 'booking_payment_return', "Hoàn số dư ví đã giữ cho {$payment->code}", ['payment_id' => $payment->id]);
+        }
+    }
+
+    /** Khách muốn nạp ví: tạo lượt chờ chuyển khoản vào tài khoản nền tảng, không gắn đơn nào. */
+    public function createTopup(User $user, int $amount): Payment
+    {
+        return Payment::create([
+            'user_id' => $user->id,
+            'purpose' => 'topup',
+            'code' => $this->uniqueCode(),
+            'option' => 'full',
+            'total' => $amount,
+            'amount' => $amount,
+            'status' => 'awaiting',
+            'due_at' => now()->addMinutes(30),
+        ]);
+    }
+
+    /** Tiền nạp đã vào tài khoản nền tảng: cộng đúng số tiền thực nhận vào ví, mã giao dịch chống cộng trùng. */
+    private function creditTopup(Payment $payment, float $received, array $attributes): void
+    {
+        $payment->update($attributes + ['status' => 'paid']);
+        app(WalletService::class)->credit($payment->user, $received, 'topup', "Nạp ví {$payment->code}", ['payment_id' => $payment->id, 'bank_ref' => $attributes['bank_ref'] ?? null]);
+        SafeMail::queue($payment->user->email, new WalletCredited($payment->user->refresh(), $received, "Nạp tiền vào ví {$payment->code}."));
     }
 
     /** Tiền khách chuyển mà không khớp lượt nào: cộng vào ví khách, ghi mã giao dịch để không cộng trùng. */
@@ -216,6 +292,7 @@ class PaymentService
             }
 
             $payment->update(['status' => $status]);
+            $this->returnWallet($payment);
             $bookings = $payment->bookings()->where('status', BookingStatus::Pending->value)->lockForUpdate()->get();
             foreach ($bookings as $booking) {
                 $booking->update(['status' => BookingStatus::Cancelled->value, 'cancelled_at' => now(), 'cancel_reason' => $reason]);

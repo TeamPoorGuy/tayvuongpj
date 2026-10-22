@@ -61,7 +61,7 @@ class BookingService
                 $bookings[] = $this->reserve($user, $field, $date, $start, $end, $slotId, $data->notes);
             }
 
-            return $this->payments->createFor($user, $bookings, $data->paymentOption)->load('bookings');
+            return $this->payments->createFor($user, $bookings, $data->paymentOption, $data->useWallet)->load('bookings');
         });
     }
 
@@ -159,7 +159,7 @@ class BookingService
     private function assertPendingLimit(User $user): void
     {
         $maxPending = Settings::getInt('max_pending_bookings', 3);
-        $pendingCount = Payment::where('user_id', $user->id)->where('status', 'awaiting')->lockForUpdate()->count();
+        $pendingCount = Payment::where('user_id', $user->id)->where('purpose', 'booking')->where('status', 'awaiting')->lockForUpdate()->count();
 
         if ($pendingCount >= $maxPending) {
             throw new ConflictException("Bạn đang có {$pendingCount} lượt đặt chờ thanh toán. Tối đa chỉ được có {$maxPending} lượt cùng lúc.");
@@ -252,6 +252,7 @@ class BookingService
         $skipConflicts = (bool) ($data['skip_conflicts'] ?? false);
         $notes = $data['notes'] ?? null;
         $paymentOption = $data['payment_option'] ?? 'deposit';
+        $useWallet = (bool) ($data['use_wallet'] ?? true);
 
         $maxAdvanceDays = Settings::getInt('max_advance_days', 60);
         $lastDate = Carbon::parse($startDate)->addWeeks($weeks - 1);
@@ -259,7 +260,7 @@ class BookingService
             throw new ConflictException("Chuỗi đặt cố định vượt quá giới hạn đặt trước ({$maxAdvanceDays} ngày).");
         }
 
-        return DB::transaction(function () use ($user, $data, $sportsFieldId, $timeSlotId, $startDate, $weeks, $skipConflicts, $notes, $paymentOption) {
+        return DB::transaction(function () use ($user, $data, $sportsFieldId, $timeSlotId, $startDate, $weeks, $skipConflicts, $notes, $paymentOption, $useWallet) {
             $field = SportsField::query()->approved()->lockForUpdate()->find($sportsFieldId);
             if (! $field) {
                 throw new ConflictException('Sân chưa được duyệt hoặc đang dừng hoạt động.');
@@ -376,7 +377,7 @@ class BookingService
             }
 
             // Cả chuỗi trả trong một lần chuyển khoản.
-            $payment = $this->payments->createFor($user, $created, $paymentOption);
+            $payment = $this->payments->createFor($user, $created, $paymentOption, $useWallet);
 
             return [
                 'has_conflicts' => false,

@@ -12,6 +12,7 @@ readonly class CreateBookingData
         public array $items,
         public string $paymentOption,
         public ?string $notes,
+        public bool $useWallet = true,
     ) {}
 
     public static function fromRequest(CreateBookingRequest $request): self
@@ -29,6 +30,7 @@ readonly class CreateBookingData
             items: $items,
             paymentOption: $request->input('payment_option', 'deposit'),
             notes: $request->input('notes'),
+            useWallet: $request->boolean('use_wallet', true),
         );
     }
 }
