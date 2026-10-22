@@ -8,6 +8,7 @@ use App\Exceptions\ConflictException;
 use App\Exceptions\DomainException;
 use App\Exceptions\ForbiddenException;
 use App\Mail\BookingStatusChanged;
+use App\Mail\Notice;
 use App\Models\Booking;
 use App\Models\BookingWaitlist;
 use App\Models\Payment;
@@ -166,6 +167,66 @@ class BookingService
         }
     }
 
+    /** Khách huỷ đơn đã thanh toán: báo chủ sân và gửi khách xác nhận số tiền đã hoàn vào ví. */
+    private function notifyCancelled(Booking $booking): void
+    {
+        $booking->loadMissing(['sportsField.owner', 'customer']);
+        $when = $booking->booking_date->format('d/m/Y').' '.$this->label($booking->start_time, $booking->end_time);
+
+        SafeMail::queue($booking->sportsField->owner?->email, new Notice(
+            "Khách đã huỷ đơn #BK-{$booking->id}",
+            ["Khách {$booking->customer->name} đã huỷ đơn đặt {$booking->sportsField->name} ({$when}). Khung giờ này đã được mở lại cho khách khác."],
+            'Xem đơn đặt sân',
+            '/owner/bookings',
+        ));
+
+        $refund = $booking->refundedAmount();
+        SafeMail::queue($booking->customer->email, new Notice(
+            "Đã huỷ đơn #BK-{$booking->id}",
+            [
+                "Đơn đặt {$booking->sportsField->name} ({$when}) đã được huỷ.",
+                $refund > 0
+                    ? 'SportHub đã hoàn '.number_format($refund, 0, ',', '.').'đ vào ví của bạn.'
+                    : 'Đơn huỷ sát giờ nên không được hoàn tiền theo chính sách huỷ.',
+            ],
+            'Xem ví SportHub',
+            '/wallet',
+        ));
+    }
+
+    /** Nhắc khách trước giờ chơi (mặc định 2 giờ) kèm mã check-in; mỗi đơn chỉ nhắc một lần. */
+    public function sendReminders(int $hoursBefore = 2): int
+    {
+        $count = 0;
+        Booking::with(['customer', 'sportsField'])
+            ->where('status', BookingStatus::Confirmed->value)
+            ->whereNull('reminded_at')
+            ->whereDate('booking_date', '>=', today())
+            ->whereDate('booking_date', '<=', today()->addDay())
+            ->lazyById()
+            ->each(function (Booking $booking) use ($hoursBefore, &$count) {
+                $start = $booking->startsAt();
+                if ($start->isPast() || $start->gt(now()->addHours($hoursBefore))) {
+                    return;
+                }
+
+                $booking->update(['reminded_at' => now()]);
+                SafeMail::queue($booking->customer->email, new Notice(
+                    "Sắp đến giờ chơi tại {$booking->sportsField->name}",
+                    [
+                        "Đơn #BK-{$booking->id} của bạn bắt đầu lúc {$this->label($booking->start_time, $booking->end_time)} hôm nay.",
+                        $booking->check_in_code ? "Mã check-in khi đến sân: {$booking->check_in_code}" : 'Hãy đến đúng giờ và check-in với chủ sân.',
+                        'Không đến mà không huỷ sẽ bị ghi vắng mặt và trừ điểm uy tín.',
+                    ],
+                    'Xem đơn đặt sân',
+                    '/bookings',
+                ));
+                $count++;
+            });
+
+        return $count;
+    }
+
     private function label(string $start, string $end): string
     {
         return substr($start, 0, 5).'–'.substr($end, 0, 5);
@@ -193,6 +254,7 @@ class BookingService
         $booking->markCancelled('customer', $reason ?: 'Khách hàng tự hủy đơn.');
 
         app(WaitlistService::class)->handleBookingFreed($booking);
+        $this->notifyCancelled($booking);
 
         return $booking->refresh()->load(Booking::resourceRelations());
     }
@@ -237,6 +299,16 @@ class BookingService
                 }
                 $booking->update($attributes);
                 $count['completed']++;
+
+                // Đã chơi thật (có check-in): mời đánh giá.
+                if ($booking->checked_in_at !== null) {
+                    SafeMail::queue($booking->customer->email, new Notice(
+                        'Bạn thấy trận đấu hôm nay thế nào?',
+                        ["Cảm ơn bạn đã chơi tại đơn #BK-{$booking->id}. Đánh giá của bạn giúp những người chơi khác chọn sân tốt hơn."],
+                        'Đánh giá sân',
+                        '/bookings',
+                    ));
+                }
             });
 
         return $count;

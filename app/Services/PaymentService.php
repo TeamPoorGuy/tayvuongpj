@@ -6,6 +6,7 @@ use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Mail\BookingStatusChanged;
 use App\Mail\NewBookingRequest;
+use App\Mail\Notice;
 use App\Mail\WalletCredited;
 use App\Models\AdminLog;
 use App\Models\Booking;
@@ -303,6 +304,16 @@ class PaymentService
 
         foreach ($released as $booking) {
             app(WaitlistService::class)->handleBookingFreed($booking);
+        }
+
+        // Hết hạn giữ chỗ (khách không tự huỷ): báo để khách biết chỗ đã được nhả.
+        if ($status === 'expired' && $released->isNotEmpty()) {
+            SafeMail::queue($payment->user->email, new Notice(
+                'Giữ chỗ đã hết hạn',
+                ["Lượt đặt sân mã {$payment->code} ({$released->count()} khung giờ) đã hết thời gian giữ chỗ nên được huỷ và nhả cho người khác.", 'Bạn có thể đặt lại bất cứ lúc nào. Nếu đã lỡ chuyển khoản, tiền sẽ được hoàn vào ví SportHub của bạn.'],
+                'Đặt sân lại',
+                '/fields',
+            ));
         }
 
         return $payment->refresh();

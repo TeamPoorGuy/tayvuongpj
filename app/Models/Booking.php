@@ -48,6 +48,7 @@ class Booking extends Model
         'commission_amount',
         'earning_amount',
         'earning_released_at',
+        'reminded_at',
         'statement_id',
         'recurring_group_id',
     ];
@@ -70,6 +71,7 @@ class Booking extends Model
         'commission_amount' => 'decimal:2',
         'earning_amount' => 'decimal:2',
         'earning_released_at' => 'datetime',
+        'reminded_at' => 'datetime',
     ];
 
     protected static function booted(): void

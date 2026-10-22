@@ -56,3 +56,9 @@ Artisan::command('wallet:release-earnings', function (\App\Services\EarningServi
     $this->info("Đã cộng tiền vào ví chủ sân cho {$count} đơn.");
 })->purpose('Cộng tiền thu hộ vào ví chủ sân cho các đơn đã quá hạn kháng cáo');
 Schedule::command('wallet:release-earnings')->everyFifteenMinutes()->withoutOverlapping();
+
+Artisan::command('bookings:remind', function (BookingService $bookings) {
+    $count = $bookings->sendReminders();
+    $this->info("Đã nhắc {$count} khách sắp đến giờ chơi.");
+})->purpose('Gửi mail nhắc khách 2 giờ trước giờ chơi kèm mã check-in');
+Schedule::command('bookings:remind')->everyFifteenMinutes()->withoutOverlapping();

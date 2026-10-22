@@ -11,6 +11,7 @@ use App\Exceptions\ForbiddenException;
 use App\Mail\AccountStatusChanged;
 use App\Mail\BookingStatusChanged;
 use App\Mail\MatchCancelled;
+use App\Mail\Notice;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\AdminLog;
 use App\Models\Booking;
@@ -411,6 +412,19 @@ class AdminService
             'reason' => $reason,
             'cancel_future_bookings' => $cancelFutureBookings,
         ]);
+
+        // Chủ sân biết kết quả duyệt ngay, không phải vào xem.
+        $field->loadMissing('owner');
+        if ($field->owner?->email && in_array($next, [FieldStatus::Approved, FieldStatus::Rejected], true)) {
+            SafeMail::queue($field->owner->email, new Notice(
+                $next === FieldStatus::Approved ? "Sân {$field->name} đã được duyệt" : "Sân {$field->name} không được duyệt",
+                $next === FieldStatus::Approved
+                    ? ['Sân của bạn đã hiển thị cho khách và nhận đặt được ngay.']
+                    : ['Sân chưa đạt yêu cầu duyệt'.($reason ? ": {$reason}" : '.'), 'Bạn có thể chỉnh sửa thông tin sân rồi gửi duyệt lại.'],
+                'Quản lý sân',
+                '/owner/fields',
+            ));
+        }
 
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
