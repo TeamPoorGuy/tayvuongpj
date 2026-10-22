@@ -446,8 +446,8 @@ export function CustomerBookingsPage() {
                           : booking.cancel_penalty
                             ? 'Đã sát giờ chơi: huỷ lúc này hoàn ít hoặc không hoàn tiền và bị trừ 15 điểm uy tín.'
                             : booking.cancel_until
-                              ? <>Huỷ trước <strong>{formatDateTime(booking.cancel_until)}</strong> được hoàn 100%, sau mốc này hoàn theo chính sách.</>
-                              : 'Huỷ lúc này được hoàn tiền theo chính sách huỷ.'}
+                              ? <>Huỷ trước <strong>{formatDateTime(booking.cancel_until)}</strong> được hoàn 100% vào ví, sau mốc này hoàn theo chính sách.</>
+                              : 'Huỷ lúc này được hoàn tiền vào ví theo chính sách huỷ.'}
                       </li>
                     </ul>
                   )}
@@ -797,7 +797,7 @@ export function CustomerBookingsPage() {
                 <div>
                   {cancellingBooking.refund_if_cancelled > 0 ? (
                     <>
-                      <strong>Hủy lúc này bạn được hoàn {formatMoney(cancellingBooking.refund_if_cancelled)}</strong>
+                      <strong>Hủy lúc này bạn được hoàn {formatMoney(cancellingBooking.refund_if_cancelled)} vào ví SportHub</strong>
                       {cancellingBooking.refund_if_cancelled < (cancellingBooking.payment?.amount ?? 0) &&
                         ` (một phần trong ${formatMoney(cancellingBooking.payment?.amount ?? 0)} đã chuyển)`}
                       , không bị trừ điểm uy tín.

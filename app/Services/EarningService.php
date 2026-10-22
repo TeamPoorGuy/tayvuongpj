@@ -52,7 +52,7 @@ class EarningService
             $share = $booking->ownerShare();
             $booking->update(['earning_amount' => $share['earning'], 'commission_amount' => $share['commission'], 'earning_released_at' => now()]);
             if ($share['earning'] > 0) {
-                $this->wallet->credit($owner, $share['earning'], 'owner_earning', "Tiền đơn #BK-{$booking->id} (đã trừ hoa hồng {$booking->commission_rate}%)", ['booking_id' => $booking->id]);
+                $this->wallet->credit($owner, $share['earning'], 'owner_earning', "Tiền đơn #BK-{$booking->id} (đã trừ hoa hồng ".(float) $booking->commission_rate."%)", ['booking_id' => $booking->id]);
             }
 
             return true;
