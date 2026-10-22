@@ -102,6 +102,16 @@ class ComplaintResolutionTest extends TestCase
         $this->postJson('/api/v1/customer/complaints', $payload)->assertCreated();
     }
 
+    public function test_customer_can_dispute_a_wrongful_no_show(): void
+    {
+        $booking = $this->playedBooking(['checked_in_at' => null, 'no_show_at' => now()->subMonth()]);
+        Sanctum::actingAs($this->customer);
+
+        $this->postJson('/api/v1/customer/complaints', ['booking_id' => $booking->id, 'category' => 'wrong_no_show', 'content' => 'Tôi đã đến sân đúng giờ.'])
+            ->assertCreated()->assertJsonPath('data.category', 'wrong_no_show');
+        $this->getJson('/api/v1/customer/bookings')->assertOk()->assertJsonPath('data.0.complaint.status', 'open');
+    }
+
     public function test_closed_complaint_cannot_be_reopened_and_closing_needs_a_resolution(): void
     {
         $complaint = $this->complain($this->playedBooking());

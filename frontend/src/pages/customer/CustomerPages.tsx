@@ -141,7 +141,7 @@ export function CustomerBookingsPage() {
 
   const openComplaint = (booking: Booking) => {
     setComplaintBooking(booking)
-    setComplaintCategory(booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
+    setComplaintCategory(booking.no_show ? 'wrong_no_show' : booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
     setComplaintContent('')
   }
 
@@ -462,6 +462,13 @@ export function CustomerBookingsPage() {
                       Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
                     </div>
                   )}
+                  {booking.complaint && (booking.complaint.status === 'resolved' || booking.complaint.status === 'rejected') && (
+                    <div className={`notice ${booking.complaint.status === 'resolved' ? 'notice--success' : 'notice--warn'}`} style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Khiếu nại {booking.complaint.status === 'resolved' ? 'đã được chấp nhận' : 'không được chấp nhận'}:</strong> {booking.complaint.resolution}
+                      {booking.complaint.refund_amount ? <> SportHub hoàn thêm {formatMoney(booking.complaint.refund_amount)} cho bạn.</> : null}
+                      {booking.complaint.attendance_confirmed ? ' Đã gỡ ghi nhận vắng mặt và hoàn lại 25 điểm uy tín.' : null}
+                    </div>
+                  )}
                   <div className="booking-item__footer">
                     <strong>{formatMoney(booking.total_price)}</strong>
 
@@ -487,14 +494,20 @@ export function CustomerBookingsPage() {
                           <Star size={15} /> Đánh giá
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="button button--ghost button--small"
-                        onClick={() => openComplaint(booking)}
-                        title="Khiếu nại hoặc phản ánh về đơn đặt sân này"
-                      >
-                        <AlertCircle size={14} /> Khiếu nại
-                      </button>
+                      {booking.complaint && (booking.complaint.status === 'open' || booking.complaint.status === 'processing') ? (
+                        <span className="badge badge--soft" title="Mỗi đơn chỉ có một khiếu nại đang xử lý">
+                          <AlertCircle size={13} /> Khiếu nại {booking.complaint.status === 'open' ? 'đã gửi, chờ xử lý' : 'đang được xác minh'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button button--ghost button--small"
+                          onClick={() => openComplaint(booking)}
+                          title="Khiếu nại hoặc phản ánh về đơn đặt sân này"
+                        >
+                          <AlertCircle size={14} /> Khiếu nại
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -875,6 +888,7 @@ export function CustomerBookingsPage() {
                   <option value="field_mismatch">Sân không đúng thực tế / mô tả sai</option>
                   <option value="owner_cancelled">Chủ sân tự ý huỷ sân hoặc không đón tiếp</option>
                   <option value="bad_behavior">Thái độ phục vụ của nhân viên / chủ sân</option>
+                  {complaintBooking.no_show && <option value="wrong_no_show">Tôi đã đến sân nhưng bị ghi nhận vắng mặt</option>}
                   <option value="other">Vấn đề khác</option>
                 </select>
               </label>

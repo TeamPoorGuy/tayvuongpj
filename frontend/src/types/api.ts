@@ -158,6 +158,14 @@ export interface Booking {
   refund_if_cancelled?: number | null
   confirmed_at?: string | null
   no_show?: boolean
+  /** Khiếu nại gần nhất của khách về đơn này. */
+  complaint?: {
+    id: number
+    status: 'open' | 'processing' | 'resolved' | 'rejected'
+    resolution: string | null
+    refund_amount: number | null
+    attendance_confirmed: boolean
+  }
   check_in_code?: string | null
   checked_in_at?: string | null
   payment?: BookingPayment
@@ -431,6 +439,11 @@ export interface Complaint {
     total_price: number
     refund_status: 'pending' | 'done' | 'waived' | null
     refund_amount: number | null
+    /** Tiền khách đã trả qua SportHub. */
+    payment_amount?: number
+    /** Số còn hoàn thêm được (khách đã trả trừ phần đã/đang hoàn). */
+    refundable?: number
+    no_show?: boolean
     field_name?: string
   } | null
   subject_type: 'booking' | 'contact'
@@ -439,6 +452,8 @@ export interface Complaint {
   content: string
   status: 'open' | 'processing' | 'resolved' | 'rejected'
   resolution: string | null
+  refund_amount?: number | null
+  attendance_confirmed?: boolean
   handled_by: number | null
   handler?: Pick<User, 'id' | 'name'> | null
   handled_at: string | null
