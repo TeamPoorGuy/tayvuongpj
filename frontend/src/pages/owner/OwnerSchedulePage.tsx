@@ -114,6 +114,7 @@ export function OwnerSchedulePage() {
   // 3. Fetch Bookings for Date / Range
   const bookingsQuery = useQuery({
     queryKey: ['owner', 'schedule-bookings', startDate, endDate, selectedFieldId, selectedStatus],
+    refetchInterval: 30_000, // khách đặt/huỷ lúc chủ sân đang mở lịch
     queryFn: async () => {
       const params = new URLSearchParams()
       if (viewMode === 'day') {

@@ -147,6 +147,8 @@ export function CustomerBookingsPage() {
 
   const bookings = useQuery({
     queryKey: ['customer', 'bookings', status, page],
+    // Đơn đang giữ chỗ/đã xác nhận có thể đổi trạng thái (thanh toán xong, hết hạn giữ chỗ, đến giờ chơi) mà khách không làm gì.
+    refetchInterval: (query) => (query.state.data?.data?.some((b) => b.status === 'pending' || b.status === 'confirmed') ? 30_000 : false),
     queryFn: async () =>
       (await api.get<Paginated<Booking>>('/customer/bookings', { params: { page, status: status || undefined } })).data,
   })

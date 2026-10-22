@@ -52,6 +52,7 @@ export function OwnerDashboardPage() {
 
   const dashboard = useQuery({
     queryKey: ['owner', 'dashboard'],
+    refetchInterval: 60_000,
     queryFn: async () => (await api.get<ApiEnvelope<OwnerDashboard>>('/field-owner/dashboard')).data.data,
   })
 
@@ -1147,6 +1148,7 @@ export function OwnerBookingsPage() {
 
   const bookings = useQuery({
     queryKey: ['owner', 'bookings', status, date, page],
+    refetchInterval: 30_000,
     queryFn: async () =>
       (
         await api.get<Paginated<Booking>>('/field-owner/bookings', {
