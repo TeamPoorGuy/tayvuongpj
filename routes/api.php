@@ -220,7 +220,6 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/statements/{statement}/export-csv', [Admin\StatementController::class, 'exportBookingsCsv']);
             Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
             Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/payout', [Admin\StatementController::class, 'payout'])->middleware('throttle:writes');
         });
     });
 });

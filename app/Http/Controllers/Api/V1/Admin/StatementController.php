@@ -120,16 +120,4 @@ class StatementController extends Controller
             'data' => OwnerStatementResource::collection($created),
         ]);
     }
-
-    /** Admin đã chuyển khoản chi trả cho chủ sân. */
-    public function payout(Request $request, OwnerStatement $statement): JsonResponse
-    {
-        $payoutRef = $request->validate(['payout_ref' => ['nullable', 'string', 'max:100']])['payout_ref'] ?? null;
-        $paid = $this->statementService->markPaidOut($request->user(), $statement, $payoutRef);
-
-        return response()->json([
-            'message' => 'Đã ghi nhận chi trả cho chủ sân.',
-            'data' => new OwnerStatementResource($paid),
-        ]);
-    }
 }

@@ -89,11 +89,6 @@ class ComplaintService
             'respond_by' => $againstId ? now()->addHours(config('booking.complaint_response_hours')) : null,
         ]);
 
-        // Khiếu nại của khách làm đơn bị giữ khỏi kỳ chi trả cho chủ sân; khiếu nại của chủ sân thì không.
-        if ($booking && $direction === 'customer_to_owner') {
-            app(StatementService::class)->refreshFor($booking);
-        }
-
         $this->storeAttachments($complaint, $user, $photos);
 
         $complaint->load(['user', 'booking', 'against', 'attachments']);
@@ -283,9 +278,9 @@ class ComplaintService
             ], $admin);
         });
 
-        // Đóng khiếu nại (nhả đơn về kỳ chi trả) hoặc có hoàn tiền: lập lại kỳ chưa chi trả của đơn.
+        // Đơn đã cộng tiền vào ví chủ sân mà khiếu nại làm đổi số tiền (hoàn tiền, gỡ vắng mặt): điều chỉnh ví chủ sân.
         if ($customerSide && $complaint->booking) {
-            app(StatementService::class)->refreshFor($complaint->booking->refresh());
+            app(EarningService::class)->reconcile($complaint->booking);
         }
 
         // Báo kết quả cho cả bên khiếu nại lẫn bên bị khiếu nại.

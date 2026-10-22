@@ -172,6 +172,29 @@ class Booking extends Model
         return 0.0;
     }
 
+    /** Tiền đã/đang hoàn cho khách của đơn (không ghi số = hoàn toàn bộ). */
+    public function refundedAmount(): float
+    {
+        return in_array($this->refund_status, ['pending', 'done'], true)
+            ? (float) ($this->refund_amount ?? $this->payment_amount)
+            : 0.0;
+    }
+
+    /**
+     * Phần chủ sân được hưởng từ tiền SportHub thu hộ: đã thanh toán − hoàn khách − hoa hồng (không âm).
+     *
+     * @return array{earning: float, commission: float}
+     */
+    public function ownerShare(): array
+    {
+        $commission = $this->computeCommission();
+
+        return [
+            'earning' => max(0.0, (float) $this->payment_amount - $this->refundedAmount() - $commission),
+            'commission' => $commission,
+        ];
+    }
+
     /**
      * Tính toán thuần túy hoa hồng (không ghi vào DB).
      */

@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Mail\StatementReminder;
-use App\Models\AdminLog;
 use App\Models\Booking;
 use App\Models\FieldOwnerProfile;
 use App\Models\OwnerStatement;
@@ -19,7 +18,8 @@ use Illuminate\Support\Facades\DB;
 class StatementService
 {
     /**
-     * Lập bảng chi trả cho một kỳ (YYYY-MM): tiền SportHub thu hộ − tiền hoàn cho khách − hoa hồng = tiền chuyển cho chủ sân.
+     * Lập báo cáo đối soát cho một kỳ (YYYY-MM): tiền SportHub thu hộ − tiền hoàn cho khách − hoa hồng = tiền về ví chủ sân.
+     * Tiền thật đã được cộng vào ví theo từng đơn (EarningService); báo cáo chỉ tổng hợp và lập lại được bất cứ lúc nào.
      * Chỉ tính đơn đã kết thúc và đã thanh toán qua nền tảng (đơn kiểu cũ khách trả thẳng chủ sân thì không có tiền thu hộ).
      *
      * @return list<OwnerStatement>
@@ -38,10 +38,6 @@ class StatementService
         $startDate = $periodDate->toDateString();
         $endDate = $periodDate->copy()->endOfMonth()->toDateString();
 
-        // Hạn SportHub cam kết chi trả cho chủ sân.
-        $dueDays = Settings::getInt('statement_due_days', 7);
-        $dueAt = $periodDate->copy()->addMonth()->startOfMonth()->addDays($dueDays - 1)->endOfDay();
-
         $profiles = FieldOwnerProfile::query()
             ->when($ownerProfileId, fn ($q) => $q->whereKey($ownerProfileId))
             ->where('verification_status', 'approved')
@@ -50,15 +46,10 @@ class StatementService
         $createdStatements = [];
 
         foreach ($profiles as $profile) {
-            $statement = DB::transaction(function () use ($profile, $period, $startDate, $endDate, $dueAt) {
+            $statement = DB::transaction(function () use ($profile, $period, $startDate, $endDate) {
                 $statement = OwnerStatement::where('owner_profile_id', $profile->id)
                     ->where('period', $period)
                     ->first();
-
-                // Đã chi trả thì giữ nguyên số liệu.
-                if ($statement && $statement->status === 'paid') {
-                    return $statement;
-                }
 
                 $fieldIds = SportsField::withTrashed()->where('field_owner_id', $profile->user_id)->pluck('id');
 
@@ -83,7 +74,7 @@ class StatementService
                 foreach ($bookings as $b) {
                     $totals['gmv'] += $b->commissionBase() > 0 ? (float) $b->total_price : 0.0;
                     $totals['collected'] += (float) $b->payment_amount;
-                    $totals['refunded'] += $this->refundedOf($b);
+                    $totals['refunded'] += $b->refundedAmount();
                     $totals['commission'] += $b->computeCommission();
                 }
                 $payout = max(0.0, $totals['collected'] - $totals['refunded'] - $totals['commission']);
@@ -95,20 +86,19 @@ class StatementService
                     'refunded_amount' => $totals['refunded'],
                     'commission_amount' => $totals['commission'],
                     'payout_amount' => $payout,
-                    // Không có gì để chuyển thì đóng kỳ luôn.
-                    'status' => $payout > 0 ? 'unpaid' : 'paid',
-                    'paid_at' => $payout > 0 ? null : now(),
+                    // Báo cáo: tiền đã về ví chủ sân theo từng đơn nên không còn kỳ "chờ chi trả".
+                    'status' => 'paid',
+                    'paid_at' => $statement?->paid_at ?? now(),
                 ];
 
                 if (! $statement) {
                     $statement = OwnerStatement::create($attributes + [
                         'owner_profile_id' => $profile->id,
                         'period' => $period,
-                        'due_at' => $dueAt,
                         'transfer_code' => OwnerStatement::generateTransferCode($period, $profile->id),
                     ]);
                 } else {
-                    $statement->update($attributes + ['due_at' => $statement->due_at ?? $dueAt]);
+                    $statement->update($attributes);
                 }
 
                 foreach ($bookings as $b) {
@@ -120,39 +110,12 @@ class StatementService
 
             $createdStatements[] = $statement;
 
-            if ($statement->wasRecentlyCreated && $statement->status === 'unpaid') {
+            if ($statement->wasRecentlyCreated && $statement->booking_count > 0) {
                 $this->notify($statement, 'issued');
             }
         }
 
         return $createdStatements;
-    }
-
-    /**
-     * Khiếu nại mở hoặc đóng làm đổi số tiền của một đơn: lập lại kỳ chưa chi trả chứa đơn đó
-     * (giữ lại đơn đang tranh chấp, cập nhật tiền hoàn). Kỳ đã chi trả thì không đụng tới.
-     */
-    public function refreshFor(Booking $booking): void
-    {
-        $ownerId = SportsField::withTrashed()->whereKey($booking->sports_field_id)->value('field_owner_id');
-        $profile = FieldOwnerProfile::where('user_id', $ownerId)->where('verification_status', 'approved')->first();
-        if (! $profile) {
-            return;
-        }
-
-        $period = $booking->booking_date->format('Y-m');
-        $open = OwnerStatement::where('owner_profile_id', $profile->id)->where('period', $period)->where('status', 'unpaid')->exists();
-        if ($open) {
-            $this->generate($period, $profile->id);
-        }
-    }
-
-    /** Tiền đã/đang hoàn cho khách của một đơn (không ghi số = hoàn toàn bộ). */
-    private function refundedOf(Booking $booking): float
-    {
-        return in_array($booking->refund_status, ['pending', 'done'], true)
-            ? (float) ($booking->refund_amount ?? $booking->payment_amount)
-            : 0.0;
     }
 
     private function notify(OwnerStatement $statement, string $kind): void
@@ -184,31 +147,6 @@ class StatementService
             'paid_amount' => (float) ($rows['paid']->amount ?? 0),
             'paid_count' => (int) ($rows['paid']->n ?? 0),
         ];
-    }
-
-    /** Admin đã chuyển khoản chi trả cho chủ sân (ghi mã giao dịch để đối chiếu). */
-    public function markPaidOut(User $admin, OwnerStatement $statement, ?string $payoutRef = null): OwnerStatement
-    {
-        if ($statement->status !== 'unpaid') {
-            throw new ConflictException('Kỳ đối soát này đã được chi trả trước đó.');
-        }
-
-        $statement->update([
-            'status' => 'paid',
-            'paid_at' => now(),
-            'payout_ref' => $payoutRef,
-            'confirmed_by' => $admin->id,
-        ]);
-
-        AdminLog::record('payout_statement', $statement, [
-            'period' => $statement->period,
-            'payout_amount' => $statement->payout_amount,
-            'payout_ref' => $payoutRef,
-        ], $admin);
-
-        $this->notify($statement, 'paid_out');
-
-        return $statement->refresh()->load(['ownerProfile.user', 'confirmedBy']);
     }
 
     /** Ước tính tháng đang chạy của chủ sân: tiền SportHub đã thu hộ, hoa hồng và số sẽ được chi trả. */
@@ -244,7 +182,7 @@ class StatementService
             $summary['booking_count']++;
             $summary['estimated_gmv'] += $b->commissionBase() > 0 ? (float) $b->total_price : 0.0;
             $summary['collected'] += (float) $b->payment_amount;
-            $summary['refunded'] += $this->refundedOf($b);
+            $summary['refunded'] += $b->refundedAmount();
             $summary['estimated_commission'] += round($b->commissionBase() * (float) ($b->commission_rate ?? $rate) / 100, 2);
         }
         $summary['estimated_payout'] = max(0.0, $summary['collected'] - $summary['refunded'] - $summary['estimated_commission']);
@@ -276,7 +214,7 @@ class StatementService
         $csv .= "Mã đối soát,Kỳ đối soát,Tên cơ sở,Chủ tài khoản,Số điện thoại,Email,Số đơn,Tổng GMV (VND),Đã thu hộ (VND),Hoàn khách (VND),Hoa hồng sàn (VND),Chi trả chủ sân (VND),Nội dung chuyển khoản,Hạn chi trả,Trạng thái,Quá hạn,Mã giao dịch chi trả,Ngày tạo\n";
 
         foreach ($statements as $st) {
-            $statusLabel = $st->status === 'paid' ? 'Đã chi trả' : 'Chờ chi trả';
+            $statusLabel = 'Đã cộng ví';
 
             $line = [
                 $st->id,

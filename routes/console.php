@@ -50,3 +50,9 @@ Artisan::command('owners:purge-documents', function (\App\Services\OwnerApplicat
 })->purpose('Xoá giấy tờ của hồ sơ chủ sân bị từ chối quá 30 ngày');
 
 Schedule::command('owners:purge-documents')->dailyAt('02:00')->withoutOverlapping();
+
+Artisan::command('wallet:release-earnings', function (\App\Services\EarningService $earnings) {
+    $count = $earnings->releaseDue();
+    $this->info("Đã cộng tiền vào ví chủ sân cho {$count} đơn.");
+})->purpose('Cộng tiền thu hộ vào ví chủ sân cho các đơn đã quá hạn kháng cáo');
+Schedule::command('wallet:release-earnings')->everyFifteenMinutes()->withoutOverlapping();

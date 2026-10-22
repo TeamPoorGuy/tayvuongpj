@@ -176,7 +176,7 @@ class ComplaintResolutionTest extends TestCase
         $this->assertEquals(200000, $booking->commissionBase());
     }
 
-    public function test_disputed_booking_is_held_out_of_the_payout_and_carried_to_the_next_period(): void
+    public function test_disputed_booking_is_held_out_of_the_report_and_comes_back_when_the_complaint_closes(): void
     {
         $held = $this->playedBooking();
         $this->playedBooking();
@@ -184,18 +184,20 @@ class ComplaintResolutionTest extends TestCase
         $service->generate($this->period);
         $this->assertSame(2, OwnerStatement::sole()->booking_count);
 
-        // Khách khiếu nại sau khi kỳ đã lập nhưng chưa chi trả: kỳ được lập lại, đơn bị giữ.
+        // Khách khiếu nại rồi báo cáo được lập lại: đơn đang tranh chấp bị giữ lại.
         Sanctum::actingAs($this->customer);
         $this->postJson('/api/v1/customer/complaints', ['booking_id' => $held->id, 'category' => 'field_mismatch', 'content' => 'Đèn sân bị hỏng.'])->assertCreated();
+        $service->generate($this->period);
 
         $statement = OwnerStatement::sole();
         $this->assertSame(1, $statement->booking_count);
-        // Còn một đơn: thu hộ 60k − hoa hồng 8% × 200k = chi trả 44k.
+        // Còn một đơn: thu hộ 60k − hoa hồng 8% × 200k = 44k về ví chủ sân.
         $this->assertEquals(44000, $statement->payout_amount);
         $this->assertNull($held->refresh()->statement_id);
 
-        // Khiếu nại bị từ chối: kỳ chưa chi trả nhận đơn trở lại.
+        // Khiếu nại bị từ chối: lập lại thì đơn quay về báo cáo.
         $this->handle(Complaint::sole(), ['status' => 'rejected', 'resolution' => 'Không có cơ sở.'])->assertOk();
+        $service->generate($this->period);
         $this->assertSame(2, OwnerStatement::sole()->booking_count);
         $this->assertSame($statement->id, $held->refresh()->statement_id);
     }

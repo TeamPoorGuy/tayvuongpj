@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
-/** Đối soát thu hộ: SportHub chi trả cho chủ sân = tiền đã thu − hoàn cho khách − hoa hồng. */
+/** Báo cáo đối soát thu hộ: tiền về ví chủ sân = tiền đã thu − hoàn cho khách − hoa hồng. */
 class PayoutStatementTest extends TestCase
 {
     use RefreshDatabase;
@@ -91,7 +91,7 @@ class PayoutStatementTest extends TestCase
         $this->assertEquals(30000, $statement->refunded_amount);
         $this->assertEquals(18400, $statement->commission_amount);
         $this->assertEquals(71600, $statement->payout_amount);
-        $this->assertSame('unpaid', $statement->status);
+        $this->assertSame('paid', $statement->status, 'Báo cáo: tiền đã về ví theo từng đơn, không còn chờ chi trả.');
     }
 
     public function test_period_without_platform_money_is_closed_automatically(): void
@@ -105,7 +105,7 @@ class PayoutStatementTest extends TestCase
         $this->assertSame('paid', $statement->status);
     }
 
-    public function test_admin_pays_out_with_owner_bank_qr_then_owner_is_notified(): void
+    public function test_admin_lists_statements_and_has_no_manual_payout_any_more(): void
     {
         Mail::fake();
         $this->seedPeriod();
@@ -114,18 +114,11 @@ class PayoutStatementTest extends TestCase
 
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
         $list = $this->getJson('/api/v1/admin/statements')->assertOk();
-        $this->assertEquals(71600, $list->json('meta.totals.unpaid_amount'));
-        $this->assertStringContainsString('970436-1234567890', $list->json('data.0.payout_bank.qr_url'));
-        $this->assertStringContainsString('amount=71600', $list->json('data.0.payout_bank.qr_url'));
+        $this->assertEquals(71600, $list->json('meta.totals.paid_amount'));
+        $this->assertNull($list->json('data.0.payout_bank.qr_url'));
 
-        $this->postJson("/api/v1/admin/statements/{$statement->id}/payout", ['payout_ref' => 'FT26102100'])
-            ->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.payout_ref', 'FT26102100')
-            ->assertJsonPath('data.payout_bank.qr_url', null);
-        $this->postJson("/api/v1/admin/statements/{$statement->id}/payout")->assertStatus(409);
-
-        $this->assertDatabaseHas('admin_logs', ['action' => 'payout_statement']);
-        Mail::assertQueued(StatementReminder::class, fn ($m) => $m->kind === 'paid_out' && $m->hasTo($this->owner->email));
-        $this->assertEquals(71600, $this->getJson('/api/v1/admin/statements')->json('meta.totals.paid_amount'));
+        $this->postJson("/api/v1/admin/statements/{$statement->id}/payout", ['payout_ref' => 'FT26102100'])->assertStatus(404);
+        Mail::assertQueued(StatementReminder::class, fn ($m) => $m->kind === 'issued' && $m->hasTo($this->owner->email));
     }
 
     public function test_owner_sees_own_statement_and_current_month_estimate(): void
@@ -138,7 +131,7 @@ class PayoutStatementTest extends TestCase
         Sanctum::actingAs($this->owner);
         $this->getJson('/api/v1/field-owner/statements')->assertOk()
             ->assertJsonPath('data.0.payout_amount', 71600)
-            ->assertJsonPath('meta.totals.unpaid_amount', 71600);
+            ->assertJsonPath('meta.totals.paid_amount', 71600);
 
         $summary = $this->getJson('/api/v1/field-owner/statements/current-summary')->assertOk()->json('data');
         $this->assertEquals(60000, $summary['collected']);

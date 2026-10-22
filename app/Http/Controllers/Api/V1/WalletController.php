@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\PaymentResource;
 use App\Http\Resources\Api\WithdrawalResource;
+use App\Services\EarningService;
 use App\Services\PaymentService;
 use App\Services\WithdrawalService;
 use App\Support\Banks;
@@ -15,7 +16,11 @@ use Illuminate\Http\Request;
 /** Ví SportHub của người đang đăng nhập (khách hoặc chủ sân): số dư, lịch sử, nạp tiền. */
 class WalletController extends Controller
 {
-    public function __construct(private readonly PaymentService $payments, private readonly WithdrawalService $withdrawals) {}
+    public function __construct(
+        private readonly PaymentService $payments,
+        private readonly WithdrawalService $withdrawals,
+        private readonly EarningService $earnings,
+    ) {}
 
     public function show(Request $request): JsonResponse
     {
@@ -25,6 +30,8 @@ class WalletController extends Controller
         return response()->json([
             'data' => [
                 'balance' => (float) $user->wallet_balance,
+                // Chủ sân: tiền các đơn đã thanh toán nhưng chưa tới hạn cộng vào ví (null với khách thường).
+                'pending_earnings' => $user->isApprovedOwner() ? $this->earnings->pendingFor($user) : null,
                 'transactions' => $transactions->map(fn ($t) => [
                     'id' => $t->id,
                     'type' => $t->type,
