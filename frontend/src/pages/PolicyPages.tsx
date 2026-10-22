@@ -84,7 +84,7 @@ export function TermsPage() {
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Trách nhiệm của chủ sân</h2>
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Đảm bảo cơ sở vật chất, khung giờ thi đấu trống đúng theo lịch công bố trên hệ thống.</li>
-          <li>Phản hồi yêu cầu đặt sân và đối chiếu sao kê thanh toán chuyển khoản của khách hàng kịp thời.</li>
+          <li>Chuẩn bị sân đúng giờ cho các đơn đã thanh toán qua SportHub; huỷ đơn chỉ khi bất khả kháng (khách được hoàn đủ tiền).</li>
           <li>Tiếp đón khách hàng và thực hiện thủ tục check-in theo quy định để ghi nhận điểm uy tín cho khách.</li>
         </ul>
       </section>

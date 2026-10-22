@@ -111,7 +111,7 @@ export function OwnerDashboardPage() {
           note={`GMV: ${formatMoney(data?.current_month_gmv ?? 0)}`}
         />
         <Stat
-          label="Phí sàn ước tính"
+          label="Hoa hồng ước tính"
           value={formatMoney(data?.current_month_commission ?? 0)}
           note="Xem chi tiết đối soát"
           to="/owner/statements"
@@ -233,11 +233,11 @@ export function OwnerFieldsPage() {
             <tbody>
               {fields.data?.data.map((field) => (
                 <tr key={field.id}>
-                  <td>
+                  <td style={{ minWidth: 230 }}>
                     <strong>{field.name}</strong>
                     <small>{field.address}</small>
                   </td>
-                  <td>{field.field_type?.name}</td>
+                  <td style={{ minWidth: 120 }}>{field.field_type?.name}</td>
                   <td>{formatMoney(field.price_per_hour)}</td>
                   <td>
                     <StatusBadge status={field.status} />
@@ -439,16 +439,12 @@ function FieldModal({
             ))}
           </select>
         </label>
-        <label>
+        <label style={{ gridColumn: '1 / -1' }}>
           <span>Địa chỉ</span>
-          <input name="address" defaultValue={current?.address} required />
-        </label>
-        <label>
-          <span>Thành phố (tuỳ chọn)</span>
-          <input name="city" list="location-cities" maxLength={100} placeholder="VD: Hà Nội" defaultValue={current?.city ?? ''} />
-          <datalist id="location-cities">
-            {locations.data?.map((l) => <option value={l.city} key={l.city} />)}
-          </datalist>
+          <input name="address" defaultValue={current?.address} required maxLength={255} placeholder="Số nhà, đường, quận/huyện, thành phố" />
+          <small className="form-help" style={{ margin: 0 }}>
+            Các sân của bạn có cùng địa chỉ sẽ hiện chung một lưới đặt giờ (Sân 1, Sân 2…), khách chọn nhiều sân và thanh toán một lần.
+          </small>
         </label>
         <label>
           <span>Quận / Huyện (tuỳ chọn)</span>
@@ -458,18 +454,31 @@ function FieldModal({
           </datalist>
         </label>
         <label>
-          <span>Vĩ độ (tuỳ chọn)</span>
-          <input name="latitude" type="number" step="any" min="-90" max="90" placeholder="VD: 21.0285" defaultValue={current?.latitude ?? ''} />
-        </label>
-        <label>
-          <span>Kinh độ (tuỳ chọn)</span>
-          <input name="longitude" type="number" step="any" min="-180" max="180" placeholder="VD: 105.8542" defaultValue={current?.longitude ?? ''} />
+          <span>Thành phố (tuỳ chọn)</span>
+          <input name="city" list="location-cities" maxLength={100} placeholder="VD: Hà Nội" defaultValue={current?.city ?? ''} />
+          <datalist id="location-cities">
+            {locations.data?.map((l) => <option value={l.city} key={l.city} />)}
+          </datalist>
         </label>
         <label>
           <span>Giá cơ bản mỗi giờ (VNĐ)</span>
-          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" max="100000000" step="1000" />
+          <input name="price_per_hour" type="number" inputMode="numeric" defaultValue={current?.price_per_hour} required min="1000" max="100000000" step="1000" placeholder="VD: 150000" />
+          <small className="form-help" style={{ margin: 0 }}>Giá giờ cao điểm / cuối tuần đặt riêng ở mục Quản lý khung giờ.</small>
         </label>
       </div>
+      <details className="form-more">
+        <summary>Toạ độ bản đồ (tuỳ chọn)</summary>
+        <div className="form-grid" style={{ marginTop: 10 }}>
+          <label>
+            <span>Vĩ độ</span>
+            <input name="latitude" type="number" step="any" min="-90" max="90" placeholder="VD: 21.0285" defaultValue={current?.latitude ?? ''} />
+          </label>
+          <label>
+            <span>Kinh độ</span>
+            <input name="longitude" type="number" step="any" min="-180" max="180" placeholder="VD: 105.8542" defaultValue={current?.longitude ?? ''} />
+          </label>
+        </div>
+      </details>
       <label>
         <span>Mô tả sân</span>
         <textarea name="description" defaultValue={current?.description ?? ''} rows={3} />
@@ -1015,7 +1024,7 @@ function FieldClosureModal({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <label style={{ margin: 0 }}>
-                <span style={{ fontSize: 12 }}>Từ giờ (tuỳ chọn, để trống = cả ngày)</span>
+                <span style={{ fontSize: 12 }}>Từ giờ (tuỳ chọn)</span>
                 <input type="time" step="1800" value={closeFrom} onChange={(e) => setCloseFrom(e.target.value)} required={!!closeTo} />
               </label>
               <label style={{ margin: 0 }}>
@@ -1023,6 +1032,7 @@ function FieldClosureModal({
                 <input type="time" step="1800" value={closeTo} onChange={(e) => setCloseTo(e.target.value)} required={!!closeFrom} />
               </label>
             </div>
+            <small className="form-help" style={{ display: 'block', margin: '-6px 0 12px' }}>Để trống cả hai ô giờ = đóng sân cả ngày. Điền giờ = chỉ khoá khoảng giờ đó (vd sửa đèn 17:00–20:00).</small>
             <label style={{ margin: '0 0 12px' }}>
               <span style={{ fontSize: 12 }}>Lý do nghỉ / đóng sân</span>
               <input

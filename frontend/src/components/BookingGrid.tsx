@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import type { GridCell, GridField } from '../types/api'
 import { cellKey } from '../utils/grid'
 
@@ -28,17 +28,37 @@ export function BookingGrid({
   fields,
   selected,
   onToggle,
+  onSelectRange,
   onBookedClick,
 }: {
   fields: GridField[]
   selected: Set<string>
   onToggle: (field: GridField, cell: GridCell) => void
+  /** Giữ Shift rồi bấm ô thứ hai: chọn cả dải ô trống liền nhau trên cùng một sân. */
+  onSelectRange: (field: GridField, cells: GridCell[]) => void
   onBookedClick: (field: GridField, cell: GridCell) => void
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(null)
+  const anchor = useRef<{ fieldId: number; start: string } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const withCells = fields.filter((f) => f.cells.length > 0)
+
+  // Màn hẹp phải cuộn ngang: đưa khung giờ cao điểm (17:00) vào tầm nhìn thay vì bắt khách tự cuộn từ 06:00.
+  const firstColumn = withCells.length ? Math.min(...withCells.map((f) => toMinutes(f.cells[0].start))) : 0
+  const lastColumn = withCells.length ? Math.max(...withCells.map((f) => toMinutes(f.cells[f.cells.length - 1].end))) : 0
+  const firstFieldId = fields[0]?.id
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return
+    const target = 17 * 60
+    if (target <= firstColumn || target >= lastColumn) return
+    const cell = scroller.querySelector<HTMLElement>(`[data-col="${(target - firstColumn) / 30}"]`)
+    const nameWidth = scroller.querySelector<HTMLElement>('.bgrid__name')?.offsetWidth ?? 0
+    if (cell) scroller.scrollTo({ left: Math.max(0, cell.offsetLeft - nameWidth - 8) })
+  }, [withCells.length, firstColumn, lastColumn, firstFieldId])
+
   if (withCells.length === 0) {
     return <p className="no-slot-notice">Sân chưa mở giờ nhận đặt cho ngày này.</p>
   }
@@ -48,6 +68,17 @@ export function BookingGrid({
   const close = Math.max(...withCells.map((f) => toMinutes(f.cells[f.cells.length - 1].end)))
   const columns = Array.from({ length: (close - open) / 30 }, (_, i) => toTime(open + i * 30))
   const lookup = withCells.map((f) => new Map(f.cells.map((c) => [c.start, c])))
+
+  // Tên sân dùng chung phần đầu ("Sân Cầu Lông Tây Vương A1/A2…") nên chỉ hiện phần khác nhau để cột tên ngắn mà vẫn phân biệt được.
+  const shortNames = (() => {
+    const words = withCells.map((f) => f.name.split(' '))
+    if (words.length < 2) return withCells.map((f) => f.name)
+    let common = 0
+    while (words.every((w) => w[common] !== undefined && w[common] === words[0][common])) common++
+    // Giữ lại một từ cuối của phần chung để tên còn nghĩa ("Xanh 1" thay vì "1").
+    const keep = Math.max(0, common - 1)
+    return words.map((w, i) => (common < w.length ? w.slice(keep).join(' ') : withCells[i].name))
+  })()
 
   // Ô duy nhất nhận Tab: ô đang active nếu còn bấm được, không thì ô bấm được đầu tiên.
   const firstInteractive = (() => {
@@ -94,7 +125,7 @@ export function BookingGrid({
   }
 
   return (
-    <div className="bgrid-scroll">
+    <div className="bgrid-scroll" ref={scrollRef}>
       <p id="bgrid-help" className="visually-hidden">
         Lưới chọn giờ. Dùng phím mũi tên để di chuyển giữa các ô, Home và End để tới đầu hoặc cuối hàng, Enter hoặc Space để chọn ô trống hoặc vào hàng chờ ô đã đặt.
       </p>
@@ -106,18 +137,18 @@ export function BookingGrid({
         aria-describedby="bgrid-help"
         aria-multiselectable="true"
         onKeyDown={onKeyDown}
-        style={{ gridTemplateColumns: `minmax(92px, max-content) repeat(${columns.length}, minmax(32px, 1fr))` }}
+        style={{ '--bgrid-cols': columns.length, gridTemplateColumns: `minmax(92px, max-content) repeat(${columns.length}, minmax(26px, 1fr))` } as CSSProperties}
       >
         <div className="bgrid__row" role="row" style={{ display: 'contents' }}>
           <div className="bgrid__corner" role="columnheader" aria-label="Sân" />
           {columns.map((time) => (
-            <div key={time} className="bgrid__time" role="columnheader" aria-label={time}>{time.endsWith(':00') ? time : ''}</div>
+            <div key={time} className="bgrid__time" role="columnheader" aria-label={time}><span>{time.endsWith(':00') ? time : ''}</span></div>
           ))}
         </div>
 
         {withCells.map((field, r) => (
           <div key={field.id} className="bgrid__row" role="row" style={{ display: 'contents' }}>
-            <div className="bgrid__name" role="rowheader" title={field.name}>{field.name}</div>
+            <div className="bgrid__name" role="rowheader" title={field.name}>{shortNames[r]}</div>
             {columns.map((time, c) => {
               const cell = lookup[r].get(time)
               if (!cell) return <div key={time} className="bgrid__cell bgrid__cell--locked" role="gridcell" aria-disabled="true" title={STATE_TITLE.locked} />
@@ -139,7 +170,20 @@ export function BookingGrid({
                   aria-label={`${field.name} ${cell.start}–${cell.end}: ${isSelected ? 'đang chọn' : STATE_TITLE[cell.state]}`}
                   title={`${cell.start}–${cell.end} · ${isSelected ? 'Đang chọn' : STATE_TITLE[cell.state]}`}
                   onFocus={() => setActiveKey(key)}
-                  onClick={() => (cell.state === 'booked' ? onBookedClick(field, cell) : onToggle(field, cell))}
+                  onClick={(event) => {
+                    if (cell.state === 'booked') return onBookedClick(field, cell)
+                    // Shift + bấm: chọn dải từ ô bấm trước đó tới ô này (cùng sân, bỏ qua ô không trống).
+                    const from = anchor.current
+                    if (event.shiftKey && from && from.fieldId === field.id && from.start !== cell.start) {
+                      const a = field.cells.findIndex((c) => c.start === from.start)
+                      const b = field.cells.findIndex((c) => c.start === cell.start)
+                      const range = field.cells.slice(Math.min(a, b), Math.max(a, b) + 1).filter((c) => c.state === 'free')
+                      anchor.current = { fieldId: field.id, start: cell.start }
+                      return onSelectRange(field, range)
+                    }
+                    anchor.current = { fieldId: field.id, start: cell.start }
+                    onToggle(field, cell)
+                  }}
                 />
               )
             })}

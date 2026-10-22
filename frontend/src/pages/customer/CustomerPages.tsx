@@ -19,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -191,13 +191,17 @@ export function CustomerBookingsPage() {
     },
   })
 
+  const navigate = useNavigate()
   const acceptWaitlist = useMutation({
     mutationFn: async (waitlistId: number) => api.post(`/customer/waitlist/${waitlistId}/accept`),
-    onSuccess: () => {
-      toast.success('Bạn đã nhận được suất sân. Đơn đặt sân mới đang chờ chủ sân duyệt, sau đó bạn chuyển khoản để giữ sân.')
+    onSuccess: (res) => {
+      toast.success('Bạn đã nhận được suất sân. Hãy chuyển khoản để giữ chỗ.')
       void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
       void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
-      setActiveTab('bookings')
+      // Nhận suất = giữ chỗ tạm 15 phút: đưa khách thẳng tới trang chuyển khoản.
+      const paymentId = res.data?.data?.payment?.id
+      if (paymentId) navigate(`/payments/${paymentId}`)
+      else setActiveTab('bookings')
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể nhận suất sân')
@@ -423,24 +427,25 @@ export function CustomerBookingsPage() {
                     </div>
                   )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
-                    <p className="form-help">
-                      {booking.can_be_cancelled ? (
-                        booking.cancel_penalty ? (
-                          <span style={{ color: '#ef4444' }}>
-                            Đã sát giờ chơi: bạn vẫn có thể huỷ nhưng chỉ được hoàn một phần hoặc không hoàn tiền và bị trừ 15 điểm uy tín.
-                          </span>
-                        ) : (
-                          <span>
-                            Đơn đã xác nhận. {booking.cancel_until ? `Huỷ trước ${formatDateTime(booking.cancel_until)} được hoàn 100%; sau mốc này hoàn theo chính sách huỷ.` : 'Huỷ lúc này được hoàn tiền theo chính sách huỷ.'}
-                          </span>
-                        )
-                      ) : (
-                        <span>Đã đến/quá giờ chơi nên không thể tự huỷ đơn.</span>
-                      )}{' '}
-                      Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
-                      {booking.payment?.status === 'paid' &&
-                        ` Đã chuyển ${formatMoney(booking.payment.amount ?? 0)}${booking.payment.option === 'deposit' ? `, còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân` : ''}.`}
-                    </p>
+                    <ul className="booking-facts">
+                      {booking.payment?.status === 'paid' && (
+                        <li>
+                          <strong>Đã thanh toán {formatMoney(booking.payment.amount ?? 0)}</strong>
+                          {booking.payment.option === 'deposit' && booking.total_price - (booking.payment.amount ?? 0) > 0
+                            ? ` · còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân`
+                            : ' · không phải trả thêm tại sân'}
+                        </li>
+                      )}
+                      <li className={booking.can_be_cancelled && booking.cancel_penalty ? 'is-warn' : undefined}>
+                        {!booking.can_be_cancelled
+                          ? 'Đã đến giờ chơi nên không thể tự huỷ đơn.'
+                          : booking.cancel_penalty
+                            ? 'Đã sát giờ chơi: huỷ lúc này hoàn ít hoặc không hoàn tiền và bị trừ 15 điểm uy tín.'
+                            : booking.cancel_until
+                              ? <>Huỷ trước <strong>{formatDateTime(booking.cancel_until)}</strong> được hoàn 100%, sau mốc này hoàn theo chính sách.</>
+                              : 'Huỷ lúc này được hoàn tiền theo chính sách huỷ.'}
+                      </li>
+                    </ul>
                   )}
                   {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
                     <p className="form-help">Lý do: {booking.cancel_reason}</p>
@@ -997,7 +1002,7 @@ export function CustomerProfilePage() {
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val minus">-15</span>
-            <span>Hủy đơn đã duyệt khi còn dưới 4 giờ trước giờ chơi</span>
+            <span>Hủy đơn đã thanh toán khi còn dưới 4 giờ trước giờ chơi</span>
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val danger">-25</span>

@@ -150,4 +150,20 @@ class ScheduleGridTest extends TestCase
         $this->assertTrue(Booking::get()->every(fn ($b) => $b->start_time === '18:00:00' && $b->end_time === '20:00:00'));
         $this->assertEquals(600000, Payment::findOrFail($res->json('data.payment.id'))->total);
     }
+
+    public function test_match_room_on_a_field_accepts_any_half_hour_range_inside_opening_hours(): void
+    {
+        $court = $this->court('C.Lông 1');
+        Sanctum::actingAs($this->customer());
+        $payload = [
+            'sport_category_id' => $this->type->sport_category_id, 'sports_field_id' => $court->id, 'title' => 'Kèo tối',
+            'play_date' => $this->date, 'start_time' => '18:00', 'end_time' => '19:30', 'skill_level' => 'any',
+            'players_needed' => 2, 'contact_phone' => '0912345678',
+        ];
+
+        $this->postJson('/api/v1/customer/matches', $payload)->assertCreated();
+        // Ngoài giờ mở cửa (sân đóng 22:00) thì bị từ chối.
+        $this->postJson('/api/v1/customer/matches', ['start_time' => '21:30', 'end_time' => '22:30'] + $payload)
+            ->assertStatus(422)->assertJsonValidationErrors('start_time');
+    }
 }

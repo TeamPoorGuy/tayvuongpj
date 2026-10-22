@@ -60,7 +60,7 @@ export function BookingConfirmModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel="Xác nhận yêu cầu đặt sân">
+    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel="Xác nhận đặt sân">
       <div style={{ maxWidth: 500 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--pitch-soft, rgba(11, 48, 37, 0.08))', display: 'grid', placeItems: 'center', color: 'var(--pitch, #0b3025)' }}>
@@ -68,7 +68,7 @@ export function BookingConfirmModal({
           </div>
           <div>
             <h2 style={{ fontSize: 18, margin: 0, color: 'var(--forest, #0b3025)' }}>
-              {isRecurring ? 'Xác nhận đặt cố định hàng tuần' : 'Xác nhận yêu cầu đặt sân'}
+              {isRecurring ? 'Xác nhận đặt cố định hàng tuần' : 'Xác nhận đặt sân'}
             </h2>
             <small style={{ color: 'var(--muted)' }}>Vui lòng kiểm tra lại thông tin và chính sách</small>
           </div>

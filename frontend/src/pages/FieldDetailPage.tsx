@@ -131,6 +131,14 @@ export function FieldDetailPage() {
     setBookedRange(null)
   }
 
+  const selectRange = (row: GridField, cells: GridCell[]) => {
+    const next = new Set(selected)
+    for (const cell of cells) next.add(cellKey(row.id, cell.start))
+    setHint(null)
+    setPicked(next)
+    setBookedRange(null)
+  }
+
   const suggestions = useQuery({
     queryKey: ['suggestions', bookedRange?.field.slug, bookedRange?.start, bookedRange?.end, date],
     enabled: !!bookedRange,
@@ -432,8 +440,35 @@ export function FieldDetailPage() {
             fields={gridFields}
             selected={selected}
             onToggle={toggleCell}
+            onSelectRange={selectRange}
             onBookedClick={(row, cell) => setBookedRange({ field: row, ...bookedRunAround(row, cell) })}
           />
+        )}
+
+        {/* Thanh tóm tắt dính ngay dưới lưới: chọn xong là thấy tổng tiền và nút đặt, không phải cuộn xuống cột bên */}
+        {blocks.length > 0 && (
+          <div className="grid-summary" role="status">
+            <div className="grid-summary__text">
+              <strong>{blocks.length} khung giờ · {formatMoney(total)}</strong>
+              <small>
+                {hasShortBlock
+                  ? `Mỗi khung tối thiểu ${minMinutes} phút — hãy chọn thêm ô liền kề.`
+                  : blocks.map((b) => `${b.fieldName} ${b.start}–${b.end}`).join(' · ')}
+              </small>
+            </div>
+            <button type="button" className="button button--ghost button--small" onClick={() => { setPicked(new Set()); setHint(null) }}>
+              Bỏ chọn
+            </button>
+            {!user ? (
+              <Link className="button button--brand" to="/login" state={loginState}>Đăng nhập để đặt</Link>
+            ) : user.role !== 'customer' ? (
+              <span className="form-help" style={{ margin: 0 }}>Chỉ khách hàng mới đặt được sân.</span>
+            ) : (
+              <button type="button" className="button button--brand" disabled={!canBook || booking.isPending} onClick={() => setShowConfirmModal(true)}>
+                <CalendarDays size={16} /> {booking.isPending ? 'Đang giữ chỗ...' : 'Đặt & thanh toán'}
+              </button>
+            )}
+          </div>
         )}
 
         {bookedRange && (
@@ -628,7 +663,7 @@ export function FieldDetailPage() {
             )}
             {blocks.length === 0 ? (
               <p className="form-help" style={{ margin: '6px 0 12px' }}>
-                Bấm các ô trống trên lưới đặt sân (mỗi ô 30 phút). Có thể chọn nhiều sân, nhiều khung giờ rồi thanh toán một lần.
+                Bấm các ô trống trên lưới (mỗi ô 30 phút). Giữ Shift rồi bấm ô thứ hai để chọn cả dải. Có thể chọn nhiều sân, nhiều khung giờ rồi thanh toán một lần.
               </p>
             ) : (
               <ul className="selection-list">
@@ -699,7 +734,7 @@ export function FieldDetailPage() {
       {/* Mobile Sticky Booking Bar */}
       <div className="mobile-booking-bar">
         <div className="mobile-booking-bar__price">
-          <span>Giá thuê từ</span>
+          <span>{blocks.length ? `Đã chọn ${blocks.length} khung giờ` : 'Giá thuê từ'}</span>
           <strong>
             {blocks.length ? formatMoney(total) : `${formatMoney(item.price_per_hour)}/h`}
           </strong>

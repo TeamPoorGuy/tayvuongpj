@@ -714,14 +714,15 @@ a svg {
 
 /* Field Detail Gallery Showcase */
 .gallery-showcase {
-  margin: 24px 0 32px;
+  margin: 16px 0 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+/* Ảnh bìa vừa phải để lưới đặt giờ (việc chính của trang) lên sớm trong màn hình đầu */
 .gallery-showcase__main {
   width: 100%;
-  height: 420px;
+  height: clamp(200px, 26vh, 280px);
   border-radius: 26px;
   overflow: hidden;
   background: var(--forest);
@@ -3167,7 +3168,7 @@ label.check-line { font-size:13px; align-items:center; }
 .bgrid__corner { left: 0; z-index: 3; }
 .bgrid__time { z-index: 1; font-size: 11px; font-weight: 600; color: var(--forest); padding-left: 2px; line-height: 28px; white-space: nowrap; overflow: visible; }
 .bgrid__name { position: sticky; left: 0; z-index: 2; display: flex; align-items: center; padding: 0 10px; height: 40px; background: var(--pitch-soft); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line-strong); font-size: 13px; font-weight: 600; color: var(--forest); white-space: nowrap; }
-.bgrid__cell { width: 100%; height: 40px; padding: 0; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff; cursor: pointer; transition: background-color .12s; }
+.bgrid__cell { width: 100%; height: 40px; padding: 0; border: 0; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); background: #fff; cursor: pointer; transition: background-color .12s; }
 .bgrid__cell:disabled { cursor: not-allowed; }
 .bgrid__cell:focus-visible { outline: 2px solid var(--forest); outline-offset: -2px; }
 .bgrid__cell--free:hover { background: var(--pitch-soft); }
@@ -3196,3 +3197,29 @@ label.check-line { font-size:13px; align-items:center; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* Lời nhắc lỗi trong ô nhập (form-stack ép màu chữ nhãn nên cần chỉ rõ) */
 .form-stack label > .input-error, .form-stack > .input-error { color: var(--danger); font-size: 13px; font-weight: 600; }
+
+/* Nhãn giờ nổi ra ngoài ô 30 phút nên không được làm cột phình rộng (cả lưới 06–22h vừa một màn hình) */
+.bgrid__time { position: relative; z-index: auto; overflow: visible; padding: 0; }
+.bgrid__time > span { position: absolute; left: 2px; top: 0; z-index: 1; line-height: 28px; }
+
+/* Thanh tóm tắt lựa chọn dính dưới lưới đặt giờ */
+.grid-summary { position: sticky; bottom: 12px; z-index: 5; margin-top: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-radius: 14px; background: var(--forest); color: #fff; box-shadow: 0 10px 30px rgba(11, 48, 37, .28); }
+.grid-summary__text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.grid-summary__text strong { font-size: 16px; color: var(--lime); }
+.grid-summary__text small { font-size: 12.5px; color: #cfe0d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid-summary .button--ghost { color: #fff; border-color: rgba(255,255,255,.4); background: transparent; }
+@media (max-width: 780px) { .grid-summary { display: none; } } /* điện thoại đã có thanh đặt cố định ở đáy */
+
+/* Thông tin chính của đơn đã xác nhận: ngắn, dễ quét mắt thay vì một đoạn văn dài */
+.booking-facts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--soft); }
+.booking-facts li { padding-left: 14px; position: relative; line-height: 1.45; }
+.booking-facts li::before { content: ''; position: absolute; left: 0; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: var(--pitch); }
+.booking-facts li.is-warn { color: var(--danger); }
+.booking-facts li.is-warn::before { background: var(--danger); }
+.booking-facts strong { color: var(--ink); }
+
+.form-more { margin: 0 0 14px; font-size: 14px; }
+.form-more > summary { cursor: pointer; color: var(--soft); font-weight: 600; }
+
+/* Điện thoại: ô chạm đủ lớn (lưới cuộn ngang) và cột tên sân gọn */
+@media (max-width: 780px) { .bgrid { grid-template-columns: minmax(64px, max-content) repeat(var(--bgrid-cols, 32), minmax(38px, 1fr)) !important; } .bgrid__cell { height: 44px; } .bgrid__name { height: 44px; } }
