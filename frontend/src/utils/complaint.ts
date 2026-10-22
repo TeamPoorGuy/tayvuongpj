@@ -10,3 +10,14 @@ export const complaintCategoryLabels: Record<string, string> = {
   overtime: 'Khách chơi quá giờ',
   other: 'Vấn đề khác',
 }
+
+/** Thân yêu cầu gửi khiếu nại/phản hồi: JSON thường, chuyển sang FormData khi có ảnh đính kèm. */
+export function complaintBody(fields: Record<string, string | number | undefined>, photos: File[]): Record<string, unknown> | FormData {
+  if (photos.length === 0) return fields
+  const form = new FormData()
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) form.append(key, String(value))
+  }
+  photos.forEach((photo) => form.append('photos[]', photo))
+  return form
+}

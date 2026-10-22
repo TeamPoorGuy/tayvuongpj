@@ -24,6 +24,8 @@ import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
 import { ComplaintRespondModal } from '../../components/ComplaintRespond'
+import { EvidencePicker } from '../../components/EvidencePicker'
+import { complaintBody } from '../../utils/complaint'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
@@ -1150,6 +1152,7 @@ export function OwnerBookingsPage() {
   const [complainingBooking, setComplainingBooking] = useState<Booking | null>(null)
   const [complaintCategory, setComplaintCategory] = useState('property_damage')
   const [complaintContent, setComplaintContent] = useState('')
+  const [complaintPhotos, setComplaintPhotos] = useState<File[]>([])
   const [respondingId, setRespondingId] = useState<number | null>(null)
 
   const bookings = useQuery({
@@ -1226,15 +1229,15 @@ export function OwnerBookingsPage() {
 
   const complain = useMutation({
     mutationFn: async () =>
-      api.post('/field-owner/complaints', {
-        booking_id: complainingBooking?.id,
-        category: complaintCategory,
-        content: complaintContent,
-      }),
+      api.post(
+        '/field-owner/complaints',
+        complaintBody({ booking_id: complainingBooking?.id, category: complaintCategory, content: complaintContent }, complaintPhotos),
+      ),
     onSuccess: () => {
       toast.success('Đã gửi khiếu nại. Khách sẽ được báo và có thể phản hồi trước khi Ban quản trị quyết định.')
       setComplainingBooking(null)
       setComplaintContent('')
+      setComplaintPhotos([])
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
     },
     onError: (err) => toast.error(errorMessage(err), 'Không thể gửi khiếu nại'),
@@ -1440,6 +1443,7 @@ export function OwnerBookingsPage() {
                         setComplainingBooking(booking)
                         setComplaintCategory('property_damage')
                         setComplaintContent('')
+                        setComplaintPhotos([])
                       }}
                       title="Khiếu nại về hành vi của khách trong đơn này"
                     >
@@ -1638,6 +1642,7 @@ export function OwnerBookingsPage() {
             <span>Mô tả chi tiết (5–3000 ký tự)</span>
             <textarea required rows={4} minLength={5} maxLength={3000} value={complaintContent} onChange={(e) => setComplaintContent(e.target.value)} placeholder="Nêu rõ sự việc, thời điểm, thiệt hại (nếu có)..." />
           </label>
+          <EvidencePicker files={complaintPhotos} onChange={setComplaintPhotos} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button type="button" className="button button--ghost" onClick={() => setComplainingBooking(null)}>Đóng</button>
             <button type="submit" className="button button--brand" disabled={complain.isPending}>

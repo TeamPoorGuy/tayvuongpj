@@ -32,7 +32,8 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
 import type { ApiEnvelope, Booking, BookingWaitlist, Paginated, User } from '../../types/api'
 import { getLocalTodayString } from '../../utils/date'
-import { complaintCategoryLabels } from '../../utils/complaint'
+import { complaintBody, complaintCategoryLabels } from '../../utils/complaint'
+import { EvidenceGallery, EvidencePicker } from '../../components/EvidencePicker'
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
 
@@ -117,6 +118,10 @@ function StarRatingInput({
   )
 }
 
+/** Đơn bị ghi vắng mặt và còn trong hạn kháng cáo "tôi đã đến sân". */
+const canAppealNoShow = (booking: Booking) =>
+  !!booking.no_show && !!booking.no_show_appeal_until && new Date(booking.no_show_appeal_until).getTime() > Date.now()
+
 export function CustomerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -132,6 +137,7 @@ export function CustomerBookingsPage() {
   const [reviewRating, setReviewRating] = useState(5)
   const [complaintBooking, setComplaintBooking] = useState<Booking | null>(null)
   const [respondingId, setRespondingId] = useState<number | null>(null)
+  const [complaintPhotos, setComplaintPhotos] = useState<File[]>([])
   const [complaintCategory, setComplaintCategory] = useState('refund_pending')
   const [complaintContent, setComplaintContent] = useState('')
   const currentReview = reviewing ?? activeReviewing
@@ -144,8 +150,9 @@ export function CustomerBookingsPage() {
 
   const openComplaint = (booking: Booking) => {
     setComplaintBooking(booking)
-    setComplaintCategory(booking.no_show ? 'wrong_no_show' : booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
+    setComplaintCategory(canAppealNoShow(booking) ? 'wrong_no_show' : booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
     setComplaintContent('')
+    setComplaintPhotos([])
   }
 
   const bookings = useQuery({
@@ -247,17 +254,15 @@ export function CustomerBookingsPage() {
       category: string
       content: string
     }) =>
-      api.post('/customer/complaints', {
-        booking_id: bookingId,
-        subject_type: 'booking',
-        subject_id: String(bookingId),
-        category,
-        content,
-      }),
+      api.post(
+        '/customer/complaints',
+        complaintBody({ booking_id: bookingId, subject_type: 'booking', subject_id: String(bookingId), category, content }, complaintPhotos),
+      ),
     onSuccess: () => {
       toast.success('Đã gửi khiếu nại tới Ban quản trị SportHub thành công!')
       setComplaintBooking(null)
       setComplaintContent('')
+      setComplaintPhotos([])
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể gửi khiếu nại')
@@ -465,9 +470,20 @@ export function CustomerBookingsPage() {
                       Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
                     </div>
                   )}
+                  {booking.no_show && canAppealNoShow(booking) && !booking.complaint && (
+                    <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Đơn bị ghi nhận vắng mặt (đã trừ 25 điểm uy tín).</strong> Nếu bạn đã đến sân, hãy khiếu nại trước {formatDateTime(booking.no_show_appeal_until!)} kèm ảnh chứng cứ (ví dụ ảnh chụp tại sân).
+                      <div style={{ marginTop: 6 }}>
+                        <button type="button" className="button button--brand button--small" onClick={() => openComplaint(booking)}>
+                          Tôi đã đến sân — khiếu nại
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {booking.complaint_against && (
                     <div className={'notice notice--warn'} style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
                       <strong>Chủ sân khiếu nại về đơn này ({complaintCategoryLabels[booking.complaint_against.category] ?? booking.complaint_against.category}):</strong> {booking.complaint_against.content}
+                      <div style={{ marginTop: 6 }}><EvidenceGallery attachments={booking.complaint_against.attachments?.filter((a) => a.by === 'complainant')} label="Ảnh chủ sân gửi:" /></div>
                       {booking.complaint_against.response && <div style={{ marginTop: 4 }}><strong>Phản hồi của bạn:</strong> {booking.complaint_against.response}</div>}
                       {booking.complaint_against.can_respond && (
                         <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -914,7 +930,7 @@ export function CustomerBookingsPage() {
                   <option value="field_mismatch">Sân không đúng thực tế / mô tả sai</option>
                   <option value="owner_cancelled">Chủ sân tự ý huỷ sân hoặc không đón tiếp</option>
                   <option value="bad_behavior">Thái độ phục vụ của nhân viên / chủ sân</option>
-                  {complaintBooking.no_show && <option value="wrong_no_show">Tôi đã đến sân nhưng bị ghi nhận vắng mặt</option>}
+                  {canAppealNoShow(complaintBooking) && <option value="wrong_no_show">Tôi đã đến sân nhưng bị ghi nhận vắng mặt</option>}
                   <option value="other">Vấn đề khác</option>
                 </select>
               </label>
@@ -929,6 +945,8 @@ export function CustomerBookingsPage() {
                   placeholder="Mô tả cụ thể sự việc để Ban quản trị đối soát với chủ sân..."
                 />
               </label>
+
+              <EvidencePicker files={complaintPhotos} onChange={setComplaintPhotos} />
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
                 <button

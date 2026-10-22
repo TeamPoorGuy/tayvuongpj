@@ -3,6 +3,7 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { ComplaintRespondModal } from '../../components/ComplaintRespond'
+import { EvidenceGallery } from '../../components/EvidencePicker'
 import { QueryState } from '../../components/QueryState'
 import type { Complaint, Paginated } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
@@ -66,11 +67,15 @@ export function OwnerComplaintsPage() {
                   <strong>{againstMe ? 'Nội dung khách nêu:' : 'Nội dung bạn nêu:'}</strong> {c.content}
                 </p>
 
+                <EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'complainant')} label={againstMe ? 'Ảnh khách gửi:' : 'Ảnh bạn gửi:'} />
+
                 {c.response && (
                   <p style={{ margin: 0, lineHeight: 1.6 }}>
                     <strong>{againstMe ? 'Phản hồi của bạn:' : 'Phản hồi của khách:'}</strong> {c.response}
                   </p>
                 )}
+
+                <EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'respondent')} label={againstMe ? 'Ảnh bạn phản hồi:' : 'Ảnh khách phản hồi:'} />
 
                 {c.can_respond && (
                   <div className="notice notice--warn" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>

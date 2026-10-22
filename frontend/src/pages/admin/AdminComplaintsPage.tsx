@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, Search } from 'lucide-react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
+import { EvidenceGallery } from '../../components/EvidencePicker'
 import { Modal } from '../../components/Modal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
@@ -239,10 +240,13 @@ export function AdminComplaintsPage() {
                 </button>
               </div>
 
+              <EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'complainant')} label="Ảnh bên khiếu nại:" />
+
               {c.against && (
                 <div style={{ padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
                   {c.response ? (
-                    <><strong>Phản hồi của bên bị khiếu nại ({c.responded_at ? formatDateTime(c.responded_at) : ''}):</strong> {c.response}</>
+                    <><strong>Phản hồi của bên bị khiếu nại ({c.responded_at ? formatDateTime(c.responded_at) : ''}):</strong> {c.response}
+                      <div style={{ marginTop: 6 }}><EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'respondent')} label="Ảnh phản hồi:" /></div></>
                   ) : c.status === 'open' || c.status === 'processing' ? (
                     <span style={{ color: 'var(--warn)' }}>Chưa có phản hồi{c.respond_by ? ` · hạn ${formatDateTime(c.respond_by)}` : ''}</span>
                   ) : (

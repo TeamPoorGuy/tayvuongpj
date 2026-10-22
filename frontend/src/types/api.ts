@@ -142,6 +142,13 @@ export interface Review {
   created_at: string
 }
 
+export interface ComplaintAttachment {
+  id: number
+  name: string
+  url: string
+  by: 'complainant' | 'respondent'
+}
+
 export interface ComplaintBrief {
   id: number
   category: string
@@ -153,6 +160,7 @@ export interface ComplaintBrief {
   refund_amount: number | null
   attendance_confirmed: boolean
   trust_penalty: number | null
+  attachments?: ComplaintAttachment[]
   can_respond: boolean
 }
 
@@ -172,6 +180,8 @@ export interface Booking {
   refund_if_cancelled?: number | null
   confirmed_at?: string | null
   no_show?: boolean
+  /** Hạn khách khiếu nại "đã đến sân" khi bị ghi vắng mặt. */
+  no_show_appeal_until?: string | null
   /** Khiếu nại gần nhất do chính người xem gửi về đơn này. */
   complaint?: ComplaintBrief | null
   /** Khiếu nại nhắm vào người xem (khách bị chủ sân khiếu nại, hoặc chủ sân bị khách khiếu nại). */
@@ -468,6 +478,7 @@ export interface Complaint {
   against?: Pick<User, 'id' | 'name'> | null
   /** Số liệu hai bên cho admin cân nhắc. */
   parties?: { complainant: ComplaintPartyStats | null; respondent: ComplaintPartyStats | null }
+  attachments?: ComplaintAttachment[]
   response?: string | null
   responded_at?: string | null
   respond_by?: string | null
