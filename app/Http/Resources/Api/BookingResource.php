@@ -29,17 +29,9 @@ class BookingResource extends JsonResource
             'checked_in_at' => $this->checked_in_at?->toISOString(),
             'no_show' => $this->no_show_at !== null,
             'recurring_group_id' => $this->recurring_group_id,
-            // Khiếu nại gần nhất: chỉ khách của đơn mới thấy (chủ sân chưa được xem nội dung khiếu nại).
-            'complaint' => $this->when(
-                $request->user()?->id === $this->user_id && $this->relationLoaded('latestComplaint') && $this->latestComplaint,
-                fn () => [
-                    'id' => $this->latestComplaint->id,
-                    'status' => $this->latestComplaint->status,
-                    'resolution' => $this->latestComplaint->resolution,
-                    'refund_amount' => $this->latestComplaint->refund_amount !== null ? (float) $this->latestComplaint->refund_amount : null,
-                    'attendance_confirmed' => (bool) $this->latestComplaint->attendance_confirmed,
-                ],
-            ),
+            // Khiếu nại gần nhất của đơn do chính người xem gửi, và khiếu nại nhắm vào người xem (cần phản hồi).
+            'complaint' => $this->complaintBrief($this->complaintsOf($request, 'user_id')),
+            'complaint_against' => $this->complaintBrief($this->complaintsOf($request, 'against_user_id'), $request),
             'payment' => [
                 'id' => $this->payment_id,
                 'status' => $this->payment_status,
@@ -76,6 +68,39 @@ class BookingResource extends JsonResource
             ],
             'review' => $this->whenLoaded('review', fn () => $this->review ? new ReviewResource($this->review) : null),
             'created_at' => $this->created_at?->toISOString(),
+        ];
+    }
+
+    private function complaintsOf(Request $request, string $column): ?\App\Models\Complaint
+    {
+        $viewer = $request->user()?->id;
+        if (! $viewer || ! $this->relationLoaded('complaints')) {
+            return null;
+        }
+
+        return $this->complaints->where($column, $viewer)->sortByDesc('id')->first();
+    }
+
+    private function complaintBrief(?\App\Models\Complaint $complaint, ?Request $request = null): ?array
+    {
+        if (! $complaint) {
+            return null;
+        }
+
+        return [
+            'id' => $complaint->id,
+            'category' => $complaint->category,
+            'status' => $complaint->status,
+            'content' => $complaint->content,
+            'resolution' => $complaint->resolution,
+            'response' => $complaint->response,
+            'respond_by' => $complaint->respond_by?->toISOString(),
+            'refund_amount' => $complaint->refund_amount !== null ? (float) $complaint->refund_amount : null,
+            'attendance_confirmed' => (bool) $complaint->attendance_confirmed,
+            'trust_penalty' => $complaint->trust_penalty,
+            'can_respond' => $request !== null
+                && in_array($complaint->status, ['open', 'processing'], true)
+                && $complaint->response === null,
         ];
     }
 }

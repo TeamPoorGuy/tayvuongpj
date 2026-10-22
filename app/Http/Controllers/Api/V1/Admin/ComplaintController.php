@@ -30,7 +30,7 @@ class ComplaintController extends Controller
 
     public function show(Complaint $complaint): ComplaintResource
     {
-        $complaint->load(['user', 'booking.sportsField', 'handler']);
+        $complaint->load(['user', 'against', 'booking.sportsField', 'handler']);
 
         return new ComplaintResource($complaint);
     }
@@ -44,6 +44,7 @@ class ComplaintController extends Controller
             $request->user(),
             $request->validated('refund_amount'),
             (bool) $request->validated('confirm_attendance'),
+            $request->validated('trust_penalty'),
         );
 
         return response()->json([

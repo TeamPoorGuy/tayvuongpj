@@ -32,6 +32,12 @@ class TrustScoreService
         self::apply($user, 25, 'Khiếu nại được chấp nhận: gỡ ghi nhận vắng mặt (+25 điểm)', $booking);
     }
 
+    /** Trừ điểm khi khiếu nại của chủ sân về hành vi của khách được admin chấp nhận. */
+    public static function penalizeMisconduct(User $user, int $points, ?Booking $booking = null): void
+    {
+        self::apply($user, -$points, "Vi phạm khi sử dụng sân bị xác nhận qua khiếu nại (-{$points} điểm)", $booking);
+    }
+
 
     /** Cập nhật điểm trong khoảng 0–150 và ghi log theo mức thay đổi thực tế (không phải mức danh nghĩa). */
     private static function apply(User $user, int $delta, string $reason, ?Booking $booking): void

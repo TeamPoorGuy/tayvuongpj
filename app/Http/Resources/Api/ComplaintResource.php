@@ -18,6 +18,26 @@ class ComplaintResource extends JsonResource
                 'email' => $this->user->email,
                 'phone' => $this->user->phone,
             ]),
+            'direction' => $this->direction,
+            'against_user_id' => $this->against_user_id,
+            'against' => $this->whenLoaded('against', fn () => $this->against ? [
+                'id' => $this->against->id,
+                'name' => $this->against->name,
+            ] : null),
+            // Admin cần số liệu của hai bên để cân nhắc (chủ sân huỷ đơn, vắng mặt, khiếu nại đã nhận).
+            'parties' => $this->when($request->user()?->isAdmin() && $this->relationLoaded('user'), fn () => [
+                'complainant' => $this->user ? app(\App\Services\ComplaintService::class)->partyStats($this->user) : null,
+                'respondent' => $this->against ? app(\App\Services\ComplaintService::class)->partyStats($this->against) : null,
+            ]),
+            'response' => $this->response,
+            'responded_at' => $this->responded_at?->toISOString(),
+            'respond_by' => $this->respond_by?->toISOString(),
+            // Người đang xem là bên bị khiếu nại, còn đang xử lý và chưa phản hồi lần nào.
+            'can_respond' => $request->user()?->id !== null
+                && $request->user()->id === $this->against_user_id
+                && in_array($this->status, ['open', 'processing'], true)
+                && $this->response === null,
+            'trust_penalty' => $this->trust_penalty,
             'booking_id' => $this->booking_id,
             'booking' => $this->whenLoaded('booking', fn () => [
                 'id' => $this->booking->id,

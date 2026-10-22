@@ -59,6 +59,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/complaints', [Customer\ComplaintController::class, 'index']);
             Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
+            Route::post('/complaints/{complaint}/respond', [Customer\ComplaintController::class, 'respond'])->middleware('throttle:writes');
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
             Route::post('/bookings/recurring', [Customer\BookingController::class, 'storeRecurring'])->middleware(['verified', 'throttle:writes']);
@@ -149,6 +150,11 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         );
 
         Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
+
+        // Khiếu nại hai chiều: chủ sân khiếu nại khách và phản hồi khi bị khách khiếu nại.
+        Route::get('/complaints', [FieldOwner\ComplaintController::class, 'index']);
+        Route::post('/complaints', [FieldOwner\ComplaintController::class, 'store'])->middleware('throttle:writes');
+        Route::post('/complaints/{complaint}/respond', [FieldOwner\ComplaintController::class, 'respond'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',

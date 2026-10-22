@@ -27,6 +27,7 @@ class Booking extends Model
         'notes',
         'cancelled_at',
         'cancel_reason',
+        'cancelled_by',
         'check_in_code',
         'checked_in_at',
         'checked_in_by',
@@ -111,11 +112,6 @@ class Booking extends Model
     public function complaints()
     {
         return $this->hasMany(Complaint::class);
-    }
-
-    public function latestComplaint()
-    {
-        return $this->hasOne(Complaint::class)->latestOfMany();
     }
 
     public function statement()
@@ -206,7 +202,7 @@ class Booking extends Model
             'sportsField.owner.fieldOwnerProfile',
             'payment',
             'review',
-            'latestComplaint',
+            'complaints',
         ];
         if ($withCustomer) {
             $relations[] = 'customer';
@@ -307,6 +303,7 @@ class Booking extends Model
             'status' => $targetStatus->value,
             'cancelled_at' => now(),
             'cancel_reason' => $reason,
+            'cancelled_by' => $by,
             'refund_status' => $refundAmount > 0 ? 'pending' : null,
             'refund_amount' => $refundAmount > 0 ? $refundAmount : null,
         ]);

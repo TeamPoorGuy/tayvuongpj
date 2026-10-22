@@ -76,7 +76,7 @@ class StatementService
                         ->where(fn ($inPeriod) => $inPeriod->whereDate('booking_date', '>=', $startDate)->whereDate('booking_date', '<=', $endDate))
                         ->orWhere(fn ($carried) => $carried->whereNull('statement_id')->whereDate('booking_date', '<', $startDate)))
                     ->whereIn('status', [BookingStatus::Completed->value, BookingStatus::Cancelled->value])
-                    ->whereDoesntHave('complaints', fn ($c) => $c->active())
+                    ->whereDoesntHave('complaints', fn ($c) => $c->holdingPayout())
                     ->get();
 
                 $totals = ['gmv' => 0.0, 'collected' => 0.0, 'refunded' => 0.0, 'commission' => 0.0];
