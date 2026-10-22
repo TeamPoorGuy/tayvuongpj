@@ -26,6 +26,12 @@ class ComplaintResource extends JsonResource
                 'total_price' => (float) $this->booking->total_price,
                 'refund_status' => $this->booking->refund_status,
                 'refund_amount' => (float) $this->booking->refund_amount,
+                'payment_amount' => (float) $this->booking->payment_amount,
+                // Số còn hoàn thêm được: tiền khách đã trả trừ phần đã/đang hoàn (0 nếu đơn không thu qua SportHub).
+                'refundable' => $this->booking->payment_id && $this->booking->payment_status === 'paid'
+                    ? max(0.0, (float) $this->booking->payment_amount - (in_array($this->booking->refund_status, ['pending', 'done'], true) ? (float) ($this->booking->refund_amount ?? $this->booking->payment_amount) : 0.0))
+                    : 0.0,
+                'no_show' => $this->booking->no_show_at !== null,
                 'field_name' => $this->booking->sportsField?->name,
             ]),
             'subject_type' => $this->subject_type,
@@ -34,6 +40,8 @@ class ComplaintResource extends JsonResource
             'content' => $this->content,
             'status' => $this->status,
             'resolution' => $this->resolution,
+            'refund_amount' => $this->refund_amount !== null ? (float) $this->refund_amount : null,
+            'attendance_confirmed' => (bool) $this->attendance_confirmed,
             'handled_by' => $this->handled_by,
             'handler' => $this->whenLoaded('handler', fn () => [
                 'id' => $this->handler->id,

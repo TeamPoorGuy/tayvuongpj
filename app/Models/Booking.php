@@ -108,6 +108,16 @@ class Booking extends Model
         return $this->hasOne(Review::class);
     }
 
+    public function complaints()
+    {
+        return $this->hasMany(Complaint::class);
+    }
+
+    public function latestComplaint()
+    {
+        return $this->hasOne(Complaint::class)->latestOfMany();
+    }
+
     public function statement()
     {
         return $this->belongsTo(OwnerStatement::class, 'statement_id');
@@ -126,6 +136,16 @@ class Booking extends Model
      * - Các trường hợp khác (hoàn tiền, từ chối, huỷ đúng hạn): 0
      */
     public function commissionBase(): float
+    {
+        // Khiếu nại được chấp nhận có thể hoàn tiền cho đơn đã hoàn tất: hoa hồng chỉ tính trên phần còn lại.
+        if ($this->status === BookingStatus::Completed && in_array($this->refund_status, ['pending', 'done'], true)) {
+            return max(0.0, $this->baseBeforeRefund() - (float) ($this->refund_amount ?? $this->payment_amount));
+        }
+
+        return $this->baseBeforeRefund();
+    }
+
+    private function baseBeforeRefund(): float
     {
         if ($this->status === BookingStatus::Completed && $this->checked_in_at !== null) {
             return (float) $this->total_price;
@@ -186,6 +206,7 @@ class Booking extends Model
             'sportsField.owner.fieldOwnerProfile',
             'payment',
             'review',
+            'latestComplaint',
         ];
         if ($withCustomer) {
             $relations[] = 'customer';

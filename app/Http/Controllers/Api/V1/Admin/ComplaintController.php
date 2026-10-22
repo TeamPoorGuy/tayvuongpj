@@ -41,7 +41,9 @@ class ComplaintController extends Controller
             $complaint,
             $request->validated('status'),
             $request->validated('resolution'),
-            $request->user()
+            $request->user(),
+            $request->validated('refund_amount'),
+            (bool) $request->validated('confirm_attendance'),
         );
 
         return response()->json([

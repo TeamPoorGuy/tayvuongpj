@@ -16,13 +16,22 @@ class Complaint extends Model
         'content',
         'status',
         'resolution',
+        'refund_amount',
+        'attendance_confirmed',
         'handled_by',
         'handled_at',
     ];
 
     protected $casts = [
         'handled_at' => 'datetime',
+        'attendance_confirmed' => 'boolean',
     ];
+
+    /** Khiếu nại còn đang xử lý: đơn liên quan bị giữ lại khỏi kỳ chi trả cho tới khi đóng. */
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status', ['open', 'processing']);
+    }
 
     public function user(): BelongsTo
     {

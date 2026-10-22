@@ -456,8 +456,10 @@ class AdminService
 
     public function updateBookingRefund(Booking $booking, string $refundStatus, ?float $refundAmount, User $admin): Booking
     {
-        if ($booking->status !== BookingStatus::Cancelled && $booking->status !== BookingStatus::Rejected) {
-            throw new ConflictException('Chỉ có thể cập nhật trạng thái hoàn tiền cho đơn đã huỷ hoặc bị từ chối.');
+        // Đơn đã chơi xong chỉ có khoản hoàn khi khiếu nại được chấp nhận (đã đặt refund_status).
+        $hasRefund = in_array($booking->refund_status, ['pending', 'done'], true);
+        if ($booking->status !== BookingStatus::Cancelled && $booking->status !== BookingStatus::Rejected && ! $hasRefund) {
+            throw new ConflictException('Chỉ có thể cập nhật trạng thái hoàn tiền cho đơn đã huỷ, bị từ chối hoặc đơn có khoản hoàn từ khiếu nại.');
         }
 
         $fill = [

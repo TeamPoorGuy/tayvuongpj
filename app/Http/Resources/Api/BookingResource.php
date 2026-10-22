@@ -29,6 +29,17 @@ class BookingResource extends JsonResource
             'checked_in_at' => $this->checked_in_at?->toISOString(),
             'no_show' => $this->no_show_at !== null,
             'recurring_group_id' => $this->recurring_group_id,
+            // Khiếu nại gần nhất: chỉ khách của đơn mới thấy (chủ sân chưa được xem nội dung khiếu nại).
+            'complaint' => $this->when(
+                $request->user()?->id === $this->user_id && $this->relationLoaded('latestComplaint') && $this->latestComplaint,
+                fn () => [
+                    'id' => $this->latestComplaint->id,
+                    'status' => $this->latestComplaint->status,
+                    'resolution' => $this->latestComplaint->resolution,
+                    'refund_amount' => $this->latestComplaint->refund_amount !== null ? (float) $this->latestComplaint->refund_amount : null,
+                    'attendance_confirmed' => (bool) $this->latestComplaint->attendance_confirmed,
+                ],
+            ),
             'payment' => [
                 'id' => $this->payment_id,
                 'status' => $this->payment_status,

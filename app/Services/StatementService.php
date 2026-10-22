@@ -62,12 +62,21 @@ class StatementService
 
                 $fieldIds = SportsField::withTrashed()->where('field_owner_id', $profile->user_id)->pluck('id');
 
+                // Kỳ chưa chi trả được lập lại: nhả các đơn đã gán để tính lại (đơn mới có khiếu nại sẽ bị giữ lại).
+                if ($statement) {
+                    Booking::where('statement_id', $statement->id)->update(['statement_id' => null]);
+                }
+
+                // Đơn đang có khiếu nại chưa đóng bị giữ lại, không chi trả cho chủ sân; khi khiếu nại đóng,
+                // đơn chưa vào kỳ nào được tính bù vào kỳ kế tiếp.
                 $bookings = Booking::whereIn('sports_field_id', $fieldIds)
                     ->whereNotNull('payment_id')
                     ->where('payment_status', 'paid')
-                    ->whereDate('booking_date', '>=', $startDate)
-                    ->whereDate('booking_date', '<=', $endDate)
+                    ->where(fn ($q) => $q
+                        ->where(fn ($inPeriod) => $inPeriod->whereDate('booking_date', '>=', $startDate)->whereDate('booking_date', '<=', $endDate))
+                        ->orWhere(fn ($carried) => $carried->whereNull('statement_id')->whereDate('booking_date', '<', $startDate)))
                     ->whereIn('status', [BookingStatus::Completed->value, BookingStatus::Cancelled->value])
+                    ->whereDoesntHave('complaints', fn ($c) => $c->active())
                     ->get();
 
                 $totals = ['gmv' => 0.0, 'collected' => 0.0, 'refunded' => 0.0, 'commission' => 0.0];
@@ -117,6 +126,25 @@ class StatementService
         }
 
         return $createdStatements;
+    }
+
+    /**
+     * Khiếu nại mở hoặc đóng làm đổi số tiền của một đơn: lập lại kỳ chưa chi trả chứa đơn đó
+     * (giữ lại đơn đang tranh chấp, cập nhật tiền hoàn). Kỳ đã chi trả thì không đụng tới.
+     */
+    public function refreshFor(Booking $booking): void
+    {
+        $ownerId = SportsField::withTrashed()->whereKey($booking->sports_field_id)->value('field_owner_id');
+        $profile = FieldOwnerProfile::where('user_id', $ownerId)->where('verification_status', 'approved')->first();
+        if (! $profile) {
+            return;
+        }
+
+        $period = $booking->booking_date->format('Y-m');
+        $open = OwnerStatement::where('owner_profile_id', $profile->id)->where('period', $period)->where('status', 'unpaid')->exists();
+        if ($open) {
+            $this->generate($period, $profile->id);
+        }
     }
 
     /** Tiền đã/đang hoàn cho khách của một đơn (không ghi số = hoàn toàn bộ). */

@@ -26,6 +26,12 @@ class TrustScoreService
         self::apply($user, -25, 'Không đến nhận sân và không hủy trước (No-show) (-25 điểm)', $booking);
     }
 
+    /** Trả điểm khi khiếu nại được chấp nhận: khách thực tế đã đến sân nên không phải vắng mặt (+25 điểm). */
+    public static function restoreNoShow(User $user, ?Booking $booking = null): void
+    {
+        self::apply($user, 25, 'Khiếu nại được chấp nhận: gỡ ghi nhận vắng mặt (+25 điểm)', $booking);
+    }
+
 
     /** Cập nhật điểm trong khoảng 0–150 và ghi log theo mức thay đổi thực tế (không phải mức danh nghĩa). */
     private static function apply(User $user, int $delta, string $reason, ?Booking $booking): void
