@@ -18,6 +18,32 @@ class ComplaintResource extends JsonResource
                 'email' => $this->user->email,
                 'phone' => $this->user->phone,
             ]),
+            'direction' => $this->direction,
+            'against_user_id' => $this->against_user_id,
+            'against' => $this->whenLoaded('against', fn () => $this->against ? [
+                'id' => $this->against->id,
+                'name' => $this->against->name,
+            ] : null),
+            // Admin cần số liệu của hai bên để cân nhắc (chủ sân huỷ đơn, vắng mặt, khiếu nại đã nhận).
+            'parties' => $this->when($request->user()?->isAdmin() && $this->relationLoaded('user'), fn () => [
+                'complainant' => $this->user ? app(\App\Services\ComplaintService::class)->partyStats($this->user) : null,
+                'respondent' => $this->against ? app(\App\Services\ComplaintService::class)->partyStats($this->against) : null,
+            ]),
+            'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->original_name,
+                'url' => url("/api/v1/complaint-attachments/{$a->id}"),
+                'by' => $a->user_id === $this->user_id ? 'complainant' : 'respondent',
+            ])->values()),
+            'response' => $this->response,
+            'responded_at' => $this->responded_at?->toISOString(),
+            'respond_by' => $this->respond_by?->toISOString(),
+            // Người đang xem là bên bị khiếu nại, còn đang xử lý và chưa phản hồi lần nào.
+            'can_respond' => $request->user()?->id !== null
+                && $request->user()->id === $this->against_user_id
+                && in_array($this->status, ['open', 'processing'], true)
+                && $this->response === null,
+            'trust_penalty' => $this->trust_penalty,
             'booking_id' => $this->booking_id,
             'booking' => $this->whenLoaded('booking', fn () => [
                 'id' => $this->booking->id,
@@ -26,6 +52,12 @@ class ComplaintResource extends JsonResource
                 'total_price' => (float) $this->booking->total_price,
                 'refund_status' => $this->booking->refund_status,
                 'refund_amount' => (float) $this->booking->refund_amount,
+                'payment_amount' => (float) $this->booking->payment_amount,
+                // Số còn hoàn thêm được: tiền khách đã trả trừ phần đã/đang hoàn (0 nếu đơn không thu qua SportHub).
+                'refundable' => $this->booking->payment_id && $this->booking->payment_status === 'paid'
+                    ? max(0.0, (float) $this->booking->payment_amount - (in_array($this->booking->refund_status, ['pending', 'done'], true) ? (float) ($this->booking->refund_amount ?? $this->booking->payment_amount) : 0.0))
+                    : 0.0,
+                'no_show' => $this->booking->no_show_at !== null,
                 'field_name' => $this->booking->sportsField?->name,
             ]),
             'subject_type' => $this->subject_type,
@@ -34,6 +66,8 @@ class ComplaintResource extends JsonResource
             'content' => $this->content,
             'status' => $this->status,
             'resolution' => $this->resolution,
+            'refund_amount' => $this->refund_amount !== null ? (float) $this->refund_amount : null,
+            'attendance_confirmed' => (bool) $this->attendance_confirmed,
             'handled_by' => $this->handled_by,
             'handler' => $this->whenLoaded('handler', fn () => [
                 'id' => $this->handler->id,

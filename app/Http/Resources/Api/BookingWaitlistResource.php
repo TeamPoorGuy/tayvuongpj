@@ -25,11 +25,12 @@ class BookingWaitlistResource extends JsonResource
                 'address' => $this->sportsField->address,
                 'primary_image' => $this->sportsField->relationLoaded('primaryImage') ? $this->sportsField->primaryImage?->image_path : null,
             ]),
-            'time_slot' => $this->whenLoaded('timeSlot', fn () => [
-                'id' => $this->timeSlot->id,
-                'start_time' => substr((string) $this->timeSlot->start_time, 0, 5),
-                'end_time' => substr((string) $this->timeSlot->end_time, 0, 5),
-            ]),
+            // Giờ lấy từ chính lượt chờ (chờ theo khoảng giờ trên lưới không gắn khung giờ nào).
+            'time_slot' => [
+                'id' => $this->time_slot_id,
+                'start_time' => substr((string) $this->start_time, 0, 5),
+                'end_time' => substr((string) $this->end_time, 0, 5),
+            ],
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

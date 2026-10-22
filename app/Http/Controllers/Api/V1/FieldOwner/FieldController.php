@@ -20,6 +20,8 @@ class FieldController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['per_page' => ['nullable', 'integer', 'between:1,50']]);
+
         return FieldResource::collection($this->service->fields($request->user(), (int) $request->query('per_page', 10)));
     }
 

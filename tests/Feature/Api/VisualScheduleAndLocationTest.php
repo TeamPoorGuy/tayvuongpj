@@ -161,7 +161,8 @@ class VisualScheduleAndLocationTest extends TestCase
     {
         [$owner, $field1, $field2, $slot1] = $this->createOwnerWithFields();
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
-        $date = '2026-10-20';
+        // Ngày tương đối (endpoint chỉ nhận từ hôm nay trở đi) để test không hỏng theo thời gian.
+        $date = today()->addDay()->toDateString();
 
         // Đặt slot 1
         Booking::create([

@@ -77,13 +77,15 @@ class Banks
             return null;
         }
 
-        $normalized = mb_strtolower(trim($name));
+        // Bỏ khoảng trắng và dấu gạch để "MB Bank", "MBBank", "mb-bank" đều khớp.
+        $squash = fn (string $text) => preg_replace('/[\s\-_.]+/u', '', mb_strtolower(trim($text)));
+        $normalized = $squash($name);
 
         foreach (self::LIST as $bank) {
-            if (mb_strtolower($bank['short_name']) === $normalized || mb_strtolower($bank['name']) === $normalized) {
+            if ($squash($bank['short_name']) === $normalized || $squash($bank['name']) === $normalized) {
                 return $bank['bin'];
             }
-            if (str_contains($normalized, mb_strtolower($bank['short_name']))) {
+            if (str_contains($normalized, $squash($bank['short_name']))) {
                 return $bank['bin'];
             }
         }

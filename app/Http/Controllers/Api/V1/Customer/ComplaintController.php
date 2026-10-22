@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Complaint\RespondComplaintRequest;
 use App\Http\Requests\Api\Complaint\StoreComplaintRequest;
+use App\Models\Complaint;
 use App\Http\Resources\Api\ComplaintResource;
 use App\Services\ComplaintService;
 use Illuminate\Http\JsonResponse;
@@ -23,10 +25,20 @@ class ComplaintController extends Controller
 
     public function store(StoreComplaintRequest $request): JsonResponse
     {
-        $complaint = $this->service->create($request->validated(), $request->user());
+        $complaint = $this->service->create($request->validated(), $request->user(), $request->file('photos', []));
 
         return (new ComplaintResource($complaint))
             ->response()
             ->setStatusCode(201);
+    }
+
+    public function respond(RespondComplaintRequest $request, Complaint $complaint): JsonResponse
+    {
+        $updated = $this->service->respond($complaint, $request->user(), $request->validated('response'), $request->file('photos', []));
+
+        return response()->json([
+            'message' => 'Đã gửi phản hồi của bạn tới Ban quản trị.',
+            'data' => new ComplaintResource($updated),
+        ]);
     }
 }

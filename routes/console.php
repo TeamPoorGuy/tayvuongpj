@@ -14,7 +14,8 @@ Artisan::command('bookings:sync', function (BookingService $bookings) {
     $this->info("Từ chối quá hạn: {$result['rejected']}, hoàn thành: {$result['completed']}");
 })->purpose('Tự động xử lý đơn đặt sân quá hạn / đã kết thúc');
 
-Schedule::command('bookings:sync')->everyFifteenMinutes()->withoutOverlapping();
+// Mỗi phút: lượt giữ chỗ chưa thanh toán phải nhả đúng hạn (mặc định 15 phút), không được kẹt thêm một chu kỳ.
+Schedule::command('bookings:sync')->everyMinute()->withoutOverlapping();
 
 Artisan::command('waitlist:expire', function (\App\Services\WaitlistService $waitlist) {
     $count = $waitlist->expireOffers();
@@ -36,16 +37,16 @@ Schedule::command('matches:close-past')->hourly()->withoutOverlapping();
 
 Artisan::command('statements:generate {period?}', function (\App\Services\StatementService $statementService) {
     $period = $this->argument('period') ?? now()->subMonth()->format('Y-m');
-    $this->info("Đang sinh bảng đối soát hoa hồng cho kỳ: {$period}...");
+    $this->info("Đang lập bảng đối soát & chi trả cho kỳ: {$period}...");
     $statements = $statementService->generate($period);
     $this->info("Đã sinh/cập nhật bảng đối soát cho ".count($statements)." chủ sân.");
-})->purpose('Sinh bảng đối soát hoa hồng hàng tháng cho các chủ sân');
+})->purpose('Lập bảng đối soát & chi trả hàng tháng cho các chủ sân');
 
 Schedule::command('statements:generate')->monthlyOn(1, '01:00')->withoutOverlapping();
 
-Artisan::command('statements:remind', function (\App\Services\StatementService $statementService) {
-    $count = $statementService->sendDueReminders();
-    $this->info("Đã gửi {$count} mail nhắc nộp phí đối soát.");
-})->purpose('Nhắc chủ sân nộp phí đối soát sắp đến hạn hoặc quá hạn');
+Artisan::command('owners:purge-documents', function (\App\Services\OwnerApplicationService $service) {
+    $count = $service->purgeRejectedDocuments();
+    $this->info("Đã xoá {$count} giấy tờ của hồ sơ chủ sân bị từ chối quá hạn lưu.");
+})->purpose('Xoá giấy tờ của hồ sơ chủ sân bị từ chối quá 30 ngày');
 
-Schedule::command('statements:remind')->dailyAt('08:00')->withoutOverlapping();
+Schedule::command('owners:purge-documents')->dailyAt('02:00')->withoutOverlapping();

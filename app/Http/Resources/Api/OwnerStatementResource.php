@@ -3,7 +3,7 @@
 namespace App\Http\Resources\Api;
 
 use App\Models\OwnerStatement;
-use App\Support\Settings;
+use App\Support\Banks;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,18 +20,22 @@ class OwnerStatementResource extends JsonResource
             'period' => $this->period,
             'booking_count' => (int) $this->booking_count,
             'gmv' => (float) $this->gmv,
+            'collected_amount' => (float) $this->collected_amount,
+            'refunded_amount' => (float) $this->refunded_amount,
             'commission_amount' => (float) $this->commission_amount,
+            'payout_amount' => (float) $this->payout_amount,
             'status' => $this->status,
             'due_at' => $this->due_at?->toISOString(),
             'is_overdue' => $this->isOverdue(),
             'transfer_code' => $this->transfer_code,
-            'reported_at' => $this->reported_at?->toISOString(),
+            'payout_ref' => $this->payout_ref,
             'paid_at' => $this->paid_at?->toISOString(),
             'note' => $this->note,
-            'platform_bank' => [
-                'bank_name' => Settings::getString('platform_bank_name', 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)'),
-                'account_number' => Settings::getString('platform_bank_account', '1234567890'),
-                'account_holder' => Settings::getString('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM'),
+            // Tài khoản nhận tiền chi trả của chủ sân (khai trong hồ sơ cơ sở).
+            'payout_bank' => [
+                'bank_name' => $this->ownerProfile?->bank_name,
+                'account_number' => $this->ownerProfile?->bank_account_number,
+                'account_holder' => $this->ownerProfile?->bank_account_holder,
                 'qr_url' => $this->qrUrl(),
             ],
             'owner' => $this->whenLoaded('ownerProfile', fn () => [
@@ -52,20 +56,19 @@ class OwnerStatementResource extends JsonResource
         ];
     }
 
-    /** Ảnh VietQR điền sẵn số tiền + nội dung chuyển khoản; null khi không còn gì phải nộp. */
+    /** VietQR để admin chuyển khoản chi trả cho chủ sân; null khi đã chi trả hoặc chủ sân chưa khai đủ tài khoản. */
     private function qrUrl(): ?string
     {
-        if ($this->status !== 'unpaid' || (float) $this->commission_amount <= 0) {
+        $profile = $this->ownerProfile;
+        $bin = $profile?->bank_bin ?? Banks::guessBin($profile?->bank_name);
+        if ($this->status !== 'unpaid' || (float) $this->payout_amount <= 0 || ! $bin || ! $profile?->bank_account_number) {
             return null;
         }
 
-        $bank = Settings::getString('platform_bank_code', 'VCB');
-        $account = Settings::getString('platform_bank_account', '1234567890');
-
-        return "https://img.vietqr.io/image/{$bank}-{$account}-compact2.png?".http_build_query([
-            'amount' => (int) $this->commission_amount,
+        return "https://img.vietqr.io/image/{$bin}-{$profile->bank_account_number}-compact2.png?".http_build_query([
+            'amount' => (int) $this->payout_amount,
             'addInfo' => $this->transfer_code,
-            'accountName' => Settings::getString('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM'),
+            'accountName' => $profile->bank_account_holder,
         ]);
     }
 }

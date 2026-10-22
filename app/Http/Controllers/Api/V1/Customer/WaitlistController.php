@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1\Customer;
 
-use App\Http\Resources\Api\BookingWaitlistResource;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\BookingResource;
+use App\Http\Resources\Api\BookingWaitlistResource;
 use App\Services\WaitlistService;
+use App\Support\InputRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,15 +28,20 @@ class WaitlistController extends Controller
     {
         $validated = $request->validate([
             'sports_field_id' => ['required', 'integer', 'exists:sports_fields,id'],
-            'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            // Một khung giờ có sẵn, hoặc một khoảng giờ trên lưới 30 phút.
+            'time_slot_id' => ['required_without:start_time', 'nullable', 'integer', 'exists:time_slots,id'],
+            'start_time' => ['required_without:time_slot_id', 'nullable', 'date_format:H:i', InputRules::HALF_HOUR],
+            'end_time' => ['required_with:start_time', 'nullable', 'date_format:H:i', 'after:start_time', InputRules::HALF_HOUR],
             'booking_date' => ['required', 'date_format:Y-m-d'],
         ]);
 
         $waitlist = $this->service->join(
             $request->user(),
             (int) $validated['sports_field_id'],
-            (int) $validated['time_slot_id'],
-            $validated['booking_date']
+            isset($validated['time_slot_id']) ? (int) $validated['time_slot_id'] : null,
+            $validated['booking_date'],
+            $validated['start_time'] ?? null,
+            $validated['end_time'] ?? null,
         );
 
         return response()->json([
@@ -49,7 +55,7 @@ class WaitlistController extends Controller
         $booking = $this->service->acceptOffer($request->user(), $id);
 
         return response()->json([
-            'message' => 'Đã nhận suất sân! Đơn đặt sân đang chờ chủ sân duyệt, sau đó bạn chuyển khoản cọc hoặc trả hết để giữ sân.',
+            'message' => 'Đã nhận suất sân! Chỗ được giữ tạm, hãy chuyển khoản cọc hoặc trả hết để hoàn tất đặt sân.',
             'data' => new BookingResource($booking),
         ], 201);
     }

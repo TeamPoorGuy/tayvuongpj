@@ -29,7 +29,7 @@ export function HomePage() {
           <div className="hero__copy">
             <span className="eyebrow"><Sparkles size={14} /> Một chạm đến trận đấu</span>
             <h1>Đặt sân nhanh.<br /><em>Chơi hết mình.</em></h1>
-            <p>Tìm đúng sân, chọn đúng giờ và gửi yêu cầu đặt lịch trong vài phút.</p>
+            <p>Tìm đúng sân, chọn đúng giờ và đặt sân kèm thanh toán trong vài phút.</p>
             <form className="hero-search" onSubmit={search}>
               <Search size={20} />
               <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Tên sân, quận hoặc địa chỉ..." aria-label="Tìm sân" />
@@ -83,7 +83,7 @@ export function HomePage() {
       <section id="how-it-works" className="benefits">
         <div className="shell benefits__grid">
           <article className="reveal" style={{ '--i': 0 } as React.CSSProperties}><Search /><div><strong>Tìm đúng sân</strong><p>Lọc theo môn, khu vực và mức giá phù hợp.</p></div></article>
-          <article className="reveal" style={{ '--i': 1 } as React.CSSProperties}><CalendarCheck /><div><strong>Chọn lịch trống</strong><p>Xem giờ còn trống trước khi gửi yêu cầu.</p></div></article>
+          <article className="reveal" style={{ '--i': 1 } as React.CSSProperties}><CalendarCheck /><div><strong>Chọn lịch trống</strong><p>Xem giờ còn trống rồi chọn ô và đặt ngay.</p></div></article>
           <article className="reveal" style={{ '--i': 2 } as React.CSSProperties}><ShieldCheck /><div><strong>An tâm vào trận</strong><p>Thông tin sân và chủ sân được kiểm duyệt.</p></div></article>
         </div>
       </section>

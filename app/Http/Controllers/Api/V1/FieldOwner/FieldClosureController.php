@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\FieldOwner;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\FieldClosureResource;
+use App\Support\InputRules;
 use App\Models\FieldClosure;
 use App\Models\SportsField;
 use App\Services\FieldClosureService;
@@ -25,12 +26,16 @@ class FieldClosureController extends Controller
         $validated = $request->validate([
             'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            // Cả hai giờ để trống = đóng cả ngày; có giờ = chỉ khoá khoảng giờ đó mỗi ngày.
+            'start_time' => ['nullable', 'required_with:end_time', 'date_format:H:i', InputRules::HALF_HOUR],
+            'end_time' => ['nullable', 'required_with:start_time', 'date_format:H:i', 'after:start_time', InputRules::HALF_HOUR],
             'reason' => ['required', 'string', 'max:255'],
         ], [
             'start_date.required' => 'Vui lòng chọn ngày bắt đầu.',
             'start_date.after_or_equal' => 'Ngày bắt đầu không được ở trong quá khứ.',
             'end_date.required' => 'Vui lòng chọn ngày kết thúc.',
             'end_date.after_or_equal' => 'Ngày kết thúc phải từ ngày bắt đầu trở đi.',
+            'end_time.after' => 'Giờ kết thúc phải sau giờ bắt đầu.',
             'reason.required' => 'Vui lòng nhập lý do đóng sân.',
             'reason.max' => 'Lý do đóng sân không được vượt quá 255 ký tự.',
         ]);

@@ -17,7 +17,12 @@ class ComplaintController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $filters = $request->only(['status', 'category', 'keyword', 'per_page']);
+        $filters = $request->validate([
+            'status' => ['nullable', 'string', 'max:30'],
+            'category' => ['nullable', 'string', 'max:50'],
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
         $complaints = $this->service->list($filters);
 
         return ComplaintResource::collection($complaints);
@@ -25,7 +30,7 @@ class ComplaintController extends Controller
 
     public function show(Complaint $complaint): ComplaintResource
     {
-        $complaint->load(['user', 'booking.sportsField', 'handler']);
+        $complaint->load(['user', 'against', 'attachments', 'booking.sportsField', 'handler']);
 
         return new ComplaintResource($complaint);
     }
@@ -36,7 +41,10 @@ class ComplaintController extends Controller
             $complaint,
             $request->validated('status'),
             $request->validated('resolution'),
-            $request->user()
+            $request->user(),
+            $request->validated('refund_amount'),
+            (bool) $request->validated('confirm_attendance'),
+            $request->validated('trust_penalty'),
         );
 
         return response()->json([

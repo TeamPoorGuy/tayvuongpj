@@ -38,28 +38,37 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/categories', [CatalogController::class, 'categories']);
     Route::get('/field-types', [CatalogController::class, 'fieldTypes']);
     Route::get('/fields', [CatalogController::class, 'fields']);
+    Route::get('/fields/locations', [CatalogController::class, 'locations']);
     Route::get('/fields/{slug}', [CatalogController::class, 'field']);
     Route::get('/fields/{field}/available-slots', [CatalogController::class, 'availableSlots']);
+    Route::get('/fields/{field}/schedule', [CatalogController::class, 'schedule']);
     Route::get('/fields/{slug}/suggestions', [FieldSuggestionController::class, 'suggestions']);
     Route::get('/settings/public', [SettingController::class, 'publicSettings']);
     Route::get('/matches', [MatchmakingController::class, 'index']);
     Route::get('/matches/{id}', [MatchmakingController::class, 'show']);
 
 
+    // Ngân hàng báo có tiền vào tài khoản nền tảng (thu hộ).
+    Route::post('/webhooks/bank', \App\Http\Controllers\Api\V1\Webhook\BankWebhookController::class)->middleware('throttle:120,1');
+
     Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+        Route::get('/complaint-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ComplaintAttachmentController::class, 'show']);
 
         Route::prefix('customer')->middleware('api.role:customer')->group(function () {
             Route::get('/complaints', [Customer\ComplaintController::class, 'index']);
             Route::post('/complaints', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
+            Route::post('/complaints/{complaint}/respond', [Customer\ComplaintController::class, 'respond'])->middleware('throttle:writes');
             Route::get('/bookings', [Customer\BookingController::class, 'index']);
             Route::post('/bookings', [Customer\BookingController::class, 'store'])->middleware(['verified', 'throttle:writes']);
             Route::post('/bookings/recurring', [Customer\BookingController::class, 'storeRecurring'])->middleware(['verified', 'throttle:writes']);
             Route::post('/bookings/recurring/{groupId}/cancel', [Customer\BookingController::class, 'cancelRecurring'])->middleware('throttle:writes');
             Route::get('/bookings/{booking}', [Customer\BookingController::class, 'show']);
-            Route::post('/bookings/{booking}/payment', [Customer\BookingController::class, 'reportPayment'])->middleware(['verified', 'throttle:writes']);
+            Route::get('/payments/{payment}', [Customer\PaymentController::class, 'show']);
+            Route::patch('/payments/{payment}', [Customer\PaymentController::class, 'update'])->middleware('throttle:writes');
+            Route::post('/payments/{payment}/cancel', [Customer\PaymentController::class, 'cancel'])->middleware('throttle:writes');
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);
             Route::get('/profile', [Customer\ProfileController::class, 'show']);
@@ -141,11 +150,12 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             [FieldOwner\BookingController::class, 'index']
         );
 
-        Route::patch('/bookings/{booking}/approve', [FieldOwner\BookingController::class, 'approve'])->middleware('throttle:writes');
-        Route::patch('/bookings/{booking}/payment', [FieldOwner\BookingController::class, 'payment'])->middleware('throttle:writes');
         Route::patch('/bookings/{booking}/no-show', [FieldOwner\BookingController::class, 'noShow'])->middleware('throttle:writes');
-        Route::patch('/bookings/recurring/{groupId}/approve', [FieldOwner\BookingController::class, 'approveRecurring'])->middleware('throttle:writes');
-        Route::patch('/bookings/recurring/{groupId}/reject', [FieldOwner\BookingController::class, 'rejectRecurring'])->middleware('throttle:writes');
+
+        // Khiếu nại hai chiều: chủ sân khiếu nại khách và phản hồi khi bị khách khiếu nại.
+        Route::get('/complaints', [FieldOwner\ComplaintController::class, 'index']);
+        Route::post('/complaints', [FieldOwner\ComplaintController::class, 'store'])->middleware('throttle:writes');
+        Route::post('/complaints/{complaint}/respond', [FieldOwner\ComplaintController::class, 'respond'])->middleware('throttle:writes');
 
         Route::patch(
             '/bookings/{booking}/status',
@@ -162,11 +172,12 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('/statements/current-summary', [FieldOwner\StatementController::class, 'currentSummary']);
         Route::get('/statements/{statement}/export-csv', [FieldOwner\StatementController::class, 'exportBookingsCsv']);
         Route::get('/statements/{statement}', [FieldOwner\StatementController::class, 'show']);
-        Route::post('/statements/{statement}/report', [FieldOwner\StatementController::class, 'report'])->middleware('throttle:writes');
     });
 
         Route::prefix('admin')->middleware('api.role:admin')->group(function () {
             Route::get('/dashboard', [Admin\DashboardController::class, 'show']);
+            Route::get('/payments', [Admin\PaymentController::class, 'index']);
+            Route::post('/payments/{payment}/confirm', [Admin\PaymentController::class, 'confirm'])->middleware('throttle:writes');
             Route::get('/users', [Admin\UserController::class, 'index']);
             Route::get('/users/{user}/detail', [Admin\UserController::class, 'detail']);
             Route::get('/users/{user}/trust-score-logs', [Admin\UserController::class, 'trustScoreLogs']);
@@ -201,9 +212,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/statements/{statement}/export-csv', [Admin\StatementController::class, 'exportBookingsCsv']);
             Route::get('/statements/{statement}', [Admin\StatementController::class, 'show']);
             Route::post('/statements/generate', [Admin\StatementController::class, 'generate'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/confirm', [Admin\StatementController::class, 'confirm'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/reject-report', [Admin\StatementController::class, 'rejectReport'])->middleware('throttle:writes');
-            Route::post('/statements/{statement}/waive', [Admin\StatementController::class, 'waive'])->middleware('throttle:writes');
+            Route::post('/statements/{statement}/payout', [Admin\StatementController::class, 'payout'])->middleware('throttle:writes');
         });
     });
 });

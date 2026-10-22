@@ -16,7 +16,7 @@ Rất tiếc, đơn đặt sân **{{ $booking->sportsField->name }}** của bạ
 @endif
 
 - **Ngày:** {{ $booking->booking_date->format('d/m/Y') }}
-- **Giờ:** {{ substr($booking->timeSlot->start_time, 0, 5) }} - {{ substr($booking->timeSlot->end_time, 0, 5) }}
+- **Giờ:** {{ substr($booking->start_time, 0, 5) }} - {{ substr($booking->end_time, 0, 5) }}
 - **Tổng tiền:** {{ number_format($booking->total_price, 0, ',', '.') }}đ
 @if ($booking->cancel_reason)
 - **Lý do:** {{ $booking->cancel_reason }}

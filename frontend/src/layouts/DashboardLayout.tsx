@@ -1,6 +1,7 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   Building2,
   CalendarDays,
@@ -33,8 +34,9 @@ const ownerNav = [
   { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
-  { to: '/owner/statements', label: 'Đối soát & Phí sàn', icon: Receipt },
+  { to: '/owner/statements', label: 'Đối soát & Chi trả', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
+  { to: '/owner/complaints', label: 'Khiếu nại', icon: AlertCircle },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]
 
@@ -51,6 +53,7 @@ const adminGroups = [
     title: 'Vận hành',
     items: [
       { to: '/admin/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
+      { to: '/admin/payments', label: 'Giao dịch thu hộ', icon: Receipt },
       { to: '/admin/complaints', label: 'Khiếu nại', icon: AlertTriangle },
       { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
     ],

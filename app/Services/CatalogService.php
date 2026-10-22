@@ -45,11 +45,14 @@ class CatalogService
             ->with(['primaryImage', 'fieldType.sportCategory'])
             ->withRating()
             ->when($request->filled('keyword'), function ($query) use ($request) {
-                $keyword = addcslashes($request->string('keyword')->toString(), '%_\\');
-                $query->where(fn ($inner) => $inner
-                    ->where('name', 'like', "%{$keyword}%")
-                    ->orWhere('address', 'like', "%{$keyword}%"));
+                // Tách từ, bỏ dấu: mỗi từ phải xuất hiện đâu đó trong tên/địa chỉ/quận/thành phố.
+                $words = preg_split('/\s+/', SportsField::normalizeForSearch($request->string('keyword')->toString()), -1, PREG_SPLIT_NO_EMPTY);
+                foreach (array_slice($words, 0, 8) as $word) {
+                    $query->where('search_text', 'like', '%'.addcslashes($word, '%_\\').'%');
+                }
             })
+            ->when($request->filled('city'), fn ($query) => $query->where('city', $request->string('city')->toString()))
+            ->when($request->filled('district'), fn ($query) => $query->where('district', $request->string('district')->toString()))
             ->when($request->filled('category'), fn ($query) => $query->whereHas(
                 'fieldType.sportCategory',
                 fn ($category) => $category->where('slug', $request->string('category')->toString())
@@ -60,6 +63,25 @@ class CatalogService
             ->latest()
             ->paginate($request->integer('per_page', 9))
             ->withQueryString();
+    }
+
+    /** @return list<array{city: string, districts: list<string>}> */
+    public function locations(): array
+    {
+        return SportsField::approved()
+            ->whereNotNull('city')
+            ->select('city', 'district')
+            ->distinct()
+            ->orderBy('city')
+            ->orderBy('district')
+            ->get()
+            ->groupBy('city')
+            ->map(fn ($rows, $city) => [
+                'city' => $city,
+                'districts' => $rows->pluck('district')->filter()->values()->all(),
+            ])
+            ->values()
+            ->all();
     }
 
     public function fieldBySlug(string $slug): SportsField
@@ -79,29 +101,22 @@ class CatalogService
         );
 
         $isClosed = $field->isClosedOn($date);
+        $occupancy = $field->occupancyOn($date);
 
-        $bookedSlotIds = Booking::query()
-            ->where('sports_field_id', $field->id)
-            ->whereDate('booking_date', $date)
-            ->whereIn('status', BookingStatus::blockingCases())
-            ->pluck('time_slot_id');
+        return $field->slotsFor($date)->map(function ($slot) use ($date, $isClosed, $occupancy) {
+            $booked = $isClosed
+                || SportsField::overlapsAny($occupancy['booked'], $slot->start_time, $slot->end_time)
+                || SportsField::overlapsAny($occupancy['locked'], $slot->start_time, $slot->end_time);
 
-        // Slot đang được giữ chỗ 15 phút cho người trong hàng đợi.
-        $heldSlotIds = BookingWaitlist::query()
-            ->where('sports_field_id', $field->id)
-            ->whereDate('booking_date', $date)
-            ->where('status', 'offered')
-            ->where('offer_expires_at', '>', now())
-            ->pluck('time_slot_id');
-
-        return $field->timeSlots()->where('is_active', true)->get()->map(fn ($slot) => [
-            'id' => $slot->id,
-            'start_time' => substr($slot->start_time, 0, 5),
-            'end_time' => substr($slot->end_time, 0, 5),
-            'is_booked' => $isClosed || $bookedSlotIds->contains($slot->id),
-            'is_held' => ! $isClosed && ! $bookedSlotIds->contains($slot->id) && $heldSlotIds->contains($slot->id),
-            'is_past' => Carbon::parse($date.' '.$slot->start_time)->isPast(),
-            'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
-        ])->all();
+            return [
+                'id' => $slot->id,
+                'start_time' => substr($slot->start_time, 0, 5),
+                'end_time' => substr($slot->end_time, 0, 5),
+                'is_booked' => $booked,
+                'is_held' => ! $booked && SportsField::overlapsAny($occupancy['held'], $slot->start_time, $slot->end_time),
+                'is_past' => Carbon::parse($date.' '.$slot->start_time)->isPast(),
+                'price_per_hour' => $slot->price_per_hour !== null ? (float) $slot->price_per_hour : null,
+            ];
+        })->all();
     }
 }

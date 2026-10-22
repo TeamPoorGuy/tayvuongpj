@@ -1,18 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  CheckCircle2,
-  Coins,
-  Download,
-  Eye,
-  Plus,
-  RotateCcw,
-  Search,
-  XCircle,
-} from 'lucide-react'
+import { Coins, Download, Eye, Plus, Search, Send } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
-import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
@@ -44,11 +34,8 @@ export function AdminStatementsPage() {
     d.setMonth(d.getMonth() - 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
-  const [confirmTarget, setConfirmTarget] = useState<OwnerStatement | null>(null)
-  const [waiveTarget, setWaiveTarget] = useState<OwnerStatement | null>(null)
-  const [waiveReason, setWaiveReason] = useState('')
-  const [rejectTarget, setRejectTarget] = useState<OwnerStatement | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
+  const [payoutTarget, setPayoutTarget] = useState<OwnerStatement | null>(null)
+  const [payoutRef, setPayoutRef] = useState('')
   const [detailTarget, setDetailTarget] = useState<OwnerStatement | null>(null)
 
   // 1. Dashboard metrics
@@ -93,46 +80,16 @@ export function AdminStatementsPage() {
     onError: (err) => toast.error(errorMessage(err)),
   })
 
-  // 5. Xác nhận thu phí
-  const confirmMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return (await api.post<ApiEnvelope<OwnerStatement>>(`/admin/statements/${id}/confirm`)).data
-    },
+  // 5. Ghi nhận đã chuyển khoản chi trả cho chủ sân
+  const payoutMutation = useMutation({
+    mutationFn: async ({ id, ref }: { id: number; ref: string }) =>
+      (await api.post<ApiEnvelope<OwnerStatement>>(`/admin/statements/${id}/payout`, { payout_ref: ref || null })).data,
     onSuccess: (res) => {
-      toast.success(res.message || 'Xác nhận thu phí thành công!')
+      toast.success(res.message || 'Đã ghi nhận chi trả cho chủ sân!')
       qc.invalidateQueries({ queryKey: ['admin', 'statements'] })
       qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-      setConfirmTarget(null)
-    },
-    onError: (err) => toast.error(errorMessage(err)),
-  })
-
-  // 6. Miễn thu phí
-  const waiveMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      return (await api.post<ApiEnvelope<OwnerStatement>>(`/admin/statements/${id}/waive`, { reason })).data
-    },
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã miễn thu phí đối soát!')
-      qc.invalidateQueries({ queryKey: ['admin', 'statements'] })
-      qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-      setWaiveTarget(null)
-      setWaiveReason('')
-    },
-    onError: (err) => toast.error(errorMessage(err)),
-  })
-
-  // 7. Từ chối báo cáo thanh toán (chưa nhận được tiền)
-  const rejectMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      return (await api.post<ApiEnvelope<OwnerStatement>>(`/admin/statements/${id}/reject-report`, { reason })).data
-    },
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã từ chối báo cáo chuyển khoản!')
-      qc.invalidateQueries({ queryKey: ['admin', 'statements'] })
-      qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-      setRejectTarget(null)
-      setRejectReason('')
+      setPayoutTarget(null)
+      setPayoutRef('')
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -144,38 +101,12 @@ export function AdminStatementsPage() {
 
   const renderStatus = (st: OwnerStatement) => {
     if (st.status === 'paid') {
-      return (
-        <span className="status status--approved">
-          <i /> Đã duyệt thu
-        </span>
-      )
-    }
-    if (st.status === 'reported') {
-      return (
-        <span className="status status--reported">
-          <i /> Đã báo chuyển
-        </span>
-      )
-    }
-    if (st.status === 'waived') {
-      return (
-        <span className="status status--inactive">
-          <i /> Miễn thu
-        </span>
-      )
+      return <span className="status status--approved"><i /> Đã chi trả</span>
     }
     if (st.is_overdue) {
-      return (
-        <span className="status status--cancelled">
-          <i /> Nợ quá hạn
-        </span>
-      )
+      return <span className="status status--cancelled"><i /> Trễ hạn chi trả</span>
     }
-    return (
-      <span className="status status--pending">
-        <i /> Chờ nộp
-      </span>
-    )
+    return <span className="status status--pending"><i /> Chờ chi trả</span>
   }
 
   return (
@@ -183,39 +114,35 @@ export function AdminStatementsPage() {
       <PageTitle
         icon={<Coins />}
         kicker="Quản trị tài chính"
-        title="Đối soát tháng & Hoa hồng đại lý"
-        copy="Quản lý việc thu phí hoa hồng nền tảng từ các cơ sở sân theo chu kỳ tháng (mô hình Agoda)."
+        title="Đối soát & Chi trả chủ sân"
+        copy="SportHub thu hộ tiền khách; mỗi tháng chuyển cho chủ sân số đã thu sau khi trừ tiền hoàn khách và hoa hồng nền tảng."
         action={
           <button
             type="button"
             className="button button--brand"
             onClick={() => setGenerateModalOpen(true)}
           >
-            <Plus size={16} /> Sinh kỳ đối soát
+            <Plus size={16} /> Lập kỳ đối soát
           </button>
         }
       />
 
-      {/* Thẻ chỉ số hoa hồng */}
+      {/* Thẻ chỉ số chi trả */}
       <div className="stats-grid-3" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <span className="stat-card__label">Tổng giá trị đơn toàn sàn (GMV)</span>
-          <strong className="stat-card__val">{formatMoney(stats?.total_gmv ?? 0)}</strong>
-          <small className="stat-card__note">Tổng doanh thu các đơn đã xác nhận / xong</small>
-        </div>
-        <div className="stat-card stat-card--highlight">
-          <span className="stat-card__label">Hoa hồng nền tảng đã thu</span>
-          <strong className="stat-card__val">
-            {formatMoney(stats?.total_commission_collected ?? 0)}
-          </strong>
-          <small className="stat-card__note">{totals?.paid_count ?? 0} kỳ đã duyệt thu</small>
+          <span className="stat-card__label">Còn phải chi trả chủ sân</span>
+          <strong className="stat-card__val" style={{ color: 'var(--warn, #e29a0c)' }}>{formatMoney(totals?.unpaid_amount ?? 0)}</strong>
+          <small className="stat-card__note">{totals?.unpaid_count ?? 0} kỳ chưa chuyển khoản</small>
         </div>
         <div className="stat-card">
-          <span className="stat-card__label">Hoa hồng đang chờ thu</span>
-          <strong className="stat-card__val" style={{ color: 'var(--warn, #e29a0c)' }}>
-            {formatMoney(stats?.total_commission_pending ?? 0)}
-          </strong>
-          <small className="stat-card__note">{totals?.unpaid_count ?? 0} kỳ chưa nộp hoặc chờ xác nhận</small>
+          <span className="stat-card__label">Đã chi trả chủ sân</span>
+          <strong className="stat-card__val">{formatMoney(totals?.paid_amount ?? 0)}</strong>
+          <small className="stat-card__note">{totals?.paid_count ?? 0} kỳ đã chuyển khoản</small>
+        </div>
+        <div className="stat-card stat-card--highlight">
+          <span className="stat-card__label">Hoa hồng nền tảng</span>
+          <strong className="stat-card__val">{formatMoney((stats?.total_commission_collected ?? 0) + (stats?.total_commission_pending ?? 0))}</strong>
+          <small className="stat-card__note">Đã trừ thẳng từ tiền thu hộ khi đối soát</small>
         </div>
       </div>
 
@@ -253,10 +180,8 @@ export function AdminStatementsPage() {
           aria-label="Lọc theo trạng thái"
         >
           <option value="">Tất cả trạng thái</option>
-          <option value="unpaid">Chờ nộp</option>
-          <option value="reported">Đã báo chuyển</option>
-          <option value="paid">Đã thanh toán</option>
-          <option value="waived">Miễn thu</option>
+          <option value="unpaid">Chờ chi trả</option>
+          <option value="paid">Đã chi trả</option>
         </select>
         <a
           href={`/api/v1/admin/statements/export-csv?period=${encodeURIComponent(periodFilter)}&status=${encodeURIComponent(statusFilter)}&keyword=${encodeURIComponent(debouncedSearch)}`}
@@ -282,13 +207,12 @@ export function AdminStatementsPage() {
               <thead>
                 <tr>
                   <th>Cơ sở / Chủ sân</th>
-                  <th>Kỳ</th>
-                  <th>Số đơn</th>
-                  <th>GMV</th>
+                  <th>Kỳ / Số đơn</th>
+                  <th>Thu hộ / Hoàn</th>
                   <th>Hoa hồng</th>
-                  <th>Mã CK / Hạn nộp</th>
+                  <th>Chi trả</th>
+                  <th>Nội dung CK / Hạn</th>
                   <th>Trạng thái</th>
-                  <th>Ghi chú</th>
                   <th style={{ textAlign: 'right' }}>Thao tác</th>
                 </tr>
               </thead>
@@ -301,13 +225,17 @@ export function AdminStatementsPage() {
                         {st.owner?.user_name} ({st.owner?.user_phone || st.owner?.user_email})
                       </small>
                     </td>
-                    <td>
-                      <strong>Tháng {st.period}</strong>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <strong>T{st.period}</strong>
+                      <small style={{ display: 'block', color: 'var(--muted)' }}>{st.booking_count} đơn</small>
                     </td>
-                    <td>{st.booking_count}</td>
-                    <td>{formatMoney(st.gmv)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {formatMoney(st.collected_amount)}
+                      <small style={{ display: 'block', color: 'var(--muted)' }}>hoàn {formatMoney(st.refunded_amount)}</small>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatMoney(st.commission_amount)}</td>
                     <td>
-                      <strong style={{ color: 'var(--forest)' }}>{formatMoney(st.commission_amount)}</strong>
+                      <strong style={{ color: 'var(--forest)' }}>{formatMoney(st.payout_amount)}</strong>
                     </td>
                     <td>
                       <code style={{ fontSize: 12, background: 'var(--surface)', padding: '2px 6px', borderRadius: 'var(--r-sm)' }}>
@@ -317,11 +245,9 @@ export function AdminStatementsPage() {
                         Hạn: {st.due_at ? formatDate(st.due_at) : '—'}
                       </small>
                     </td>
-                    <td>{renderStatus(st)}</td>
-                    <td style={{ maxWidth: 160 }}>
-                      <small style={{ display: 'block', color: 'var(--muted)' }} title={st.note || ''}>
-                        {st.note || '—'}
-                      </small>
+                    <td>
+                      {renderStatus(st)}
+                      {st.payout_ref && <small style={{ display: 'block', color: 'var(--muted)' }}>GD: {st.payout_ref}</small>}
                     </td>
                     <td>
                       <div className="row-actions">
@@ -333,40 +259,17 @@ export function AdminStatementsPage() {
                         >
                           <Eye size={13} /> Chi tiết
                         </button>
-                        {['unpaid', 'reported'].includes(st.status) && (
+                        {st.status === 'unpaid' && (
                           <button
                             type="button"
                             className="button button--brand button--small"
-                            onClick={() => setConfirmTarget(st)}
-                            title="Xác nhận đã nhận tiền"
-                          >
-                            <CheckCircle2 size={13} /> Duyệt thu
-                          </button>
-                        )}
-                        {st.status === 'reported' && (
-                          <button
-                            type="button"
-                            className="button button--danger button--small"
                             onClick={() => {
-                              setRejectTarget(st)
-                              setRejectReason('')
+                              setPayoutTarget(st)
+                              setPayoutRef('')
                             }}
-                            title="Chưa nhận được tiền (trả về chờ nộp)"
+                            title="Chuyển khoản chi trả cho chủ sân"
                           >
-                            <XCircle size={13} /> Chưa nhận
-                          </button>
-                        )}
-                        {st.status !== 'paid' && st.status !== 'waived' && (
-                          <button
-                            type="button"
-                            className="button button--ghost button--small"
-                            onClick={() => {
-                              setWaiveTarget(st)
-                              setWaiveReason('')
-                            }}
-                            title="Miễn thu phí"
-                          >
-                            <RotateCcw size={13} /> Miễn thu
+                            <Send size={13} /> Chi trả
                           </button>
                         )}
                       </div>
@@ -389,18 +292,18 @@ export function AdminStatementsPage() {
       <Modal
         isOpen={generateModalOpen}
         onClose={() => setGenerateModalOpen(false)}
-        title="Sinh bảng đối soát hoa hồng hàng tháng"
+        title="Lập bảng đối soát & chi trả hàng tháng"
       >
         <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
           <p style={{ fontSize: 14, margin: 0, color: 'var(--muted)' }}>
-            Hệ thống sẽ quét tất cả các đơn đặt sân đã hoàn thành hoặc huỷ có phạt cọc trong tháng được chọn,
-            tính toán phí hoa hồng tương ứng theo tỷ lệ cấu hình và tạo bảng đối soát cho toàn bộ chủ sân được duyệt.
+            Hệ thống tổng hợp các đơn đã kết thúc và đã thanh toán qua SportHub trong tháng được chọn,
+            tính tiền thu hộ, tiền hoàn cho khách, hoa hồng và số phải chi trả cho từng chủ sân.
           </p>
           <label>
             <span>Kỳ đối soát (Định dạng YYYY-MM):</span>
             <input
               id="genPeriod"
-              type="text"
+              type="month"
               placeholder="Ví dụ: 2026-09"
               value={genPeriod}
               onChange={(e) => setGenPeriod(e.target.value)}
@@ -420,103 +323,51 @@ export function AdminStatementsPage() {
               disabled={generateMutation.isPending || !/^\d{4}-\d{2}$/.test(genPeriod)}
               onClick={() => generateMutation.mutate(genPeriod)}
             >
-              {generateMutation.isPending ? 'Đang tổng hợp...' : 'Bắt đầu sinh đối soát'}
+              {generateMutation.isPending ? 'Đang tổng hợp...' : 'Lập đối soát'}
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal xác nhận duyệt thu tiền */}
-      <ConfirmModal
-        isOpen={Boolean(confirmTarget)}
-        title="Xác nhận đã thu phí hoa hồng?"
-        message={`Bạn có chắc chắn đã nhận đủ số tiền ${formatMoney(confirmTarget?.commission_amount ?? 0)} từ chủ sân "${confirmTarget?.owner?.business_name}" cho kỳ đối soát tháng ${confirmTarget?.period}?`}
-        confirmText="Xác nhận đã nhận"
-        danger={false}
-        busy={confirmMutation.isPending}
-        onConfirm={() => confirmTarget && confirmMutation.mutate(confirmTarget.id)}
-        onClose={() => setConfirmTarget(null)}
-      />
-
-      {/* Modal miễn thu phí */}
+      {/* Modal chi trả cho chủ sân */}
       <Modal
-        isOpen={Boolean(waiveTarget)}
-        onClose={() => setWaiveTarget(null)}
-        title={`Miễn thu phí đối soát tháng ${waiveTarget?.period}`}
+        isOpen={Boolean(payoutTarget)}
+        onClose={() => setPayoutTarget(null)}
+        title={`Chi trả tháng ${payoutTarget?.period} · ${payoutTarget?.owner?.business_name ?? ''}`}
       >
-        <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
-          <p style={{ fontSize: 14, margin: 0 }}>
-            Bạn đang thực hiện miễn thu phí hoa hồng <strong>{formatMoney(waiveTarget?.commission_amount ?? 0)}</strong> cho cơ sở <strong>{waiveTarget?.owner?.business_name}</strong>.
-          </p>
-          <label>
-            <span>Lý do miễn thu (bắt buộc):</span>
-            <textarea
-              id="waiveReason"
-              rows={3}
-              placeholder="Ví dụ: Chương trình khuyến mãi khai trương / bồi thường sự cố..."
-              value={waiveReason}
-              onChange={(e) => setWaiveReason(e.target.value)}
-            />
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => setWaiveTarget(null)}
-            >
-              Đóng
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              disabled={waiveMutation.isPending || !waiveReason.trim()}
-              onClick={() => waiveTarget && waiveMutation.mutate({ id: waiveTarget.id, reason: waiveReason })}
-            >
-              {waiveMutation.isPending ? 'Đang xử lý...' : 'Xác nhận miễn thu'}
-            </button>
+        {payoutTarget && (
+          <div className="panel-form" style={{ display: 'grid', gap: 14 }}>
+            <p style={{ fontSize: 14, margin: 0 }}>
+              Chuyển <strong>{formatMoney(payoutTarget.payout_amount)}</strong> vào tài khoản của chủ sân với nội dung{' '}
+              <code>{payoutTarget.transfer_code}</code>, rồi ghi mã giao dịch ngân hàng để đối chiếu.
+            </p>
+            {payoutTarget.payout_bank?.qr_url ? (
+              <img src={payoutTarget.payout_bank.qr_url} alt="Mã QR chuyển khoản chi trả cho chủ sân" style={{ width: 220, maxWidth: '100%', justifySelf: 'center', borderRadius: 8 }} />
+            ) : (
+              <div className="notice notice--warn">Chủ sân chưa khai đủ tài khoản ngân hàng hợp lệ; liên hệ chủ sân trước khi chuyển.</div>
+            )}
+            <dl className="payment-rows">
+              <div><dt>Ngân hàng</dt><dd>{payoutTarget.payout_bank?.bank_name ?? '—'}</dd></div>
+              <div><dt>Số tài khoản</dt><dd>{payoutTarget.payout_bank?.account_number ?? '—'}</dd></div>
+              <div><dt>Chủ tài khoản</dt><dd>{payoutTarget.payout_bank?.account_holder ?? '—'}</dd></div>
+            </dl>
+            <label>
+              <span>Mã giao dịch ngân hàng (tuỳ chọn)</span>
+              <input value={payoutRef} maxLength={100} onChange={(e) => setPayoutRef(e.target.value)} placeholder="Ví dụ: FT26102112345" />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="button button--ghost" onClick={() => setPayoutTarget(null)}>Đóng</button>
+              <button
+                type="button"
+                className="button button--brand"
+                disabled={payoutMutation.isPending}
+                onClick={() => payoutMutation.mutate({ id: payoutTarget.id, ref: payoutRef.trim() })}
+              >
+                {payoutMutation.isPending ? 'Đang ghi nhận...' : 'Đã chuyển khoản'}
+              </button>
+            </div>
           </div>
-        </div>
-      </Modal>
-
-      {/* Modal từ chối báo cáo thanh toán (chưa nhận được tiền) */}
-      <Modal
-        isOpen={Boolean(rejectTarget)}
-        onClose={() => setRejectTarget(null)}
-        title={`Từ chối báo cáo chuyển khoản tháng ${rejectTarget?.period}`}
-      >
-        <div className="panel-form" style={{ display: 'grid', gap: 16 }}>
-          <p style={{ fontSize: 14, margin: 0 }}>
-            Bạn đang xác nhận <strong>chưa nhận được</strong> số tiền <strong>{formatMoney(rejectTarget?.commission_amount ?? 0)}</strong> từ chủ sân <strong>{rejectTarget?.owner?.business_name}</strong>.
-            Kỳ đối soát sẽ được chuyển lại về trạng thái <strong>Chờ nộp</strong>.
-          </p>
-          <label>
-            <span>Lý do từ chối (tuỳ chọn):</span>
-            <input
-              id="rejectReason"
-              type="text"
-              placeholder="Ví dụ: Chưa thấy tiền nổi trên sao kê tài khoản ngân hàng..."
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-            />
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => setRejectTarget(null)}
-            >
-              Đóng
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              disabled={rejectMutation.isPending}
-              onClick={() => rejectTarget && rejectMutation.mutate({ id: rejectTarget.id, reason: rejectReason })}
-            >
-              {rejectMutation.isPending ? 'Đang xử lý...' : 'Xác nhận chưa nhận tiền'}
-            </button>
-          </div>
-        </div>
+        )}
       </Modal>
 
       {/* Modal chi tiết đơn */}
@@ -530,13 +381,15 @@ export function AdminStatementsPage() {
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
               <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Tổng GMV:</span>
-                <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--ink)' }}>{formatMoney(activeDetail.gmv)}</div>
+                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Thu hộ − hoàn − hoa hồng:</span>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>
+                  {formatMoney(activeDetail.collected_amount)} − {formatMoney(activeDetail.refunded_amount)} − {formatMoney(activeDetail.commission_amount)}
+                </div>
               </div>
               <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Phí hoa hồng:</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Chi trả chủ sân:</span>
                 <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--forest)' }}>
-                  {formatMoney(activeDetail.commission_amount)}
+                  {formatMoney(activeDetail.payout_amount)}
                 </div>
               </div>
               <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}>
@@ -546,7 +399,7 @@ export function AdminStatementsPage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
-              <h4 style={{ margin: 0, fontSize: 15 }}>Danh sách đơn đặt sân tính phí ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
+              <h4 style={{ margin: 0, fontSize: 15 }}>Đơn trong kỳ ({activeDetail.bookings?.length ?? activeDetail.booking_count} đơn)</h4>
               <a
                 href={`/api/v1/admin/statements/${activeDetail.id}/export-csv`}
                 className="button button--ghost button--small"
@@ -563,7 +416,8 @@ export function AdminStatementsPage() {
                     <th>Mã đơn</th>
                     <th>Ngày</th>
                     <th>Khách hàng</th>
-                    <th>Tổng tiền</th>
+                    <th>Khách đã trả</th>
+                    <th>Hoàn</th>
                     <th>Phí hoa hồng</th>
                   </tr>
                 </thead>
@@ -576,7 +430,8 @@ export function AdminStatementsPage() {
                         <strong>{b.customer?.name}</strong>
                         {b.customer?.phone && <small style={{ display: 'block', color: 'var(--muted)' }}>{b.customer.phone}</small>}
                       </td>
-                      <td>{formatMoney(b.total_price)}</td>
+                      <td>{formatMoney(b.payment?.amount ?? 0)}</td>
+                      <td>{b.refund ? formatMoney(b.refund.amount) : '—'}</td>
                       <td>
                         <strong style={{ color: 'var(--forest)' }}>{formatMoney(b.commission?.amount ?? 0)}</strong>
                       </td>

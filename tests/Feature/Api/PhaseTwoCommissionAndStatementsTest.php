@@ -171,62 +171,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         $this->assertEquals(7200.0, $noShowBooking->calculateCommission());
     }
 
-    public function test_statement_service_generates_idempotent_monthly_statements(): void
-    {
-        Settings::set('commission_percent', 10);
-        Settings::set('statement_due_days', 7);
-
-        // Tạo 2 đơn trong tháng 9/2026
-        $b1 = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => '2026-09-05',
-            'status' => BookingStatus::Completed->value,
-            'total_price' => 400000,
-            'payment_status' => 'paid',
-            'payment_amount' => 400000,
-            'checked_in_at' => '2026-09-05 18:00:00',
-        ]);
-
-        $b2 = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => '2026-09-20',
-            'status' => BookingStatus::Completed->value,
-            'total_price' => 600000,
-            'payment_status' => 'paid',
-            'payment_amount' => 600000,
-            'checked_in_at' => '2026-09-20 18:00:00',
-        ]);
-
-        $service = app(StatementService::class);
-        $profileId = $this->owner->fieldOwnerProfile->id;
-
-        // Sinh kỳ đối soát cho tháng 2026-09
-        $statements = $service->generate('2026-09', $profileId);
-
-        $this->assertCount(1, $statements);
-        $st = $statements[0];
-        $this->assertEquals('2026-09', $st->period);
-        $this->assertEquals(2, $st->booking_count);
-        $this->assertEquals(1000000.0, (float) $st->gmv);
-        $this->assertEquals(100000.0, (float) $st->commission_amount);
-        $this->assertEquals('unpaid', $st->status);
-        $this->assertNotNull($st->transfer_code);
-        $this->assertEquals('2026-10-07 23:59:59', $st->due_at->toDateTimeString());
-
-        // Kiểm tra bookings được gắn statement_id
-        $this->assertEquals($st->id, $b1->refresh()->statement_id);
-        $this->assertEquals($st->id, $b2->refresh()->statement_id);
-
-        // Chạy lại (Idempotency) -> không tạo bản ghi trùng lặp
-        $statementsAgain = $service->generate('2026-09', $profileId);
-        $this->assertCount(1, $statementsAgain);
-        $this->assertEquals($st->id, $statementsAgain[0]->id);
-        $this->assertEquals(1, OwnerStatement::where('owner_profile_id', $profileId)->where('period', '2026-09')->count());
-    }
 
     public function test_statements_generate_console_command(): void
     {
@@ -243,7 +187,7 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         ]);
 
         $this->artisan('statements:generate 2026-08')
-            ->expectsOutputToContain('Đang sinh bảng đối soát hoa hồng cho kỳ: 2026-08...')
+            ->expectsOutputToContain('Đang lập bảng đối soát & chi trả cho kỳ: 2026-08...')
             ->assertExitCode(0);
 
         $this->assertDatabaseHas('owner_statements', [
@@ -252,52 +196,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         ]);
     }
 
-    public function test_field_owner_can_view_statements_and_current_summary(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-08',
-            'booking_count' => 5,
-            'gmv' => 2000000,
-            'commission_amount' => 160000,
-            'status' => 'unpaid',
-            'due_at' => now()->addDays(5),
-            'transfer_code' => 'ST202608P1XYZ',
-        ]);
-
-        Settings::set('platform_bank_name', 'Techcombank');
-
-        Sanctum::actingAs($this->owner);
-
-        // 1. Danh sách đối soát
-        $response = $this->getJson('/api/v1/field-owner/statements');
-        $response->assertOk()
-            ->assertJsonPath('data.0.id', $st->id)
-            ->assertJsonPath('data.0.period', '2026-08')
-            ->assertJsonPath('data.0.platform_bank.bank_name', 'Techcombank');
-
-        // 2. Chi tiết kỳ đối soát
-        $detailResponse = $this->getJson("/api/v1/field-owner/statements/{$st->id}");
-        $detailResponse->assertOk()
-            ->assertJsonPath('data.id', $st->id);
-        $this->assertEquals(160000, (float) $detailResponse->json('data.commission_amount'));
-
-        // 3. Ước tính tháng hiện tại
-        $summaryResponse = $this->getJson('/api/v1/field-owner/statements/current-summary');
-        $summaryResponse->assertOk()
-            ->assertJsonStructure([
-                'data' => [
-                    'period',
-                    'booking_count',
-                    'estimated_gmv',
-                    'estimated_commission',
-                    'commission_rate',
-                    'has_overdue_debt',
-                ],
-            ]);
-    }
 
     public function test_field_owner_cannot_view_other_owner_statement(): void
     {
@@ -319,150 +217,8 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         $response->assertForbidden();
     }
 
-    public function test_field_owner_can_report_statement_payment(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-08',
-            'booking_count' => 3,
-            'gmv' => 1500000,
-            'commission_amount' => 120000,
-            'status' => 'unpaid',
-            'due_at' => now()->addDays(3),
-            'transfer_code' => 'ST202608P1REP',
-        ]);
 
-        Sanctum::actingAs($this->owner);
 
-        $response = $this->postJson("/api/v1/field-owner/statements/{$st->id}/report", [
-            'note' => 'Tôi đã chuyển khoản qua Vietcombank lúc 10h sáng.',
-        ]);
-
-        $response->assertOk()
-            ->assertJsonPath('data.status', 'reported')
-            ->assertJsonPath('data.note', 'Tôi đã chuyển khoản qua Vietcombank lúc 10h sáng.');
-
-        $this->assertDatabaseHas('owner_statements', [
-            'id' => $st->id,
-            'status' => 'reported',
-            'note' => 'Tôi đã chuyển khoản qua Vietcombank lúc 10h sáng.',
-        ]);
-    }
-
-    public function test_admin_can_generate_confirm_and_waive_statements(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        // Tạo đơn hoàn thành để có phát sinh phí hoa hồng > 0
-        Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => '2026-07-15',
-            'status' => BookingStatus::Completed->value,
-            'total_price' => 500000,
-            'payment_status' => 'paid',
-            'payment_amount' => 500000,
-            'checked_in_at' => '2026-07-15 18:00:00',
-        ]);
-
-        Sanctum::actingAs($this->admin);
-
-        // 1. Admin bấm sinh đối soát
-        $generateResponse = $this->postJson('/api/v1/admin/statements/generate', [
-            'period' => '2026-07',
-            'owner_profile_id' => $profile->id,
-        ]);
-        $generateResponse->assertOk();
-
-        $st = OwnerStatement::where('owner_profile_id', $profile->id)->where('period', '2026-07')->firstOrFail();
-
-        // 2. Admin xem danh sách
-        $listResponse = $this->getJson('/api/v1/admin/statements?period=2026-07');
-        $listResponse->assertOk()
-            ->assertJsonPath('data.0.id', $st->id);
-
-        // 3. Admin xác nhận đã thu phí (confirm)
-        $confirmResponse = $this->postJson("/api/v1/admin/statements/{$st->id}/confirm");
-        $confirmResponse->assertOk()
-            ->assertJsonPath('data.status', 'paid')
-            ->assertJsonPath('data.confirmed_by.id', $this->admin->id);
-
-        $this->assertDatabaseHas('admin_logs', [
-            'action' => 'confirm_statement',
-            'admin_id' => $this->admin->id,
-        ]);
-
-        // 4. Admin miễn phí (waive) cho 1 kỳ khác
-        $st2 = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-06',
-            'booking_count' => 2,
-            'gmv' => 800000,
-            'commission_amount' => 64000,
-            'status' => 'unpaid',
-            'due_at' => now()->addDays(2),
-            'transfer_code' => 'ST202606P1WAV',
-        ]);
-
-        $waiveResponse = $this->postJson("/api/v1/admin/statements/{$st2->id}/waive", [
-            'reason' => 'Tháng khai trương, miễn phí đối soát.',
-        ]);
-
-        $waiveResponse->assertOk()
-            ->assertJsonPath('data.status', 'waived')
-            ->assertJsonPath('data.note', 'Tháng khai trương, miễn phí đối soát.');
-
-        $this->assertDatabaseHas('admin_logs', [
-            'action' => 'waive_statement',
-            'admin_id' => $this->admin->id,
-        ]);
-    }
-
-    public function test_owner_blocked_from_approving_bookings_when_having_overdue_debt(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        // Tạo kỳ đối soát quá hạn: due_at ngày hôm qua, status unpaid
-        $overdueStatement = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-07',
-            'booking_count' => 4,
-            'gmv' => 1600000,
-            'commission_amount' => 128000,
-            'status' => 'unpaid',
-            'due_at' => now()->subDay(),
-            'transfer_code' => 'ST202607P1DEBT',
-        ]);
-
-        $this->assertTrue($overdueStatement->isOverdue());
-
-        // Khách đặt đơn mới
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-
-        // Chủ sân bấm duyệt -> bị chặn với HTTP 409
-        $response = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $response->assertStatus(409)
-            ->assertJsonPath('message', 'Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
-
-        // Sau khi thanh toán (chuyển sang paid)
-        $overdueStatement->update(['status' => 'paid', 'paid_at' => now()]);
-
-        // Duyệt lại -> thành công
-        $retryResponse = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $retryResponse->assertOk()
-            ->assertJsonPath('data.payment.status', 'awaiting');
-    }
 
     public function test_owner_and_admin_dashboards_include_statement_and_gmv_metrics(): void
     {
@@ -504,7 +260,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
                     'current_month_collected',
                     'current_month_commission',
                     'current_month_net_revenue',
-                    'has_overdue_debt',
                     'statement_summary',
                 ],
             ]);
@@ -517,122 +272,8 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         $this->assertEquals(120000, (float) $adminDash->json('data.total_commission_pending'));
     }
 
-    public function test_zero_commission_statement_auto_paid_and_does_not_block_owner_after_due_date(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-        $service = app(StatementService::class);
 
-        // Tháng 2026-06 không có đơn nào
-        $statements = $service->generate('2026-06', $profile->id);
-        $this->assertCount(1, $statements);
-        $st = $statements[0];
 
-        $this->assertEquals(0, $st->booking_count);
-        $this->assertEquals(0.0, (float) $st->commission_amount);
-        $this->assertEquals('paid', $st->status);
-        $this->assertNotNull($st->paid_at);
-
-        // Kể cả khi due_at nằm trong quá khứ
-        $st->update(['due_at' => now()->subDays(10)]);
-        $this->assertFalse($st->isOverdue());
-        $this->assertFalse($service->hasOverdueDebt($this->owner));
-
-        // Chủ sân vẫn duyệt đơn bình thường không bị khoá
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-        $response = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $response->assertOk()
-            ->assertJsonPath('data.payment.status', 'awaiting');
-    }
-
-    public function test_platform_bank_settings_change_is_reflected_in_statements(): void
-    {
-        Settings::set('platform_bank_name', 'MB Bank');
-        Settings::set('platform_bank_account', '999988887777');
-        Settings::set('platform_bank_holder', 'CONG TY SPORTHUB VIET NAM - MB');
-
-        $profile = $this->owner->fieldOwnerProfile;
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-08',
-            'booking_count' => 1,
-            'gmv' => 500000,
-            'commission_amount' => 40000,
-            'status' => 'unpaid',
-            'due_at' => now()->addDays(5),
-            'transfer_code' => 'ST202608MBTEST',
-        ]);
-
-        Sanctum::actingAs($this->owner);
-
-        $res = $this->getJson("/api/v1/field-owner/statements/{$st->id}");
-        $res->assertOk()
-            ->assertJsonPath('data.platform_bank.bank_name', 'MB Bank')
-            ->assertJsonPath('data.platform_bank.account_number', '999988887777')
-            ->assertJsonPath('data.platform_bank.account_holder', 'CONG TY SPORTHUB VIET NAM - MB');
-    }
-
-    public function test_admin_can_reject_reported_statement_and_overdue_debt_is_enforced(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        // Kỳ đối soát quá hạn
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-07',
-            'booking_count' => 2,
-            'gmv' => 1000000,
-            'commission_amount' => 80000,
-            'status' => 'unpaid',
-            'due_at' => now()->subDay(),
-            'transfer_code' => 'ST202607REJECT',
-        ]);
-
-        // Chủ sân bấm báo đã chuyển tiền để thoát khoá
-        Sanctum::actingAs($this->owner);
-        $this->postJson("/api/v1/field-owner/statements/{$st->id}/report", ['note' => 'Tôi đã chuyển tiền rồi']);
-        $this->assertEquals('reported', $st->refresh()->status);
-        $this->assertFalse(app(StatementService::class)->hasOverdueDebt($this->owner));
-
-        // Admin đối chiếu sao kê và bấm từ chối
-        Sanctum::actingAs($this->admin);
-        $rejectRes = $this->postJson("/api/v1/admin/statements/{$st->id}/reject-report", [
-            'reason' => 'Chưa thấy tiền nổi trên tài khoản Vietcombank.',
-        ]);
-        $rejectRes->assertOk()
-            ->assertJsonPath('data.status', 'unpaid')
-            ->assertJsonPath('data.note', 'Từ chối báo chuyển: Chưa thấy tiền nổi trên tài khoản Vietcombank.');
-
-        $this->assertDatabaseHas('admin_logs', [
-            'action' => 'reject_statement_payment',
-            'admin_id' => $this->admin->id,
-        ]);
-
-        // Ngay lập tức chủ sân bị khoá duyệt đơn lại vì quá hạn và status là unpaid
-        $this->assertTrue(app(StatementService::class)->hasOverdueDebt($this->owner));
-
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->addDays(2)->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 300000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-        $approveRes = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/approve");
-        $approveRes->assertStatus(409)
-            ->assertJsonPath('message', 'Tài khoản của bạn đang có kỳ đối soát nợ phí nền tảng quá hạn. Vui lòng thanh toán phí đối soát để tiếp tục duyệt đơn.');
-    }
 
     public function test_cannot_generate_statement_for_future_period(): void
     {
@@ -646,44 +287,6 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
             ->assertJsonPath('message', 'Không thể sinh bảng đối soát cho các kỳ trong tương lai.');
     }
 
-    public function test_reported_statement_is_not_overwritten_by_generate(): void
-    {
-        $profile = $this->owner->fieldOwnerProfile;
-
-        $st = OwnerStatement::create([
-            'owner_profile_id' => $profile->id,
-            'period' => '2026-07',
-            'booking_count' => 1,
-            'gmv' => 500000,
-            'commission_amount' => 40000,
-            'status' => 'reported',
-            'reported_at' => now(),
-            'due_at' => now()->addDays(5),
-            'transfer_code' => 'ST202607STABLE',
-        ]);
-
-        // Tạo thêm đơn mới trong tháng đó
-        Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => '2026-07-20',
-            'status' => BookingStatus::Completed->value,
-            'total_price' => 800000,
-            'payment_status' => 'paid',
-            'payment_amount' => 800000,
-            'checked_in_at' => '2026-07-20 18:00:00',
-        ]);
-
-        // Chạy lại generate
-        app(StatementService::class)->generate('2026-07', $profile->id);
-
-        // Số tiền và status kỳ reported không bị thay đổi
-        $st->refresh();
-        $this->assertEquals('reported', $st->status);
-        $this->assertEquals(40000.0, (float) $st->commission_amount);
-        $this->assertEquals(1, $st->booking_count);
-    }
 
     public function test_viewing_booking_resource_does_not_write_commission_to_database(): void
     {
@@ -736,65 +339,5 @@ class PhaseTwoCommissionAndStatementsTest extends TestCase
         ]);
     }
 
-    public function test_statement_list_returns_paid_and_unpaid_totals_and_qr_for_unpaid_only(): void
-    {
-        $this->makeStatement('2026-05', 'paid', 100000, now()->subDays(40));
-        $this->makeStatement('2026-06', 'reported', 50000, now()->subDays(10));
-        $unpaid = $this->makeStatement('2026-07', 'unpaid', 70000, now()->addDays(3));
-        $this->makeStatement('2026-08', 'waived', 90000, now()->addDays(3));
 
-        Sanctum::actingAs($this->owner);
-        $response = $this->getJson('/api/v1/field-owner/statements')->assertOk();
-
-        $this->assertEquals(100000, $response->json('meta.totals.paid_amount'));
-        $this->assertEquals(1, $response->json('meta.totals.paid_count'));
-        $this->assertEquals(120000, $response->json('meta.totals.unpaid_amount'));
-        $this->assertEquals(2, $response->json('meta.totals.unpaid_count'));
-
-        $byId = collect($response->json('data'))->keyBy('id');
-        $qr = $byId[$unpaid->id]['platform_bank']['qr_url'];
-        $this->assertStringContainsString('amount=70000', $qr);
-        $this->assertStringContainsString('addInfo='.$unpaid->transfer_code, $qr);
-        $this->assertNull($byId[$unpaid->id - 1]['platform_bank']['qr_url']);
-
-        Sanctum::actingAs($this->admin);
-        $this->getJson('/api/v1/admin/statements')->assertOk()
-            ->assertJsonPath('meta.totals.unpaid_count', 2)
-            ->assertJsonPath('meta.totals.paid_count', 1);
-    }
-
-    public function test_statement_reminders_are_sent_on_issue_due_soon_and_overdue_days_only(): void
-    {
-        \Illuminate\Support\Facades\Mail::fake();
-        $service = app(StatementService::class);
-
-        // Sinh kỳ mới có phí -> mail "issued" (sinh lại không gửi thêm)
-        Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => now()->subMonth()->startOfMonth()->addDays(3)->toDateString(),
-            'status' => BookingStatus::Completed->value,
-            'total_price' => 300000,
-            'payment_status' => 'paid',
-            'payment_amount' => 300000,
-            'checked_in_at' => now()->subMonth()->startOfMonth()->addDays(3),
-        ]);
-        $period = now()->subMonth()->format('Y-m');
-        $service->generate($period, $this->owner->fieldOwnerProfile->id);
-        $service->generate($period, $this->owner->fieldOwnerProfile->id);
-        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\StatementReminder::class, 1);
-
-        OwnerStatement::query()->delete();
-        \Illuminate\Support\Facades\Mail::fake();
-
-        $this->makeStatement('2026-01', 'unpaid', 10000, now()->addDays(2)->endOfDay());   // còn 2 ngày -> gửi
-        $this->makeStatement('2026-02', 'unpaid', 10000, now()->addDays(5)->endOfDay());   // còn 5 ngày -> không
-        $this->makeStatement('2026-03', 'unpaid', 10000, now()->subDays(1)->endOfDay());   // quá hạn 1 ngày -> gửi
-        $this->makeStatement('2026-04', 'unpaid', 10000, now()->subDays(2)->endOfDay());   // quá hạn 2 ngày -> không
-        $this->makeStatement('2026-05', 'reported', 10000, now()->addDays(2)->endOfDay()); // đã báo chuyển -> không
-
-        $this->assertSame(2, $service->sendDueReminders());
-        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\StatementReminder::class, 2);
-    }
 }

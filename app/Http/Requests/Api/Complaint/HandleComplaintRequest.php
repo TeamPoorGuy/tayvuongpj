@@ -15,7 +15,10 @@ class HandleComplaintRequest extends FormRequest
     {
         return [
             'status' => ['required', 'string', 'in:processing,resolved,rejected'],
-            'resolution' => ['nullable', 'string', 'max:3000'],
+            'resolution' => ['required_unless:status,processing', 'nullable', 'string', 'min:5', 'max:3000'],
+            'refund_amount' => ['nullable', 'integer', 'min:1000', 'max:100000000'],
+            'confirm_attendance' => ['nullable', 'boolean'],
+            'trust_penalty' => ['nullable', 'integer', 'between:5,50'],
         ];
     }
 
@@ -24,6 +27,10 @@ class HandleComplaintRequest extends FormRequest
         return [
             'status.required' => 'Vui lòng chọn trạng thái xử lý khiếu nại.',
             'status.in' => 'Trạng thái xử lý không hợp lệ.',
+            'resolution.required_unless' => 'Vui lòng ghi phương án giải quyết trước khi đóng khiếu nại.',
+            'resolution.min' => 'Phương án giải quyết tối thiểu 5 ký tự.',
+            'trust_penalty.between' => 'Điểm uy tín bị trừ phải từ 5 đến 50.',
+            'refund_amount.min' => 'Số tiền hoàn tối thiểu 1.000đ.',
         ];
     }
 }

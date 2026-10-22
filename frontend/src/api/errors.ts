@@ -13,3 +13,15 @@ export function errorMessage(error: unknown): string {
   }
   return 'Đã có lỗi không mong muốn.'
 }
+
+/** Lỗi 422 theo từng ô: { tên_ô: câu thông báo đầu tiên }; rỗng nếu không phải lỗi nhập liệu. */
+export function fieldErrors(error: unknown): Record<string, string> {
+  if (!axios.isAxiosError(error) || error.response?.status !== 422) return {}
+  const errors = error.response.data?.errors as Record<string, string[]> | undefined
+  if (!errors) return {}
+  return Object.fromEntries(
+    Object.entries(errors)
+      .filter(([, messages]) => messages?.[0])
+      .map(([field, messages]) => [field, messages[0].charAt(0).toUpperCase() + messages[0].slice(1)]),
+  )
+}

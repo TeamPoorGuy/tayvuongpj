@@ -12,15 +12,12 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Sun,
-  Sunset,
-  Moon,
   ArrowRight,
   BellRing,
   Zap,
 } from 'lucide-react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
-import { useState, useMemo } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { api } from '../api/client'
 import { errorMessage } from '../api/errors'
@@ -29,10 +26,27 @@ import { useReveal } from '../hooks/useReveal'
 import { useToast } from '../components/Toast'
 import { FieldMap } from '../components/FieldMap'
 import { addDays, formatDay, getLocalTodayString } from '../utils/date'
-import type { ApiEnvelope, SlotSuggestion, SportsField, TimeSlot } from '../types/api'
+import type { ApiEnvelope, GridCell, GridField, SlotSuggestion, SportsField } from '../types/api'
 import { Avatar } from '../components/Avatar'
 import { formatMoney, formatDate } from '../utils/format'
 import { BookingConfirmModal } from '../components/BookingConfirmModal'
+import { BookingGrid, BookingGridLegend } from '../components/BookingGrid'
+import { bookedRunAround, cellKey, mergeSelection, type GridBlock } from '../utils/grid'
+import { loadSelectionDraft, saveSelectionDraft } from '../utils/selectionDraft'
+import { usePublicSettings } from '../hooks/usePublicSettings'
+
+const minutesOf = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+const minutesOfNow = () => {
+  const d = new Date()
+  return d.getHours() * 60 + d.getMinutes()
+}
+const shiftTime = (time: string, minutes: number) => {
+  const total = minutesOf(time) + minutes
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
 
 export function FieldDetailPage() {
 
@@ -45,19 +59,25 @@ export function FieldDetailPage() {
   const [searchParams] = useSearchParams()
   // Cho phép mở từ trang tìm đối với ngày đã chọn (?date=YYYY-MM-DD), bỏ qua ngày quá khứ.
   const dateParam = searchParams.get('date')
+  // Ô đã chọn trước khi rời trang (vd sang đăng nhập): khôi phục khi quay lại, trừ khi mở từ liên kết gợi ý có ngày/giờ riêng.
+  const [draft] = useState(() => (searchParams.get('date') || searchParams.get('start') ? null : loadSelectionDraft(slug, todayStr)))
   const [date, setDate] = useState(
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : todayStr,
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && dateParam >= todayStr ? dateParam : (draft?.date ?? todayStr),
   )
-  const [slotId, setSlotId] = useState<number | null>(null)
-  // Mở từ trang tìm đối / gợi ý (?start=HH:MM): chọn sẵn khung giờ đó nếu còn trống.
-  const [startHint, setStartHint] = useState(searchParams.get('start'))
+  // Gợi ý / trang tìm đối mở kèm ?start=HH:MM(&end=HH:MM): chọn sẵn khoảng đó trên sân đang xem nếu còn trống.
+  const [hint, setHint] = useState<{ fieldId?: number; start: string; end?: string } | null>(() => {
+    const start = searchParams.get('start')
+    return start ? { start, end: searchParams.get('end') ?? undefined } : null
+  })
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(draft?.keys))
   const location = useLocation()
   const loginState = { from: location.pathname + location.search }
   const [notes, setNotes] = useState('')
   const [activeImg, setActiveImg] = useState(0)
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all')
-  const [selectedBookedSlot, setSelectedBookedSlot] = useState<TimeSlot | null>(null)
+  const [bookedRange, setBookedRange] = useState<{ field: GridField; start: string; end: string } | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const { data: settings } = usePublicSettings()
+  const minMinutes = settings?.min_minutes ?? 60
 
   const field = useQuery({
     queryKey: ['field', slug],
@@ -67,33 +87,93 @@ export function FieldDetailPage() {
   const [recurringConflicts, setRecurringConflicts] = useState<Array<{ date: string; reason: string }> | null>(null)
   const [pendingRecurringConfig, setPendingRecurringConfig] = useState<{ isRecurring: boolean; weeks: number } | null>(null)
 
-  const slots = useQuery({
-    queryKey: ['slots', field.data?.id, date],
+  const schedule = useQuery({
+    queryKey: ['schedule', field.data?.id, date],
     enabled: !!field.data,
     queryFn: async () =>
-      (await api.get<ApiEnvelope<{ date: string; is_closed?: boolean; closure_reason?: string; slots: TimeSlot[] }>>(
-        `/fields/${field.data?.id}/available-slots?date=${date}`,
-      )).data.data,
+      (await api.get<ApiEnvelope<{ date: string; fields: GridField[] }>>(`/fields/${field.data?.id}/schedule?date=${date}`)).data.data,
+    // Người khác có thể đặt / nhả ô bất cứ lúc nào: tự cập nhật lưới thay vì bắt khách tải lại trang.
+    refetchInterval: 20_000,
   })
 
-  const slotsList = useMemo(() => slots.data?.slots ?? [], [slots.data?.slots])
-  const isDateClosed = !!slots.data?.is_closed
-  const closureReason = slots.data?.closure_reason
+  // Đồng hồ cho lưới: ô trống đã quá giờ bắt đầu chuyển sang "Đã qua" ngay, không chờ lần tải kế tiếp.
+  const [nowMinutes, setNowMinutes] = useState(() => minutesOfNow())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMinutes(minutesOfNow()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const gridFields = useMemo(() => {
+    const fields = schedule.data?.fields ?? []
+    if (date !== getLocalTodayString()) return fields
+    return fields.map((f) => ({
+      ...f,
+      cells: f.cells.map((c) => (c.state === 'free' && minutesOf(c.start) <= nowMinutes ? { ...c, state: 'past' as const } : c)),
+    }))
+  }, [schedule.data?.fields, date, nowMinutes])
+  const viewedRow = gridFields[0]
+  const isDateClosed = !!viewedRow?.is_closed
+  const closureReason = viewedRow?.closure_reason
+
+  // Chỉ giữ các ô vẫn còn trống (ô khôi phục từ lần trước có thể đã có người đặt trong lúc khách đi đăng nhập).
+  const stillFree = useMemo(() => {
+    if (gridFields.length === 0) return picked
+    const free = new Set(gridFields.flatMap((f) => f.cells.filter((c) => c.state === 'free').map((c) => cellKey(f.id, c.start))))
+    return new Set([...picked].filter((key) => free.has(key)))
+  }, [gridFields, picked])
+  const droppedCount = picked.size - stillFree.size
+
+  const selected = useMemo(() => {
+    if (!hint || stillFree.size > 0) return stillFree
+    const row = gridFields.find((f) => f.id === hint.fieldId) ?? viewedRow
+    if (!row) return stillFree
+    const end = hint.end ?? shiftTime(hint.start, minMinutes)
+    const cells = row.cells.filter((c) => c.start >= hint.start && c.end <= end)
+    return cells.length > 0 && cells.every((c) => c.state === 'free') ? new Set(cells.map((c) => cellKey(row.id, c.start))) : stillFree
+  }, [hint, stillFree, gridFields, viewedRow, minMinutes])
+
+  useEffect(() => {
+    saveSelectionDraft(slug, date, selected)
+  }, [slug, date, selected])
+
+  const blocks = useMemo(() => mergeSelection(gridFields, selected), [gridFields, selected])
+  const total = blocks.reduce((sum, b) => sum + b.price, 0)
+  const durationOf = (b: GridBlock) => minutesOf(b.end) - minutesOf(b.start)
+  const hasShortBlock = blocks.some((b) => durationOf(b) < minMinutes)
+
+  const toggleCell = (row: GridField, cell: GridCell) => {
+    const next = new Set(selected)
+    const key = cellKey(row.id, cell.start)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setHint(null)
+    setPicked(next)
+    setBookedRange(null)
+  }
+
+  const selectRange = (row: GridField, cells: GridCell[]) => {
+    const next = new Set(selected)
+    for (const cell of cells) next.add(cellKey(row.id, cell.start))
+    setHint(null)
+    setPicked(next)
+    setBookedRange(null)
+  }
 
   const suggestions = useQuery({
-    queryKey: ['suggestions', slug, selectedBookedSlot?.id, date],
-    enabled: !!selectedBookedSlot && !!slug,
+    queryKey: ['suggestions', bookedRange?.field.slug, bookedRange?.start, bookedRange?.end, date],
+    enabled: !!bookedRange,
     queryFn: async () =>
       (await api.get<ApiEnvelope<SlotSuggestion[]>>(
-        `/fields/${slug}/suggestions?slot_id=${selectedBookedSlot?.id}&date=${date}`,
+        `/fields/${bookedRange?.field.slug}/suggestions?start_time=${bookedRange?.start}&end_time=${bookedRange?.end}&date=${date}`,
       )).data.data,
   })
 
   const joinWaitlist = useMutation({
-    mutationFn: async (slot: TimeSlot) =>
+    mutationFn: async (range: { field: GridField; start: string; end: string }) =>
       api.post('/customer/waitlist', {
-        sports_field_id: field.data?.id,
-        time_slot_id: slot.id,
+        sports_field_id: range.field.id,
+        start_time: range.start,
+        end_time: range.end,
         booking_date: date,
       }),
     onSuccess: () => {
@@ -101,19 +181,22 @@ export function FieldDetailPage() {
         'Đã tham gia hàng đợi thành công! Hệ thống sẽ ưu tiên gửi email giữ chỗ cho bạn ngay khi có người hủy.',
         'Hàng đợi thông minh (Waitlist)',
       )
-      setSelectedBookedSlot(null)
+      setBookedRange(null)
     },
     onError: (err) => {
       error(errorMessage(err), 'Không thể vào hàng đợi')
     },
   })
 
+  const navigate = useNavigate()
   const booking = useMutation({
     mutationFn: async ({ isRecurring, weeks, skipConflicts }: { isRecurring: boolean; weeks: number; skipConflicts?: boolean }) => {
       if (isRecurring) {
+        const block = blocks[0]
         return (await api.post('/customer/bookings/recurring', {
-          sports_field_id: field.data?.id,
-          time_slot_id: selectedSlot?.id,
+          sports_field_id: block.fieldId,
+          start_time: block.start,
+          end_time: block.end,
           start_date: date,
           weeks,
           notes,
@@ -121,24 +204,23 @@ export function FieldDetailPage() {
         })).data
       }
       return (await api.post('/customer/bookings', {
-        sports_field_id: field.data?.id,
-        time_slot_id: selectedSlot?.id,
         booking_date: date,
+        items: blocks.map((b) => ({ sports_field_id: b.fieldId, start_time: b.start, end_time: b.end })),
         notes,
       })).data
     },
-    onSuccess: (_, vars) => {
+    onSuccess: (res, vars) => {
       setShowConfirmModal(false)
       setRecurringConflicts(null)
       setPendingRecurringConfig(null)
-      pickSlot(null)
+      setPicked(new Set())
+      setHint(null)
       setNotes('')
-      const msg = vars.isRecurring
-        ? `Đã gửi yêu cầu đặt cố định ${vars.weeks} buổi. Khi chủ sân duyệt, bạn sẽ thanh toán cọc theo từng tuần.`
-        : 'Yêu cầu đặt sân đã được gửi. Khi chủ sân duyệt, bạn sẽ chuyển khoản cọc hoặc trả hết để giữ sân.'
-      success(msg, 'Đã gửi yêu cầu')
-      void queryClient.invalidateQueries({ queryKey: ['slots'] })
+      success(vars.isRecurring ? `Đã giữ chỗ ${vars.weeks} buổi. Thanh toán một lần cho cả chuỗi.` : 'Đã giữ chỗ. Hãy chuyển khoản để hoàn tất.', 'Đã giữ chỗ')
+      void queryClient.invalidateQueries({ queryKey: ['schedule'] })
       void queryClient.invalidateQueries({ queryKey: ['customer', 'bookings'] })
+      const paymentId = vars.isRecurring ? res?.data?.payment?.id : res?.payment?.id
+      if (paymentId) navigate(`/payments/${paymentId}`)
     },
     onError: (err: any) => {
       const data = err?.response?.data
@@ -160,70 +242,22 @@ export function FieldDetailPage() {
     return []
   }, [item])
 
-  const selectedSlot =
-    slotsList.find((s) => s.id === slotId) ??
-    (startHint
-      ? slotsList.find((s) => s.start_time === startHint && !s.is_booked && !s.is_past && !s.is_held)
-      : null) ??
-    null
-
-  const pickSlot = (id: number | null) => {
-    setStartHint(null)
-    setSlotId(id)
-  }
-
   const changeDate = (next: string) => {
     setDate(next)
-    pickSlot(null)
-    setSelectedBookedSlot(null)
+    setPicked(new Set())
+    setHint(null)
+    setBookedRange(null)
   }
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(todayStr, i)), [todayStr])
 
-  // Calculate duration in hours between HH:mm and HH:mm and respect slot-specific price
-  const calculatedPrice = useMemo(() => {
-    if (!selectedSlot || !item) return null
-    const [sh, sm] = selectedSlot.start_time.split(':').map(Number)
-    const [eh, em] = selectedSlot.end_time.split(':').map(Number)
-    const startMinutes = sh * 60 + sm
-    const endMinutes = eh * 60 + em
-    const durationHours = Math.max(0.5, (endMinutes - startMinutes) / 60)
-    // Sửa lỗi: ưu tiên giá riêng của khung giờ slot.price_per_hour nếu có
-    const effectivePricePerHour = selectedSlot.price_per_hour ?? item.price_per_hour
-
-    return {
-      durationHours,
-      durationMinutes: endMinutes - startMinutes,
-      effectivePricePerHour,
-      total: Math.round(effectivePricePerHour * durationHours),
-    }
-  }, [selectedSlot, item])
-
-  // Categorize slots by day period
-  const filteredSlots = useMemo(() => {
-    return slotsList.filter((slot) => {
-      const hour = parseInt(slot.start_time.slice(0, 2), 10)
-      if (periodFilter === 'morning') return hour < 12
-      if (periodFilter === 'afternoon') return hour >= 12 && hour < 17
-      if (periodFilter === 'evening') return hour >= 17
-      return true
-    })
-  }, [slotsList, periodFilter])
-
-  const allSlots = slotsList
-  const availableCount = useMemo(
-    () => allSlots.filter((s) => !s.is_booked && !s.is_past && !s.is_held).length,
-    [allSlots],
-  )
-  const isDateFullyBooked = !slots.isPending && allSlots.length > 0 && availableCount === 0
-
+  const freeCount = gridFields.reduce((n, f) => n + f.cells.filter((c) => c.state === 'free').length, 0)
+  const isDateFullyBooked = !schedule.isPending && gridFields.some((f) => f.cells.length > 0) && freeCount === 0
   const tomorrowDateStr = addDays(date, 1)
+  const canBook = blocks.length > 0 && !hasShortBlock
 
-  const scrollToBooking = () => {
-    const el = document.getElementById('booking-card-section')
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+  const scrollToGrid = () => {
+    document.getElementById('booking-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   if (field.isPending) {
@@ -296,6 +330,9 @@ export function FieldDetailPage() {
           <p>
             <MapPin size={16} /> {item.address}
           </p>
+          <button type="button" className="button button--brand" style={{ marginTop: 14 }} onClick={scrollToGrid}>
+            <CalendarDays size={16} /> Chọn giờ & đặt sân
+          </button>
         </div>
         <div className="detail-head__meta">
           <div className="detail-rating">
@@ -323,7 +360,8 @@ export function FieldDetailPage() {
               <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 13 }}>
                 {upcoming.map((c) => (
                   <li key={c.id}>
-                    Từ <strong>{formatDate(c.start_date)}</strong> đến <strong>{formatDate(c.end_date)}</strong>: {c.reason}
+                    Từ <strong>{formatDate(c.start_date)}</strong> đến <strong>{formatDate(c.end_date)}</strong>
+                    {c.start_time && c.end_time ? ` (khoá ${c.start_time}–${c.end_time})` : ''}: {c.reason}
                   </li>
                 ))}
               </ul>
@@ -364,6 +402,159 @@ export function FieldDetailPage() {
         )}
       </div>
 
+      {/* Lưới đặt sân 30 phút: mỗi hàng là một sân trong cụm, chọn nhiều ô rồi thanh toán một lần */}
+      <section className="content-card booking-grid-section" id="booking-grid">
+        <div className="booking-grid-section__head">
+          <h2>Đặt lịch theo sân</h2>
+          <BookingGridLegend />
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+          <input
+            type="date"
+            aria-label="Ngày vào sân"
+            min={todayStr}
+            value={date}
+            onChange={(event) => event.target.value && changeDate(event.target.value)}
+            style={{ maxWidth: 180 }}
+          />
+          <div className="day-strip" role="group" aria-label="Chọn nhanh ngày" style={{ flex: 1, minWidth: 260 }}>
+            {weekDays.map((day) => {
+              const [label, rest] = formatDay(day).split(' · ')
+              return (
+                <button type="button" key={day} className={day === date ? 'active' : ''} aria-pressed={day === date} onClick={() => changeDate(day)}>
+                  <strong>{label}</strong>
+                  <small>{rest.slice(0, 5)}</small>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {schedule.isPending && <div className="query-state query-state--loading">Đang tải lịch sân...</div>}
+
+        {isDateClosed && (
+          <div className="notice notice--warn" style={{ marginBottom: 12 }}>
+            <AlertTriangle size={18} />
+            <div>
+              <strong>Sân tạm đóng cửa vào ngày này:</strong> {closureReason || 'Bảo trì hoặc nghỉ lễ theo lịch của chủ sân.'}
+            </div>
+          </div>
+        )}
+
+        {!isDateClosed && isDateFullyBooked && (
+          <div className="fully-booked-notice">
+            <div className="fully-booked-head">
+              <Info size={15} />
+              <strong>{formatDay(date)} đã kín lịch!</strong>
+            </div>
+            <p>Bấm vào ô đã đặt để vào <strong>hàng chờ</strong>, hoặc xem ngày kế tiếp.</p>
+            <button type="button" className="button button--brand button--small" onClick={() => changeDate(tomorrowDateStr)}>
+              <CalendarDays size={13} /> Xem ngày mai ({formatDay(tomorrowDateStr)})
+            </button>
+          </div>
+        )}
+
+        {!schedule.isPending && (
+          <BookingGrid
+            fields={gridFields}
+            selected={selected}
+            onToggle={toggleCell}
+            onSelectRange={selectRange}
+            onBookedClick={(row, cell) => setBookedRange({ field: row, ...bookedRunAround(row, cell) })}
+          />
+        )}
+
+        {/* Thanh tóm tắt dính ngay dưới lưới: chọn xong là thấy tổng tiền và nút đặt, không phải cuộn xuống cột bên */}
+        {blocks.length > 0 && (
+          <div className="grid-summary" role="status">
+            <div className="grid-summary__text">
+              <strong>{blocks.length} khung giờ · {formatMoney(total)}</strong>
+              <small>
+                {hasShortBlock
+                  ? `Mỗi khung tối thiểu ${minMinutes} phút — hãy chọn thêm ô liền kề.`
+                  : blocks.map((b) => `${b.fieldName} ${b.start}–${b.end}`).join(' · ')}
+              </small>
+            </div>
+            <button type="button" className="button button--ghost button--small" onClick={() => { setPicked(new Set()); setHint(null) }}>
+              Bỏ chọn
+            </button>
+            {!user ? (
+              <Link className="button button--brand" to="/login" state={loginState}>Đăng nhập để đặt</Link>
+            ) : user.role !== 'customer' ? (
+              <span className="form-help" style={{ margin: 0 }}>Chỉ khách hàng mới đặt được sân.</span>
+            ) : (
+              <button type="button" className="button button--brand" disabled={!canBook || booking.isPending} onClick={() => setShowConfirmModal(true)}>
+                <CalendarDays size={16} /> {booking.isPending ? 'Đang giữ chỗ...' : 'Đặt & thanh toán'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {bookedRange && (
+          <div className="waitlist-card" style={{ marginTop: 14 }}>
+            <div className="waitlist-card__head">
+              <div className="waitlist-card__title">
+                <Zap size={16} />
+                <strong>{bookedRange.field.name} · {bookedRange.start} – {bookedRange.end} đã có người đặt</strong>
+              </div>
+              <button type="button" className="button button--ghost button--small" onClick={() => setBookedRange(null)}>
+                Đóng
+              </button>
+            </div>
+            <p className="waitlist-card__desc">
+              Tham gia <strong>hàng chờ</strong> để được ưu tiên giữ chỗ ngay khi người đặt huỷ.
+            </p>
+            {user ? (
+              <button
+                type="button"
+                className="button button--brand button--small waitlist-btn"
+                onClick={() => joinWaitlist.mutate(bookedRange)}
+                disabled={joinWaitlist.isPending}
+              >
+                <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Vào hàng chờ'}
+              </button>
+            ) : (
+              <Link to="/login" state={loginState} className="button button--brand button--small">
+                Đăng nhập để vào hàng chờ
+              </Link>
+            )}
+
+            {suggestions.data && suggestions.data.length > 0 && (
+              <div className="suggestions-block">
+                <span className="suggestions-label">💡 Gợi ý khung giờ thay thế gần nhất:</span>
+                <div className="suggestions-list">
+                  {suggestions.data.map((sug, idx) => (
+                    <div key={idx} className="suggestion-item">
+                      <div>
+                        <span className="suggestion-badge">{sug.badge}</span>
+                        <strong>{sug.field_name}</strong>
+                        <small>{sug.date_label} · {sug.start_time} – {sug.end_time}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => {
+                          if (gridFields.some((f) => f.id === sug.field_id)) {
+                            changeDate(sug.date)
+                            setHint({ fieldId: sug.field_id, start: sug.start_time, end: sug.end_time })
+                          } else {
+                            // Sang sân khác thì mang theo ngày + giờ gợi ý để khỏi chọn lại.
+                            window.location.href = `/fields/${sug.field_slug}?date=${sug.date}&start=${sug.start_time}&end=${sug.end_time}`
+                          }
+                        }}
+                      >
+                        Chọn giờ này <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Main Grid: Content + Sticky Booking Card */}
       <div className="detail-grid">
         <div className="detail-main-col">
@@ -382,7 +573,7 @@ export function FieldDetailPage() {
                 <Check /> Xác nhận bởi chủ sân
               </span>
               <span>
-                <Info /> Chờ duyệt: hủy bất cứ lúc nào · Đã xác nhận: hủy được trong 2 giờ, hủy khi còn dưới 4 giờ trước giờ chơi bị trừ điểm uy tín
+                <Info /> Giữ chỗ 15 phút để chuyển khoản · Huỷ sớm được hoàn tiền theo chính sách huỷ
               </span>
             </div>
           </section>
@@ -482,265 +673,40 @@ export function FieldDetailPage() {
             </strong>
           </div>
 
-          <label className="booking-label">
-            <span>Ngày vào sân</span>
-            <input
-              type="date"
-              min={todayStr}
-              value={date}
-              onChange={(event) => event.target.value && changeDate(event.target.value)}
-            />
-          </label>
-          <div className="day-strip" role="group" aria-label="Chọn nhanh ngày">
-            {weekDays.map((day) => {
-              const [label, rest] = formatDay(day).split(' · ')
-              return (
-                <button
-                  type="button"
-                  key={day}
-                  className={day === date ? 'active' : ''}
-                  aria-pressed={day === date}
-                  onClick={() => changeDate(day)}
-                >
-                  <strong>{label}</strong>
-                  <small>{rest.slice(0, 5)}</small>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Time slot period filter */}
-          <div className="slot-picker-wrap">
-            <div className="slot-picker-head">
-              <div className="slot-picker-title-col">
-                <span className="field-label">Khung giờ hoạt động</span>
-                {!slots.isPending && allSlots.length > 0 && (
-                  <span className="slot-availability-pill">
-                    Còn <strong>{availableCount}</strong>/{allSlots.length} khung giờ
-                  </span>
-                )}
-              </div>
-              <div className="period-tabs">
-                <button
-                  type="button"
-                  className={periodFilter === 'all' ? 'active' : ''}
-                  onClick={() => setPeriodFilter('all')}
-                  title="Tất cả giờ"
-                >
-                  Tất cả
-                </button>
-                <button
-                  type="button"
-                  className={periodFilter === 'morning' ? 'active' : ''}
-                  onClick={() => setPeriodFilter('morning')}
-                  title="Sáng (<12h)"
-                >
-                  <Sun size={12} /> Sáng
-                </button>
-                <button
-                  type="button"
-                  className={periodFilter === 'afternoon' ? 'active' : ''}
-                  onClick={() => setPeriodFilter('afternoon')}
-                  title="Chiều (12h-17h)"
-                >
-                  <Sunset size={12} /> Chiều
-                </button>
-                <button
-                  type="button"
-                  className={periodFilter === 'evening' ? 'active' : ''}
-                  onClick={() => setPeriodFilter('evening')}
-                  title="Tối (>17h)"
-                >
-                  <Moon size={12} /> Tối
-                </button>
-              </div>
-            </div>
-
-            {slots.isPending && (
-              <div className="slot-loading">
-                <span className="skeleton-shimmer" style={{ height: 38, borderRadius: 10 }} />
-                <span className="skeleton-shimmer" style={{ height: 38, borderRadius: 10 }} />
-                <span className="skeleton-shimmer" style={{ height: 38, borderRadius: 10 }} />
+          <div className="booking-label">
+            <span className="field-label">Khung giờ đã chọn ({formatDay(date)})</span>
+            {droppedCount > 0 && (
+              <div className="notice notice--warn" role="status" style={{ margin: '6px 0 10px', fontSize: 13 }}>
+                <AlertTriangle size={16} />
+                <span>{droppedCount} ô bạn chọn trước đó vừa có người đặt nên đã được bỏ chọn.</span>
               </div>
             )}
-
-            {/* Notice when date is closed/maintenance */}
-            {isDateClosed && (
-              <div className="notice notice--warn" style={{ marginBottom: 16 }}>
-                <AlertTriangle size={18} />
-                <div>
-                  <strong>Sân tạm đóng cửa vào ngày này:</strong> {closureReason || 'Bảo trì hoặc nghỉ lễ theo lịch của chủ sân.'}
-                </div>
-              </div>
-            )}
-
-            {/* Smart notice when date is fully booked */}
-            {!isDateClosed && isDateFullyBooked && (
-              <div className="fully-booked-notice">
-                <div className="fully-booked-head">
-                  <Info size={15} />
-                  <strong>{formatDay(date)} đã kín tất cả khung giờ!</strong>
-                </div>
-                <p>
-                  Bạn có thể bấm vào các khung giờ đã đặt bên dưới để tham gia <strong>Hàng đợi (Waitlist)</strong>, hoặc chuyển sang ngày kế tiếp để xem khung giờ trống.
-                </p>
-                <button
-                  type="button"
-                  className="button button--brand button--small"
-                  onClick={() => changeDate(tomorrowDateStr)}
-                >
-                  <CalendarDays size={13} /> Xem ngày mai ({formatDay(tomorrowDateStr)})
-                </button>
-              </div>
-            )}
-
-            <div className="slot-grid">
-              {filteredSlots.map((slot) => {
-                const isSelected = selectedSlot?.id === slot.id
-                const isBookedSelected = selectedBookedSlot?.id === slot.id
-                const isAvailable = !slot.is_booked && !slot.is_past && !slot.is_held
-                return (
-                  <button
-                    type="button"
-                    disabled={slot.is_past || slot.is_held}
-                    aria-disabled={slot.is_booked || slot.is_past || slot.is_held}
-                    className={`slot-chip ${isSelected ? 'selected' : ''} ${
-                      slot.is_booked ? 'slot-chip--booked' : ''
-                    } ${isBookedSelected ? 'slot-chip--booked-active' : ''} ${
-                      slot.is_past ? 'slot-chip--past' : ''
-                    }`}
-                    onClick={() => {
-                      if (slot.is_booked) {
-                        pickSlot(null)
-                        setSelectedBookedSlot(slot)
-                      } else if (!slot.is_past && !slot.is_held) {
-                        setSelectedBookedSlot(null)
-                        pickSlot(slot.id)
-                      }
-                    }}
-                    key={slot.id}
-                    title={
-                      slot.is_past
-                        ? 'Khung giờ này đã trôi qua'
-                        : slot.is_held
-                          ? 'Đang giữ chỗ 15 phút cho người trong hàng đợi'
-                          : slot.is_booked
-                          ? 'Khung giờ đã kín — Bấm để vào hàng đợi Waitlist hoặc xem gợi ý'
-                          : 'Khung giờ còn trống — Bấm để chọn đặt'
-                    }
-                  >
+            {blocks.length === 0 ? (
+              <p className="form-help" style={{ margin: '6px 0 12px' }}>
+                Bấm các ô trống trên lưới (mỗi ô 30 phút). Giữ Shift rồi bấm ô thứ hai để chọn cả dải. Có thể chọn nhiều sân, nhiều khung giờ rồi thanh toán một lần.
+              </p>
+            ) : (
+              <ul className="selection-list">
+                {blocks.map((b) => (
+                  <li key={`${b.fieldId}-${b.start}`} className={durationOf(b) < minMinutes ? 'is-short' : ''}>
                     <span>
-                      {slot.start_time} – {slot.end_time}
+                      <strong>{b.fieldName}</strong> · {b.start}–{b.end}
+                      {durationOf(b) < minMinutes && <small> (tối thiểu {minMinutes} phút)</small>}
                     </span>
-                    {slot.price_per_hour && (
-                      <small className="slot-custom-price">
-                        {formatMoney(slot.price_per_hour)}/h
-                      </small>
-                    )}
-                    {slot.is_booked && <small className="slot-badge--booked">Đã đặt · Chờ</small>}
-                    {slot.is_past && <small className="slot-badge--past">Đã qua giờ</small>}
-                    {slot.is_held && !slot.is_past && <small className="slot-badge--booked">Đang giữ chỗ</small>}
-                    {isAvailable && <small className="slot-badge--avail">Còn trống</small>}
-                  </button>
-                )
-              })}
-            </div>
-
-            {filteredSlots.length === 0 && !slots.isPending && (
-              <p className="no-slot-notice">Không có khung giờ nào phù hợp bộ lọc.</p>
+                    <strong>{formatMoney(b.price)}</strong>
+                  </li>
+                ))}
+              </ul>
             )}
-
-            {/* Phase 4: Smart Waitlist & Suggestion Block */}
-            {selectedBookedSlot && (
-              <div className="waitlist-card">
-                <div className="waitlist-card__head">
-                  <div className="waitlist-card__title">
-                    <Zap size={16} />
-                    <strong>Khung giờ {selectedBookedSlot.start_time} – {selectedBookedSlot.end_time} đã kín</strong>
-                  </div>
-                  <button
-                    type="button"
-                    className="button button--ghost button--small"
-                    onClick={() => setSelectedBookedSlot(null)}
-                  >
-                    Đóng
-                  </button>
+            {blocks.length > 0 && (
+              <div className="price-breakdown">
+                <div className="price-breakdown__row price-breakdown__total">
+                  <span>Tổng tạm tính:</span>
+                  <strong>{formatMoney(total)}</strong>
                 </div>
-                <p className="waitlist-card__desc">
-                  Bạn có thể tham gia <strong>Hàng đợi thông minh (Smart Waitlist)</strong> để được ưu tiên nhận giữ chỗ ngay lập tức khi có người hủy hoặc đổi giờ!
-                </p>
-                {user ? (
-                  <button
-                    type="button"
-                    className="button button--brand button--small waitlist-btn"
-                    onClick={() => joinWaitlist.mutate(selectedBookedSlot)}
-                    disabled={joinWaitlist.isPending}
-                  >
-                    <BellRing size={14} /> {joinWaitlist.isPending ? 'Đang đăng ký...' : 'Vào hàng đợi'}
-                  </button>
-                ) : (
-                  <Link to="/login" state={loginState} className="button button--brand button--small">
-                    Đăng nhập để vào Hàng đợi
-                  </Link>
-                )}
-
-                {/* Smart suggestions */}
-                {suggestions.data && suggestions.data.length > 0 && (
-                  <div className="suggestions-block">
-                    <span className="suggestions-label">💡 Gợi ý khung giờ thay thế gần nhất:</span>
-                    <div className="suggestions-list">
-                      {suggestions.data.map((sug, idx) => (
-                        <div key={idx} className="suggestion-item">
-                          <div>
-                            <span className="suggestion-badge">{sug.badge}</span>
-                            <strong>{sug.field_name}</strong>
-                            <small>{sug.date_label} · {sug.start_time} – {sug.end_time}</small>
-                          </div>
-                          <button
-                            type="button"
-                            className="button button--ghost button--small"
-                            onClick={() => {
-                              if (sug.field_slug === slug) {
-                                changeDate(sug.date)
-                                setSlotId(sug.time_slot_id)
-                              } else {
-                                // Sang sân khác thì mang theo ngày + giờ gợi ý để khỏi chọn lại.
-                                window.location.href = `/fields/${sug.field_slug}?date=${sug.date}&start=${sug.start_time}`
-                              }
-                            }}
-                          >
-                            Chọn giờ này <ArrowRight size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
-
-          {/* Dynamic Price Breakdown */}
-          {calculatedPrice && selectedSlot && (
-            <div className="price-breakdown">
-              <div className="price-breakdown__row">
-                <span>Khung giờ chọn:</span>
-                <strong>
-                  {selectedSlot.start_time} – {selectedSlot.end_time} ({calculatedPrice.durationMinutes} phút)
-                </strong>
-              </div>
-              {selectedSlot.price_per_hour && (
-                <div className="price-breakdown__row">
-                  <span>Giá riêng khung giờ:</span>
-                  <strong>{formatMoney(selectedSlot.price_per_hour)}/h</strong>
-                </div>
-              )}
-              <div className="price-breakdown__row price-breakdown__total">
-                <span>Tổng tạm tính:</span>
-                <strong>{formatMoney(calculatedPrice.total)}</strong>
-              </div>
-            </div>
-          )}
 
           <label className="booking-label">
             <span>Ghi chú thêm (tùy chọn)</span>
@@ -753,31 +719,34 @@ export function FieldDetailPage() {
           </label>
 
           {!user ? (
-            <Link className="button button--dark button--block" to="/login" state={loginState}>
-              Đăng nhập để đặt sân
-            </Link>
+            <>
+              <Link className="button button--dark button--block" to="/login" state={loginState}>
+                Đăng nhập để đặt sân
+              </Link>
+              {blocks.length > 0 && <p className="form-help" style={{ margin: '8px 0 0', textAlign: 'center' }}>Các ô bạn đã chọn sẽ được giữ lại sau khi đăng nhập.</p>}
+            </>
           ) : user.role !== 'customer' ? (
             <div className="notice notice--soft">Chỉ tài khoản khách hàng có thể đặt sân.</div>
           ) : (
             <button
-              disabled={!selectedSlot || booking.isPending}
+              disabled={!canBook || booking.isPending}
               onClick={() => setShowConfirmModal(true)}
               className="button button--brand button--block button--lg"
             >
               <CalendarDays size={18} />{' '}
-              {booking.isPending ? 'Đang gửi...' : selectedSlot ? 'Gửi yêu cầu' : 'Chọn khung giờ'}
+              {booking.isPending ? 'Đang giữ chỗ...' : blocks.length ? 'Đặt & thanh toán' : 'Chọn ô trên lưới'}
             </button>
           )}
 
-          {booking.isSuccess && !selectedSlot && (
+          {booking.isSuccess && blocks.length === 0 && (
             <div className="notice notice--success" role="status">
-              Đã gửi yêu cầu, đang chờ chủ sân duyệt để thanh toán. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
+              Đã giữ chỗ, hãy chuyển khoản để hoàn tất. <Link to="/bookings"><u>Xem đơn của tôi</u></Link>
             </div>
           )}
 
           <div className="booking-guarantee">
             <ShieldCheck size={14} />
-            <span>Sau khi chủ sân duyệt, bạn chuyển khoản đặt cọc hoặc trả hết để giữ sân.</span>
+            <span>Thanh toán qua SportHub: đơn xác nhận ngay khi nhận tiền, được hoàn tiền nếu chủ sân huỷ.</span>
           </div>
         </aside>
       </div>
@@ -785,23 +754,23 @@ export function FieldDetailPage() {
       {/* Mobile Sticky Booking Bar */}
       <div className="mobile-booking-bar">
         <div className="mobile-booking-bar__price">
-          <span>Giá thuê từ</span>
+          <span>{blocks.length ? `Đã chọn ${blocks.length} khung giờ` : 'Giá thuê từ'}</span>
           <strong>
-            {calculatedPrice ? formatMoney(calculatedPrice.total) : `${formatMoney(item.price_per_hour)}/h`}
+            {blocks.length ? formatMoney(total) : `${formatMoney(item.price_per_hour)}/h`}
           </strong>
         </div>
         <button
           type="button"
           className="button button--brand"
           disabled={booking.isPending}
-          onClick={() => (selectedSlot && user?.role === 'customer' ? setShowConfirmModal(true) : scrollToBooking())}
+          onClick={() => (canBook && user?.role === 'customer' ? setShowConfirmModal(true) : scrollToGrid())}
         >
           <CalendarDays size={16} />{' '}
-          {booking.isPending ? 'Đang gửi...' : selectedSlot && user?.role === 'customer' ? 'Gửi yêu cầu' : 'Chọn giờ'}
+          {booking.isPending ? 'Đang giữ chỗ...' : canBook && user?.role === 'customer' ? 'Đặt & thanh toán' : 'Chọn giờ'}
         </button>
       </div>
 
-      {showConfirmModal && selectedSlot && item && calculatedPrice && (
+      {showConfirmModal && canBook && item && (
         <BookingConfirmModal
           isOpen={showConfirmModal}
           onClose={() => {
@@ -813,10 +782,9 @@ export function FieldDetailPage() {
             setPendingRecurringConfig({ isRecurring, weeks })
             booking.mutate({ isRecurring, weeks, skipConflicts: false })
           }}
-          field={item}
-          slot={selectedSlot}
+          blocks={blocks}
           date={date}
-          totalPrice={calculatedPrice.total}
+          totalPrice={total}
           notes={notes}
           busy={booking.isPending}
           conflicts={recurringConflicts}

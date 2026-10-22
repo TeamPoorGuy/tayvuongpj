@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
+use App\Support\Banks;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,7 +13,7 @@ class OwnerProfileResource extends JsonResource
         return [
             'id' => $this->id,
             'owner_name' => $this->owner_name,
-            'owner_id_number' => $this->owner_id_number,
+            'owner_id_number' => $request->user()?->isAdmin() ? $this->owner_id_number : $this->maskedIdNumber(),
             'business_name' => $this->business_name,
             'business_address' => $this->business_address,
             'business_phone' => $this->business_phone,
@@ -20,7 +21,7 @@ class OwnerProfileResource extends JsonResource
             'description' => $this->description,
             'verification_status' => $this->verification_status,
             'bank_name' => $this->bank_name,
-            'bank_bin' => $this->bank_bin ?? \App\Support\Banks::guessBin($this->bank_name),
+            'bank_bin' => $this->bank_bin ?? Banks::guessBin($this->bank_name),
             'bank_account_number' => $this->bank_account_number,
             'bank_account_holder' => $this->bank_account_holder,
             'terms_version' => $this->terms_version,
@@ -37,5 +38,13 @@ class OwnerProfileResource extends JsonResource
             'verified_at' => $this->verified_at?->toISOString(),
             'user' => $this->whenLoaded('user', fn () => new UserResource($this->user)),
         ];
+    }
+
+    /** Chỉ lộ 4 số cuối để người nộp nhận ra số của mình, admin mới thấy đủ. */
+    private function maskedIdNumber(): ?string
+    {
+        $number = $this->owner_id_number;
+
+        return $number ? str_repeat('*', max(strlen($number) - 4, 0)).substr($number, -4) : null;
     }
 }

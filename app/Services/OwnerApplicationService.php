@@ -27,15 +27,16 @@ class OwnerApplicationService
             throw new ConflictException('Bạn đã có hồ sơ đăng ký chủ sân đang chờ duyệt, đã được duyệt hoặc đang bị tạm khoá.');
         }
 
-        $hash = FieldOwnerProfile::hashIdNumber($data->ownerIdNumber);
+        $idNumber = $data->ownerIdNumber ?: $existing?->owner_id_number;
+        $hash = FieldOwnerProfile::hashIdNumber($idNumber);
         if (FieldOwnerProfile::where('owner_id_hash', $hash)->where('user_id', '!=', $user->id)->exists()) {
             throw new ConflictException('Số CCCD này đã được dùng để đăng ký bởi tài khoản khác.');
         }
 
-        return DB::transaction(function () use ($user, $data, $hash) {
+        return DB::transaction(function () use ($user, $data, $hash, $idNumber) {
             $profile = $user->fieldOwnerProfile()->updateOrCreate(['user_id' => $user->id], [
                 'owner_name' => $data->ownerName,
-                'owner_id_number' => $data->ownerIdNumber,
+                'owner_id_number' => $idNumber,
                 'owner_id_hash' => $hash,
                 'business_name' => $data->businessName,
                 'business_address' => $data->businessAddress,
@@ -72,5 +73,29 @@ class OwnerApplicationService
 
             return $profile->load('documents');
         });
+    }
+
+    /** Số ngày giữ giấy tờ của hồ sơ bị từ chối trước khi tự xoá. */
+    public const REJECTED_RETENTION_DAYS = 30;
+
+    /** Xoá file và bản ghi giấy tờ của hồ sơ bị từ chối quá hạn lưu; hồ sơ vẫn giữ để tra cứu. */
+    public function purgeRejectedDocuments(): int
+    {
+        $count = 0;
+
+        FieldOwnerProfile::query()
+            ->where('verification_status', VerificationStatus::Rejected)
+            ->where('verified_at', '<', now()->subDays(self::REJECTED_RETENTION_DAYS))
+            ->whereHas('documents')
+            ->with('documents')
+            ->each(function (FieldOwnerProfile $profile) use (&$count) {
+                foreach ($profile->documents as $document) {
+                    Storage::disk('local')->delete($document->path);
+                    $document->delete();
+                    $count++;
+                }
+            });
+
+        return $count;
     }
 }

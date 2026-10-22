@@ -1,3 +1,4 @@
+import { digitsOnly } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -18,10 +19,11 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { ConfirmModal } from '../../components/ConfirmModal'
+import { ComplaintRespondModal } from '../../components/ComplaintRespond'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
@@ -30,6 +32,8 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../context/auth-context'
 import type { ApiEnvelope, Booking, BookingWaitlist, Paginated, User } from '../../types/api'
 import { getLocalTodayString } from '../../utils/date'
+import { complaintBody, complaintCategoryLabels } from '../../utils/complaint'
+import { EvidenceGallery, EvidencePicker } from '../../components/EvidencePicker'
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
 
@@ -114,6 +118,10 @@ function StarRatingInput({
   )
 }
 
+/** Đơn bị ghi vắng mặt và còn trong hạn kháng cáo "tôi đã đến sân". */
+const canAppealNoShow = (booking: Booking) =>
+  !!booking.no_show && !!booking.no_show_appeal_until && new Date(booking.no_show_appeal_until).getTime() > Date.now()
+
 export function CustomerBookingsPage() {
   const client = useQueryClient()
   const toast = useToast()
@@ -128,6 +136,8 @@ export function CustomerBookingsPage() {
   const [activeReviewing, setActiveReviewing] = useState<Booking | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [complaintBooking, setComplaintBooking] = useState<Booking | null>(null)
+  const [respondingId, setRespondingId] = useState<number | null>(null)
+  const [complaintPhotos, setComplaintPhotos] = useState<File[]>([])
   const [complaintCategory, setComplaintCategory] = useState('refund_pending')
   const [complaintContent, setComplaintContent] = useState('')
   const currentReview = reviewing ?? activeReviewing
@@ -140,12 +150,15 @@ export function CustomerBookingsPage() {
 
   const openComplaint = (booking: Booking) => {
     setComplaintBooking(booking)
-    setComplaintCategory(booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
+    setComplaintCategory(canAppealNoShow(booking) ? 'wrong_no_show' : booking.refund?.status === 'pending' ? 'refund_pending' : 'field_mismatch')
     setComplaintContent('')
+    setComplaintPhotos([])
   }
 
   const bookings = useQuery({
     queryKey: ['customer', 'bookings', status, page],
+    // Đơn đang giữ chỗ/đã xác nhận có thể đổi trạng thái (thanh toán xong, hết hạn giữ chỗ, đến giờ chơi) mà khách không làm gì.
+    refetchInterval: (query) => (query.state.data?.data?.some((b) => b.status === 'pending' || b.status === 'confirmed') ? 30_000 : false),
     queryFn: async () =>
       (await api.get<Paginated<Booking>>('/customer/bookings', { params: { page, status: status || undefined } })).data,
   })
@@ -190,13 +203,17 @@ export function CustomerBookingsPage() {
     },
   })
 
+  const navigate = useNavigate()
   const acceptWaitlist = useMutation({
     mutationFn: async (waitlistId: number) => api.post(`/customer/waitlist/${waitlistId}/accept`),
-    onSuccess: () => {
-      toast.success('Bạn đã nhận được suất sân. Đơn đặt sân mới đang chờ chủ sân duyệt, sau đó bạn chuyển khoản để giữ sân.')
+    onSuccess: (res) => {
+      toast.success('Bạn đã nhận được suất sân. Hãy chuyển khoản để giữ chỗ.')
       void client.invalidateQueries({ queryKey: ['customer', 'waitlist'] })
       void client.invalidateQueries({ queryKey: ['customer', 'bookings'] })
-      setActiveTab('bookings')
+      // Nhận suất = giữ chỗ tạm 15 phút: đưa khách thẳng tới trang chuyển khoản.
+      const paymentId = res.data?.data?.payment?.id
+      if (paymentId) navigate(`/payments/${paymentId}`)
+      else setActiveTab('bookings')
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể nhận suất sân')
@@ -237,17 +254,15 @@ export function CustomerBookingsPage() {
       category: string
       content: string
     }) =>
-      api.post('/customer/complaints', {
-        booking_id: bookingId,
-        subject_type: 'booking',
-        subject_id: String(bookingId),
-        category,
-        content,
-      }),
+      api.post(
+        '/customer/complaints',
+        complaintBody({ booking_id: bookingId, subject_type: 'booking', subject_id: String(bookingId), category, content }, complaintPhotos),
+      ),
     onSuccess: () => {
       toast.success('Đã gửi khiếu nại tới Ban quản trị SportHub thành công!')
       setComplaintBooking(null)
       setComplaintContent('')
+      setComplaintPhotos([])
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể gửi khiếu nại')
@@ -320,7 +335,7 @@ export function CustomerBookingsPage() {
               }}
             >
               <option value="">Mọi trạng thái</option>
-              <option value="pending">Chờ duyệt / chờ thanh toán</option>
+              <option value="pending">Đang giữ chỗ, chờ thanh toán</option>
               <option value="confirmed">Đã xác nhận</option>
               <option value="completed">Hoàn thành</option>
               <option value="cancelled">Đã hủy</option>
@@ -398,18 +413,10 @@ export function CustomerBookingsPage() {
                       {booking.field?.address}
                     </span>
                   </div>
-                  {booking.status === 'pending' && !booking.payment?.status && (
-                    <p className="form-help">
-                      Đang chờ chủ sân duyệt — bạn có thể huỷ bất cứ lúc nào, không bị trừ điểm. Sau khi được duyệt bạn sẽ
-                      chuyển khoản cọc hoặc trả hết để giữ sân. Đơn tự huỷ nếu chủ sân không phản hồi sau 24 giờ.
-                    </p>
-                  )}
                   {booking.status === 'pending' && booking.payment?.status === 'awaiting' && (
                     <p className="form-help">
-                      Chủ sân đã duyệt. Hãy chuyển khoản
-                      {booking.payment.due_at &&
-                        ` trước ${formatDateTime(booking.payment.due_at)}`}
-                      , quá hạn đơn sẽ tự huỷ.
+                      Đang giữ chỗ. Hãy chuyển khoản vào tài khoản SportHub
+                      {booking.payment.due_at && ` trước ${formatDateTime(booking.payment.due_at)}`}, quá hạn chỗ sẽ được nhả cho người khác.
                     </p>
                   )}
                   {booking.status === 'pending' && booking.payment?.status === 'reported' && (
@@ -430,44 +437,84 @@ export function CustomerBookingsPage() {
                     </div>
                   )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.booking_date >= getLocalTodayString() && (
-                    <p className="form-help">
-                      {booking.can_be_cancelled ? (
-                        booking.cancel_penalty ? (
-                          <span style={{ color: '#ef4444' }}>
-                            Chủ sân đã xác nhận. Đã vào khung huỷ muộn (dưới 4 giờ trước giờ chơi): bạn vẫn có thể huỷ nhưng sẽ mất cọc và bị trừ 15 điểm uy tín.
-                          </span>
-                        ) : (
-                          <span>
-                            Chủ sân đã xác nhận. Bạn có thể huỷ miễn phí (hoàn cọc, không trừ điểm) trước {booking.cancel_until ? formatDateTime(booking.cancel_until) : 'giờ chơi'}.
-                          </span>
-                        )
-                      ) : (
-                        <span>Chủ sân đã xác nhận và đã đến/quá giờ chơi nên không thể tự huỷ đơn.</span>
-                      )}{' '}
-                      Mã đơn để đối chiếu khi đến sân: <strong>#BK-{String(booking.id).padStart(5, '0')}</strong>.
-                      {booking.payment?.status === 'paid' &&
-                        ` Đã chuyển ${formatMoney(booking.payment.amount ?? 0)}${booking.payment.option === 'deposit' ? `, còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân` : ''}.`}
-                    </p>
+                    <ul className="booking-facts">
+                      {booking.payment?.status === 'paid' && (
+                        <li>
+                          <strong>Đã thanh toán {formatMoney(booking.payment.amount ?? 0)}</strong>
+                          {booking.payment.option === 'deposit' && booking.total_price - (booking.payment.amount ?? 0) > 0
+                            ? ` · còn ${formatMoney(booking.total_price - (booking.payment.amount ?? 0))} trả tại sân`
+                            : ' · không phải trả thêm tại sân'}
+                        </li>
+                      )}
+                      <li className={booking.can_be_cancelled && booking.cancel_penalty ? 'is-warn' : undefined}>
+                        {!booking.can_be_cancelled
+                          ? 'Đã đến giờ chơi nên không thể tự huỷ đơn.'
+                          : booking.cancel_penalty
+                            ? 'Đã sát giờ chơi: huỷ lúc này hoàn ít hoặc không hoàn tiền và bị trừ 15 điểm uy tín.'
+                            : booking.cancel_until
+                              ? <>Huỷ trước <strong>{formatDateTime(booking.cancel_until)}</strong> được hoàn 100%, sau mốc này hoàn theo chính sách.</>
+                              : 'Huỷ lúc này được hoàn tiền theo chính sách huỷ.'}
+                      </li>
+                    </ul>
                   )}
                   {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
                     <p className="form-help">Lý do: {booking.cancel_reason}</p>
                   )}
                   {booking.refund?.status === 'pending' && (
                     <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      <strong>Khoản hoàn tiền:</strong> Đơn đã ghi nhận hoàn cọc {formatMoney(booking.refund.amount)}. Nếu sau 24h chưa nhận được chuyển khoản, bạn hãy bấm &quot;Khiếu nại&quot; bên dưới để ban quản trị đối soát hỗ trợ.
+                      <strong>Khoản hoàn tiền:</strong> SportHub sẽ hoàn {formatMoney(booking.refund.amount)} cho bạn. Nếu sau 24h chưa nhận được, hãy bấm &quot;Khiếu nại&quot; bên dưới để được hỗ trợ.
                     </div>
                   )}
                   {booking.refund?.status === 'done' && (
                     <div className="notice notice--success" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      Đã hoàn trả {formatMoney(booking.refund.amount)} tiền cọc{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                      Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                    </div>
+                  )}
+                  {booking.no_show && canAppealNoShow(booking) && !booking.complaint && (
+                    <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Đơn bị ghi nhận vắng mặt (đã trừ 25 điểm uy tín).</strong> Nếu bạn đã đến sân, hãy khiếu nại trước {formatDateTime(booking.no_show_appeal_until!)} kèm ảnh chứng cứ (ví dụ ảnh chụp tại sân).
+                      <div style={{ marginTop: 6 }}>
+                        <button type="button" className="button button--brand button--small" onClick={() => openComplaint(booking)}>
+                          Tôi đã đến sân — khiếu nại
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {booking.complaint_against && (
+                    <div className={'notice notice--warn'} style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Chủ sân khiếu nại về đơn này ({complaintCategoryLabels[booking.complaint_against.category] ?? booking.complaint_against.category}):</strong> {booking.complaint_against.content}
+                      <div style={{ marginTop: 6 }}><EvidenceGallery attachments={booking.complaint_against.attachments?.filter((a) => a.by === 'complainant')} label="Ảnh chủ sân gửi:" /></div>
+                      {booking.complaint_against.response && <div style={{ marginTop: 4 }}><strong>Phản hồi của bạn:</strong> {booking.complaint_against.response}</div>}
+                      {booking.complaint_against.can_respond && (
+                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                          <span>Bạn có một lần phản hồi trước khi Ban quản trị quyết định.</span>
+                          <button type="button" className="button button--brand button--small" onClick={() => setRespondingId(booking.complaint_against!.id)}>
+                            Phản hồi
+                          </button>
+                        </div>
+                      )}
+                      {(booking.complaint_against.status === 'resolved' || booking.complaint_against.status === 'rejected') && (
+                        <div style={{ marginTop: 4 }}>
+                          <strong>Kết luận:</strong> {booking.complaint_against.status === 'resolved' ? 'Khiếu nại được chấp nhận' : 'Khiếu nại không được chấp nhận'}
+                          {booking.complaint_against.resolution ? ` — ${booking.complaint_against.resolution}` : ''}
+                          {booking.complaint_against.trust_penalty ? ` Bạn bị trừ ${booking.complaint_against.trust_penalty} điểm uy tín.` : ''}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {booking.complaint && (booking.complaint.status === 'resolved' || booking.complaint.status === 'rejected') && (
+                    <div className={`notice ${booking.complaint.status === 'resolved' ? 'notice--success' : 'notice--warn'}`} style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                      <strong>Khiếu nại {booking.complaint.status === 'resolved' ? 'đã được chấp nhận' : 'không được chấp nhận'}:</strong> {booking.complaint.resolution}
+                      {booking.complaint.refund_amount ? <> SportHub hoàn thêm {formatMoney(booking.complaint.refund_amount)} cho bạn.</> : null}
+                      {booking.complaint.attendance_confirmed ? ' Đã gỡ ghi nhận vắng mặt và hoàn lại 25 điểm uy tín.' : null}
                     </div>
                   )}
                   <div className="booking-item__footer">
                     <strong>{formatMoney(booking.total_price)}</strong>
 
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {booking.status === 'pending' && booking.payment?.status && (
-                        <Link to={`/bookings/${booking.id}/payment`} className="button button--brand button--small">
+                      {booking.payment?.id && (
+                        <Link to={`/payments/${booking.payment.id}`} className={`button button--small ${booking.payment.status === 'awaiting' ? 'button--brand' : 'button--ghost'}`}>
                           {booking.payment.status === 'awaiting' ? 'Thanh toán' : 'Xem thanh toán'}
                         </Link>
                       )}
@@ -487,14 +534,20 @@ export function CustomerBookingsPage() {
                           <Star size={15} /> Đánh giá
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="button button--ghost button--small"
-                        onClick={() => openComplaint(booking)}
-                        title="Khiếu nại hoặc phản ánh về đơn đặt sân này"
-                      >
-                        <AlertCircle size={14} /> Khiếu nại
-                      </button>
+                      {booking.complaint && (booking.complaint.status === 'open' || booking.complaint.status === 'processing') ? (
+                        <span className="badge badge--soft" title="Mỗi đơn chỉ có một khiếu nại đang xử lý">
+                          <AlertCircle size={13} /> Khiếu nại {booking.complaint.status === 'open' ? 'đã gửi, chờ xử lý' : 'đang được xác minh'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button button--ghost button--small"
+                          onClick={() => openComplaint(booking)}
+                          title="Khiếu nại hoặc phản ánh về đơn đặt sân này"
+                        >
+                          <AlertCircle size={14} /> Khiếu nại
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -746,11 +799,32 @@ export function CustomerBookingsPage() {
                   <strong>Cảnh báo hủy muộn:</strong> Đang trong khung giờ hủy muộn (dưới 4 tiếng trước giờ chơi). Hủy đơn lúc này bạn sẽ <strong>KHÔNG được hoàn tiền cọc</strong> và bị <strong>trừ 15 điểm uy tín</strong>.
                 </div>
               </div>
+            ) : cancellingBooking.refund_if_cancelled != null ? (
+              <div
+                className={`notice ${cancellingBooking.refund_if_cancelled > 0 ? 'notice--success' : 'notice--warn'}`}
+                style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}
+              >
+                <CheckCircle2 size={18} />
+                <div>
+                  {cancellingBooking.refund_if_cancelled > 0 ? (
+                    <>
+                      <strong>Hủy lúc này bạn được hoàn {formatMoney(cancellingBooking.refund_if_cancelled)}</strong>
+                      {cancellingBooking.refund_if_cancelled < (cancellingBooking.payment?.amount ?? 0) &&
+                        ` (một phần trong ${formatMoney(cancellingBooking.payment?.amount ?? 0)} đã chuyển)`}
+                      , không bị trừ điểm uy tín.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Hủy lúc này bạn không được hoàn tiền</strong> vì đã sát giờ chơi.
+                    </>
+                  )}
+                </div>
+              </div>
             ) : (
               <div className="notice notice--success" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                 <CheckCircle2 size={18} />
                 <div>
-                  <strong>Hủy trong thời hạn hợp lệ:</strong> Bạn được <strong>hoàn tiền cọc</strong> và <strong>không bị trừ điểm uy tín</strong>.
+                  <strong>Chưa thanh toán:</strong> huỷ lúc này không mất phí và không bị trừ điểm uy tín.
                 </div>
               </div>
             )}
@@ -816,6 +890,8 @@ export function CustomerBookingsPage() {
         busy={cancelWaitlist.isPending}
       />
 
+      <ComplaintRespondModal complaintId={respondingId} role="customer" onClose={() => setRespondingId(null)} />
+
       <Modal
         isOpen={!!complaintBooking}
         onClose={() => setComplaintBooking(null)}
@@ -854,6 +930,7 @@ export function CustomerBookingsPage() {
                   <option value="field_mismatch">Sân không đúng thực tế / mô tả sai</option>
                   <option value="owner_cancelled">Chủ sân tự ý huỷ sân hoặc không đón tiếp</option>
                   <option value="bad_behavior">Thái độ phục vụ của nhân viên / chủ sân</option>
+                  {canAppealNoShow(complaintBooking) && <option value="wrong_no_show">Tôi đã đến sân nhưng bị ghi nhận vắng mặt</option>}
                   <option value="other">Vấn đề khác</option>
                 </select>
               </label>
@@ -868,6 +945,8 @@ export function CustomerBookingsPage() {
                   placeholder="Mô tả cụ thể sự việc để Ban quản trị đối soát với chủ sân..."
                 />
               </label>
+
+              <EvidencePicker files={complaintPhotos} onChange={setComplaintPhotos} />
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
                 <button
@@ -983,7 +1062,7 @@ export function CustomerProfilePage() {
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val minus">-15</span>
-            <span>Hủy đơn đã duyệt khi còn dưới 4 giờ trước giờ chơi</span>
+            <span>Hủy đơn đã thanh toán khi còn dưới 4 giờ trước giờ chơi</span>
           </div>
           <div className="trust-rule-item">
             <span className="trust-rule-val danger">-25</span>
@@ -1014,11 +1093,11 @@ export function CustomerProfilePage() {
             </label>
             <label>
               <span>Email</span>
-              <input name="email" defaultValue={profile.data?.email} required />
+              <input name="email" type="email" maxLength={255} defaultValue={profile.data?.email} required />
             </label>
             <label>
               <span>Số điện thoại</span>
-              <input name="phone" defaultValue={profile.data?.phone ?? ''} />
+              <input name="phone" type="tel" inputMode="numeric" required maxLength={11} pattern="0[0-9]{9,10}" title="Số điện thoại gồm 10–11 chữ số, bắt đầu bằng 0" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} defaultValue={profile.data?.phone ?? ''} />
             </label>
             <label>
               <span>Địa chỉ</span>
@@ -1060,11 +1139,11 @@ export function CustomerProfilePage() {
           )}
           <label>
             <span>Mật khẩu mới</span>
-            <input name="password" type="password" required />
+            <input name="password" type="password" required minLength={8} maxLength={72} />
           </label>
           <label>
             <span>Xác nhận mật khẩu</span>
-            <input name="password_confirmation" type="password" required />
+            <input name="password_confirmation" type="password" required minLength={8} maxLength={72} />
           </label>
           <button disabled={password.isPending} className="button button--dark">
             {password.isPending ? 'Đang xử lý...' : hasPassword ? 'Cập nhật mật khẩu' : 'Tạo mật khẩu'}

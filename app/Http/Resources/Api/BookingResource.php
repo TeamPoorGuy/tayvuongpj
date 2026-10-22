@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
+use App\Enums\BookingStatus;
 use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -21,17 +22,26 @@ class BookingResource extends JsonResource
             'can_be_cancelled' => $this->canBeCancelled(),
             'cancel_penalty' => $this->canBeCancelled() && $this->isLateToCancel(),
             'cancel_until' => $this->cancelUntil()?->toISOString(),
+            // Số tiền được hoàn nếu khách huỷ ngay lúc này (theo bậc giờ); null khi đơn chưa thanh toán hoặc không còn huỷ được.
+            'refund_if_cancelled' => $this->status === BookingStatus::Confirmed && $this->payment_status === 'paid' ? $this->refundAmountIfCancelledNow() : null,
             'confirmed_at' => $this->confirmed_at?->toISOString(),
             'check_in_code' => $this->check_in_code,
             'checked_in_at' => $this->checked_in_at?->toISOString(),
             'no_show' => $this->no_show_at !== null,
+            // Hạn khách khiếu nại "tôi đã đến sân" khi bị ghi nhận vắng mặt (null khi không phải đơn vắng mặt).
+            'no_show_appeal_until' => $this->no_show_at?->copy()->addHours(config('booking.no_show_appeal_hours'))->toISOString(),
             'recurring_group_id' => $this->recurring_group_id,
+            // Khiếu nại gần nhất của đơn do chính người xem gửi, và khiếu nại nhắm vào người xem (cần phản hồi).
+            'complaint' => $this->complaintBrief($this->complaintsOf($request, 'user_id')),
+            'complaint_against' => $this->complaintBrief($this->complaintsOf($request, 'against_user_id'), $request),
             'payment' => [
+                'id' => $this->payment_id,
                 'status' => $this->payment_status,
                 'option' => $this->payment_option,
                 'amount' => $this->payment_amount !== null ? (float) $this->payment_amount : null,
-                'code' => $this->payment_code,
-                'due_at' => $this->payment_due_at?->toISOString(),
+                // Đơn thu hộ lấy mã và hạn từ lượt thanh toán; đơn kiểu cũ giữ cột trên chính đơn.
+                'code' => $this->payment?->code ?? $this->payment_code,
+                'due_at' => ($this->payment?->due_at ?? $this->payment_due_at)?->toISOString(),
                 'reported_at' => $this->payment_reported_at?->toISOString(),
                 'paid_at' => $this->paid_at?->toISOString(),
                 'deposit_amount' => $this->depositAmount(),
@@ -50,28 +60,55 @@ class BookingResource extends JsonResource
                 'statement_id' => $this->statement_id,
             ],
 
-            // Tài khoản nhận tiền: chỉ trả cho chính khách của đơn, sau khi chủ sân đã duyệt, ở endpoint chi tiết.
-            'bank' => $this->when(
-                $this->payment_status !== null
-                    && $request->user()?->id === $this->user_id
-                    && $this->relationLoaded('sportsField')
-                    && $this->sportsField->relationLoaded('owner'),
-                fn () => [
-                    'bank_name' => $this->sportsField->owner->fieldOwnerProfile?->bank_name,
-                    'bank_bin' => $this->sportsField->owner->fieldOwnerProfile?->bank_bin ?? \App\Support\Banks::guessBin($this->sportsField->owner->fieldOwnerProfile?->bank_name),
-                    'account_number' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_number,
-                    'account_holder' => $this->sportsField->owner->fieldOwnerProfile?->bank_account_holder,
-                ]
-            ),
             'field' => $this->whenLoaded('sportsField', fn () => new FieldResource($this->sportsField)),
             'customer' => $this->whenLoaded('customer', fn () => new UserResource($this->customer)),
-            'time_slot' => $this->whenLoaded('timeSlot', fn () => [
-                'id' => $this->timeSlot->id,
-                'start_time' => substr($this->timeSlot->start_time, 0, 5),
-                'end_time' => substr($this->timeSlot->end_time, 0, 5),
-            ]),
+            // Giữ tên time_slot cho giao diện cũ; giờ lấy từ chính đơn (đơn theo khoảng giờ không có khung giờ).
+            'time_slot' => [
+                'id' => $this->time_slot_id,
+                'start_time' => substr($this->start_time, 0, 5),
+                'end_time' => substr($this->end_time, 0, 5),
+            ],
             'review' => $this->whenLoaded('review', fn () => $this->review ? new ReviewResource($this->review) : null),
             'created_at' => $this->created_at?->toISOString(),
+        ];
+    }
+
+    private function complaintsOf(Request $request, string $column): ?\App\Models\Complaint
+    {
+        $viewer = $request->user()?->id;
+        if (! $viewer || ! $this->relationLoaded('complaints')) {
+            return null;
+        }
+
+        return $this->complaints->where($column, $viewer)->sortByDesc('id')->first();
+    }
+
+    private function complaintBrief(?\App\Models\Complaint $complaint, ?Request $request = null): ?array
+    {
+        if (! $complaint) {
+            return null;
+        }
+
+        return [
+            'id' => $complaint->id,
+            'category' => $complaint->category,
+            'status' => $complaint->status,
+            'content' => $complaint->content,
+            'resolution' => $complaint->resolution,
+            'response' => $complaint->response,
+            'respond_by' => $complaint->respond_by?->toISOString(),
+            'refund_amount' => $complaint->refund_amount !== null ? (float) $complaint->refund_amount : null,
+            'attendance_confirmed' => (bool) $complaint->attendance_confirmed,
+            'trust_penalty' => $complaint->trust_penalty,
+            'attachments' => $complaint->relationLoaded('attachments') ? $complaint->attachments->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->original_name,
+                'url' => url("/api/v1/complaint-attachments/{$a->id}"),
+                'by' => $a->user_id === $complaint->user_id ? 'complainant' : 'respondent',
+            ])->values() : [],
+            'can_respond' => $request !== null
+                && in_array($complaint->status, ['open', 'processing'], true)
+                && $complaint->response === null,
         ];
     }
 }

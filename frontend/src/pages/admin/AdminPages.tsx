@@ -1591,7 +1591,7 @@ export function AdminBookingsPage() {
       <Modal
         isOpen={!!refundingBooking}
         onClose={() => setRefundingBooking(null)}
-        title={`Cập nhật hoàn cọc đơn #BK-${refundingBooking?.id}`}
+        title={`Cập nhật hoàn tiền đơn #BK-${refundingBooking?.id}`}
       >
         {refundingBooking && (
           <form
@@ -1625,7 +1625,7 @@ export function AdminBookingsPage() {
               </label>
 
               <label>
-                <span>Số tiền hoàn cọc (VNĐ)</span>
+                <span>Số tiền hoàn (VNĐ)</span>
                 <input
                   type="number"
                   min="0"
@@ -1648,7 +1648,7 @@ export function AdminBookingsPage() {
                   className="button button--brand"
                   disabled={updateRefundMutation.isPending}
                 >
-                  {updateRefundMutation.isPending ? 'Đang lưu...' : 'Lưu kết quả hoàn cọc'}
+                  {updateRefundMutation.isPending ? 'Đang lưu...' : 'Lưu kết quả hoàn tiền'}
                 </button>
               </div>
             </div>

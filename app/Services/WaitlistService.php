@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Exceptions\ConflictException;
 use App\Exceptions\DomainException;
-use App\Mail\NewBookingRequest;
 use App\Mail\WaitlistSlotOffered;
 use App\Models\Booking;
 use App\Models\BookingWaitlist;
@@ -21,7 +20,7 @@ class WaitlistService
     /**
      * Tham gia hàng đợi thông minh khi slot đã có người đặt.
      */
-    public function join(User $user, int $fieldId, int $slotId, string $date): BookingWaitlist
+    public function join(User $user, int $fieldId, ?int $slotId, string $date, ?string $start = null, ?string $end = null): BookingWaitlist
     {
         $field = SportsField::approved()->findOrFail($fieldId);
 
@@ -33,9 +32,17 @@ class WaitlistService
         if ($activeCount >= 5) {
             throw new ConflictException('Bạn chỉ có thể xếp hàng chờ tối đa 5 khung giờ cùng lúc.');
         }
-        $slot = TimeSlot::where('sports_field_id', $fieldId)->where('is_active', true)->findOrFail($slotId);
-
         $parsedDate = Carbon::parse($date)->startOfDay();
+        if ($slotId) {
+            $slot = TimeSlot::where('sports_field_id', $fieldId)->where('is_active', true)->findOrFail($slotId);
+            if (! $slot->appliesTo($parsedDate)) {
+                throw new DomainException('Khung giờ này không áp dụng cho ngày đã chọn.');
+            }
+        } else {
+            // Khoảng giờ trên lưới: phải nằm trong giờ mở cửa (priceFor ném lỗi nếu không).
+            $field->priceFor($parsedDate->toDateString(), $start, $end);
+            $slot = new TimeSlot(['start_time' => Booking::normalizeTime($start), 'end_time' => Booking::normalizeTime($end)]);
+        }
         if ($parsedDate->isPast() && ! $parsedDate->isToday()) {
             throw new DomainException('Không thể đăng ký hàng đợi cho ngày trong quá khứ.');
         }
@@ -45,9 +52,9 @@ class WaitlistService
 
         // Kiểm tra xem slot có thực sự bị đặt chưa
         $isBooked = Booking::where('sports_field_id', $fieldId)
-            ->where('time_slot_id', $slotId)
             ->whereDate('booking_date', $parsedDate)
             ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->overlapping($slot->start_time, $slot->end_time)
             ->exists();
 
         if (! $isBooked) {
@@ -57,9 +64,9 @@ class WaitlistService
         // Kiểm tra user đã có booking cho slot này chưa
         $userHasBooking = Booking::where('user_id', $user->id)
             ->where('sports_field_id', $fieldId)
-            ->where('time_slot_id', $slotId)
             ->whereDate('booking_date', $parsedDate)
             ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->overlapping($slot->start_time, $slot->end_time)
             ->exists();
 
         if ($userHasBooking) {
@@ -69,9 +76,9 @@ class WaitlistService
         // Kiểm tra user đã có trong waitlist đang active chưa
         $existing = BookingWaitlist::where('user_id', $user->id)
             ->where('sports_field_id', $fieldId)
-            ->where('time_slot_id', $slotId)
             ->whereDate('booking_date', $parsedDate)
             ->whereIn('status', ['waiting', 'offered'])
+            ->overlapping($slot->start_time, $slot->end_time)
             ->first();
 
         if ($existing) {
@@ -83,51 +90,52 @@ class WaitlistService
             'sports_field_id' => $fieldId,
             'time_slot_id' => $slotId,
             'booking_date' => $parsedDate->toDateString(),
+            'start_time' => $slot->start_time,
+            'end_time' => $slot->end_time,
             'status' => 'waiting',
             'priority_score' => $user->trust_score ?? 100,
         ])->load(['sportsField', 'timeSlot']);
     }
 
-    /**
-     * Kích hoạt tự động khi một slot được giải phóng (hủy hoặc từ chối đơn).
-     */
-    public function handleSlotFreed(int $fieldId, int $slotId, string $date): ?BookingWaitlist
+    /** Kích hoạt khi một đơn bị huỷ/từ chối: mời người chờ cho khoảng giờ vừa trống. */
+    public function handleBookingFreed(Booking $booking): ?BookingWaitlist
     {
-        $slotStart = TimeSlot::whereKey($slotId)->value('start_time');
-        if ($slotStart && Carbon::parse($date.' '.$slotStart)->isPast()) {
-            // Slot đã qua giờ bắt đầu: không còn ý nghĩa để mời ai nữa.
-            BookingWaitlist::where('sports_field_id', $fieldId)->where('time_slot_id', $slotId)
-                ->whereDate('booking_date', $date)->whereIn('status', ['waiting', 'offered'])
+        return $this->handleSlotFreed(
+            $booking->sports_field_id,
+            $booking->booking_date->toDateString(),
+            $booking->start_time,
+            $booking->end_time,
+        );
+    }
+
+    /**
+     * Kích hoạt tự động khi một khoảng giờ được giải phóng (hủy hoặc từ chối đơn).
+     * Chỉ mời người chờ mà toàn bộ khoảng giờ họ muốn nay đã trống.
+     */
+    public function handleSlotFreed(int $fieldId, string $date, string $start, string $end): ?BookingWaitlist
+    {
+        if (Carbon::parse($date.' '.$start)->isPast()) {
+            // Đã qua giờ bắt đầu: không còn ý nghĩa để mời ai nữa.
+            BookingWaitlist::where('sports_field_id', $fieldId)->whereDate('booking_date', $date)
+                ->overlapping($start, $end)->whereIn('status', ['waiting', 'offered'])
                 ->update(['status' => 'expired']);
 
             return null;
         }
 
-        return DB::transaction(function () use ($fieldId, $slotId, $date) {
+        return DB::transaction(function () use ($fieldId, $date, $start, $end) {
             // Khoá dòng sân để serialize cùng khoá với BookingService::create và acceptOffer
             $field = SportsField::query()->lockForUpdate()->find($fieldId);
             if (! $field) {
                 return null;
             }
 
-            // Kiểm tra xem hiện tại slot có bị đơn nào khác giữ không
-            $isOccupied = Booking::where('sports_field_id', $fieldId)
-                ->where('time_slot_id', $slotId)
-                ->whereDate('booking_date', $date)
-                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
-                ->lockForUpdate()
-                ->exists();
-
-            if ($isOccupied) {
-                return null;
-            }
-
-            // Kiểm tra xem đã có ai đang được offer mà chưa hết hạn không
+            // Đã có người đang được offer mà chưa hết hạn thì giữ nguyên.
             $activeOffer = BookingWaitlist::where('sports_field_id', $fieldId)
-                ->where('time_slot_id', $slotId)
                 ->whereDate('booking_date', $date)
                 ->where('status', 'offered')
                 ->where('offer_expires_at', '>', now())
+                ->overlapping($start, $end)
                 ->lockForUpdate()
                 ->first();
 
@@ -135,15 +143,22 @@ class WaitlistService
                 return $activeOffer;
             }
 
-            // Tìm ứng viên kế tiếp có điểm ưu tiên cao nhất
-            $candidate = BookingWaitlist::where('sports_field_id', $fieldId)
-                ->where('time_slot_id', $slotId)
+            // Ứng viên kế tiếp có điểm ưu tiên cao nhất và khoảng giờ muốn đặt đang trống hoàn toàn.
+            $candidates = BookingWaitlist::where('sports_field_id', $fieldId)
                 ->whereDate('booking_date', $date)
                 ->where('status', 'waiting')
+                ->overlapping($start, $end)
                 ->orderByDesc('priority_score')
                 ->orderBy('created_at')
                 ->lockForUpdate()
-                ->first();
+                ->get();
+
+            $candidate = $candidates->first(fn (BookingWaitlist $w) => ! Booking::where('sports_field_id', $fieldId)
+                ->whereDate('booking_date', $date)
+                ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->overlapping($w->start_time, $w->end_time)
+                ->lockForUpdate()
+                ->exists());
 
             if (! $candidate) {
                 return null;
@@ -192,15 +207,15 @@ class WaitlistService
 
             if ($waitlist->offer_expires_at && now()->gt($waitlist->offer_expires_at)) {
                 $waitlist->update(['status' => 'expired']);
-                $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->time_slot_id, $waitlist->booking_date->toDateString());
+                $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->booking_date->toDateString(), $waitlist->start_time, $waitlist->end_time);
                 return 'Rất tiếc, thời hạn 15 phút xác nhận lời mời đã hết.';
             }
 
             // Kiểm tra phòng ngừa tranh chấp slot đồng thời
             $isOccupied = Booking::where('sports_field_id', $waitlist->sports_field_id)
-                ->where('time_slot_id', $waitlist->time_slot_id)
                 ->whereDate('booking_date', $waitlist->booking_date)
                 ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+                ->overlapping($waitlist->start_time, $waitlist->end_time)
                 ->lockForUpdate()
                 ->exists();
 
@@ -208,8 +223,6 @@ class WaitlistService
                 $waitlist->update(['status' => 'expired']);
                 return 'Khung giờ này đã được người khác xác nhận trước.';
             }
-
-            $slot = $waitlist->timeSlot;
 
             $maxPending = \App\Support\Settings::getInt('max_pending_bookings', 3);
             $pendingCount = Booking::where('user_id', $user->id)
@@ -220,35 +233,40 @@ class WaitlistService
                 return "Bạn đang có {$pendingCount} đơn chờ xử lý. Tối đa chỉ được có {$maxPending} đơn cùng lúc.";
             }
 
-            // Khung giờ bị tắt trong lúc chờ thì lời mời không còn giá trị.
-            if (! $slot?->is_active) {
+            // Khung giờ bị tắt/khoá trong lúc chờ thì lời mời không còn giá trị.
+            $dateStr = $waitlist->booking_date->toDateString();
+            try {
+                if ($field->closureBlocking($dateStr, $waitlist->start_time, $waitlist->end_time)) {
+                    throw new DomainException('Sân đang khoá khung giờ này.');
+                }
+                $totalPrice = $field->priceFor($dateStr, $waitlist->start_time, $waitlist->end_time);
+            } catch (DomainException) {
                 $waitlist->update(['status' => 'expired']);
                 return 'Khung giờ này hiện không còn nhận đặt.';
             }
 
-            $pricePerHour = $slot->price_per_hour ?? $field->price_per_hour;
-            $totalPrice = $pricePerHour * $slot->durationInHours();
-
             $booking = Booking::create([
                 'user_id' => $user->id,
                 'sports_field_id' => $field->id,
-                'time_slot_id' => $slot->id,
+                'time_slot_id' => $waitlist->time_slot_id,
                 'booking_date' => $waitlist->booking_date,
+                'start_time' => $waitlist->start_time,
+                'end_time' => $waitlist->end_time,
                 'status' => BookingStatus::Pending->value,
                 'total_price' => $totalPrice,
                 'notes' => 'Đặt sân thông qua Hàng đợi thông minh (Smart Waitlist)',
             ]);
 
             $waitlist->update(['status' => 'accepted']);
+            // Nhận lời mời = giữ chỗ như đặt thường: chờ khách chuyển khoản vào tài khoản nền tảng.
+            app(PaymentService::class)->createFor($user, [$booking], 'deposit');
 
-            return $booking->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
+            return $booking->refresh()->load([...Booking::resourceRelations(withCustomer: true), 'sportsField.owner']);
         });
 
         if (is_string($booking)) {
             throw new ConflictException($booking);
         }
-
-        SafeMail::queue($booking->sportsField->owner->email, new NewBookingRequest($booking));
 
         return $booking;
     }
@@ -269,7 +287,7 @@ class WaitlistService
 
             // Nếu người này từ chối khi đang được offer -> ngay lập tức chuyển cơ hội cho người tiếp theo!
             if ($wasOffered) {
-                $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->time_slot_id, $waitlist->booking_date->toDateString());
+                $this->handleSlotFreed($waitlist->sports_field_id, $waitlist->booking_date->toDateString(), $waitlist->start_time, $waitlist->end_time);
             }
 
             return $waitlist;
@@ -286,10 +304,9 @@ class WaitlistService
         // Dọn hàng đợi của khung giờ đã bắt đầu (waiting/offered quá giờ) để không treo vô thời hạn.
         BookingWaitlist::whereIn('status', ['waiting', 'offered'])
             ->whereDate('booking_date', '<=', today())
-            ->with('timeSlot')
             ->get()
             ->each(function (BookingWaitlist $w) {
-                if ($w->timeSlot && Carbon::parse($w->booking_date->toDateString().' '.$w->timeSlot->start_time)->isPast()) {
+                if (Carbon::parse($w->booking_date->toDateString().' '.$w->start_time)->isPast()) {
                     $w->update(['status' => 'expired']);
                 }
             });
@@ -303,7 +320,7 @@ class WaitlistService
                 if ($w && $w->status === 'offered' && now()->gt($w->offer_expires_at)) {
                     $w->update(['status' => 'expired']);
                     $expiredCount++;
-                    $this->handleSlotFreed($w->sports_field_id, $w->time_slot_id, $w->booking_date->toDateString());
+                    $this->handleSlotFreed($w->sports_field_id, $w->booking_date->toDateString(), $w->start_time, $w->end_time);
                 }
             });
         }

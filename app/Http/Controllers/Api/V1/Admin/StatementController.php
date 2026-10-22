@@ -9,6 +9,7 @@ use App\Models\OwnerStatement;
 use App\Services\StatementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class StatementController extends Controller
 {
@@ -16,8 +17,14 @@ class StatementController extends Controller
         private readonly StatementService $statementService
     ) {}
 
-    public function exportCsv(Request $request): \Symfony\Component\HttpFoundation\Response
+    public function exportCsv(Request $request): Response
     {
+        $request->validate([
+            'period' => ['nullable', 'date_format:Y-m'],
+            'status' => ['nullable', 'in:unpaid,paid'],
+            'keyword' => ['nullable', 'string', 'max:100'],
+        ]);
+
         $csv = $this->statementService->exportStatementsCsv(
             $request->input('period'),
             $request->input('status'),
@@ -30,7 +37,7 @@ class StatementController extends Controller
         ]);
     }
 
-    public function exportBookingsCsv(OwnerStatement $statement): \Symfony\Component\HttpFoundation\Response
+    public function exportBookingsCsv(OwnerStatement $statement): Response
     {
         $csv = $this->statementService->exportStatementBookingsCsv($statement);
 
@@ -42,7 +49,14 @@ class StatementController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $perPage = min(100, max(1, (int) $request->input('per_page', 15)));
+        $request->validate([
+            'period' => ['nullable', 'date_format:Y-m'],
+            'status' => ['nullable', 'in:unpaid,paid'],
+            'owner_profile_id' => ['nullable', 'integer'],
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+        $perPage = (int) $request->input('per_page', 15);
 
         $query = OwnerStatement::query()
             ->with(['ownerProfile.user', 'confirmedBy'])
@@ -92,7 +106,7 @@ class StatementController extends Controller
     public function generate(Request $request): JsonResponse
     {
         $request->validate([
-            'period' => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'period' => ['required', 'date_format:Y-m'],
             'owner_profile_id' => ['nullable', 'integer', 'exists:field_owner_profiles,id'],
         ]);
 
@@ -107,41 +121,15 @@ class StatementController extends Controller
         ]);
     }
 
-    public function confirm(Request $request, OwnerStatement $statement): JsonResponse
+    /** Admin đã chuyển khoản chi trả cho chủ sân. */
+    public function payout(Request $request, OwnerStatement $statement): JsonResponse
     {
-        $confirmed = $this->statementService->confirm($request->user(), $statement);
+        $payoutRef = $request->validate(['payout_ref' => ['nullable', 'string', 'max:100']])['payout_ref'] ?? null;
+        $paid = $this->statementService->markPaidOut($request->user(), $statement, $payoutRef);
 
         return response()->json([
-            'message' => 'Xác nhận thu phí hoa hồng thành công.',
-            'data' => new OwnerStatementResource($confirmed),
-        ]);
-    }
-
-    public function waive(Request $request, OwnerStatement $statement): JsonResponse
-    {
-        $request->validate([
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
-
-        $waived = $this->statementService->waive($request->user(), $statement, $request->input('reason'));
-
-        return response()->json([
-            'message' => 'Đã miễn thu phí đối soát cho chủ sân.',
-            'data' => new OwnerStatementResource($waived),
-        ]);
-    }
-
-    public function rejectReport(Request $request, OwnerStatement $statement): JsonResponse
-    {
-        $request->validate([
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $updated = $this->statementService->rejectReport($request->user(), $statement, $request->input('reason'));
-
-        return response()->json([
-            'message' => 'Đã từ chối báo cáo thanh toán và chuyển kỳ đối soát về trạng thái chờ nộp.',
-            'data' => new OwnerStatementResource($updated),
+            'message' => 'Đã ghi nhận chi trả cho chủ sân.',
+            'data' => new OwnerStatementResource($paid),
         ]);
     }
 }

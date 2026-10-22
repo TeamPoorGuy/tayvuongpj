@@ -1,33 +1,39 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Eye, MessageSquare, Search } from 'lucide-react'
+import { MessageSquare, Search } from 'lucide-react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
+import { EvidenceGallery } from '../../components/EvidencePicker'
 import { Modal } from '../../components/Modal'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
-import { formatDate, formatMoney } from '../../utils/format'
+import { digitsOnly } from '../../utils/input'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 import type { Complaint } from '../../types/api'
+import { PageTitle } from '../customer/CustomerPages'
 
 const categoryLabels: Record<string, string> = {
   refund_pending: 'Chưa nhận được tiền hoàn cọc',
   field_mismatch: 'Sân không đúng thực tế/mô tả',
   owner_cancelled: 'Chủ sân tự ý huỷ/không nhận',
   bad_behavior: 'Thái độ phục vụ/hành vi xấu',
+  wrong_no_show: 'Đã đến sân nhưng bị ghi vắng mặt',
+  property_damage: 'Khách làm hư hỏng/mất tài sản',
+  customer_misconduct: 'Khách gây rối/thái độ không phù hợp',
+  overtime: 'Khách chơi quá giờ',
   other: 'Vấn đề khác',
 }
 
 const statusBadge = (status: Complaint['status']) => {
   switch (status) {
     case 'open':
-      return <span className="badge badge--warn">Chờ xử lý</span>
+      return <span className="status status--pending"><i />Chờ xử lý</span>
     case 'processing':
-      return <span className="badge badge--info" style={{ background: '#e0f2fe', color: '#0369a1' }}>Đang xác minh</span>
+      return <span className="status status--awaiting"><i />Đang xác minh</span>
     case 'resolved':
-      return <span className="badge badge--success">Đã giải quyết</span>
+      return <span className="status status--approved"><i />Đã giải quyết</span>
     case 'rejected':
-      return <span className="badge badge--muted">Đã từ chối</span>
+      return <span className="status status--rejected"><i />Đã từ chối</span>
   }
 }
 
@@ -38,11 +44,13 @@ export function AdminComplaintsPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [keyword, setKeyword] = useState('')
   const [activeComplaint, setActiveComplaint] = useState<Complaint | null>(null)
-  const [proofBookingId, setProofBookingId] = useState<number | null>(null)
 
   // Handle modal state
   const [handleStatus, setHandleStatus] = useState<'processing' | 'resolved' | 'rejected'>('resolved')
   const [resolution, setResolution] = useState('')
+  const [refundInput, setRefundInput] = useState('')
+  const [confirmAttendance, setConfirmAttendance] = useState(false)
+  const [penaltyInput, setPenaltyInput] = useState('')
 
   const { data, isLoading, isError } = useQuery<{ data: Complaint[] }>({
     queryKey: ['admin', 'complaints', statusFilter, categoryFilter, keyword],
@@ -56,13 +64,17 @@ export function AdminComplaintsPage() {
   })
 
   const handleMutation = useMutation({
-    mutationFn: async ({ id, status, resolution }: { id: number; status: string; resolution: string }) => {
-      return (await api.patch(`/admin/complaints/${id}/handle`, { status, resolution })).data
+    mutationFn: async (payload: { id: number; status: string; resolution: string; refund_amount?: number; confirm_attendance?: boolean; trust_penalty?: number }) => {
+      const { id, ...body } = payload
+      return (await api.patch(`/admin/complaints/${id}/handle`, body)).data
     },
     onSuccess: () => {
       toast.success('Đã cập nhật trạng thái khiếu nại và gửi thông báo tới người dùng.')
       setActiveComplaint(null)
       setResolution('')
+      setRefundInput('')
+      setConfirmAttendance(false)
+      setPenaltyInput('')
       void client.invalidateQueries({ queryKey: ['admin', 'complaints'] })
       void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
     },
@@ -73,17 +85,25 @@ export function AdminComplaintsPage() {
 
   const openHandleModal = (c: Complaint) => {
     setActiveComplaint(c)
-    setHandleStatus(c.status === 'open' ? 'resolved' : (c.status as any))
+    setHandleStatus(c.status === 'open' ? 'resolved' : (c.status as 'processing' | 'resolved' | 'rejected'))
     setResolution(c.resolution ?? '')
+    setRefundInput('')
+    setConfirmAttendance(false)
+    setPenaltyInput('')
   }
 
   const submitHandle = (e: React.FormEvent) => {
     e.preventDefault()
     if (!activeComplaint) return
+    const refund = Number(refundInput)
+    const accepted = handleStatus === 'resolved'
     handleMutation.mutate({
       id: activeComplaint.id,
       status: handleStatus,
       resolution,
+      refund_amount: accepted && refund > 0 ? refund : undefined,
+      confirm_attendance: accepted && confirmAttendance ? true : undefined,
+      trust_penalty: accepted && Number(penaltyInput) > 0 ? Number(penaltyInput) : undefined,
     })
   }
 
@@ -92,25 +112,24 @@ export function AdminComplaintsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 24, margin: '0 0 4px', color: 'var(--forest)' }}>Khiếu nại & Tranh chấp</h1>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-          Tiếp nhận và xử lý các phản ánh, khiếu nại về hoàn cọc, chất lượng sân bãi và dịch vụ.
-        </p>
-      </div>
+      <PageTitle
+        icon={<MessageSquare />}
+        kicker="Quản trị dịch vụ"
+        title="Khiếu nại & Tranh chấp"
+        copy="Tiếp nhận và xử lý các phản ánh, khiếu nại về hoàn cọc, chất lượng sân bãi và dịch vụ."
+      />
 
-      {/* Filters */}
-      <div className="filter-bar" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <Search size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--muted)' }} />
+      {/* Filters Toolbar */}
+      <div className="toolbar">
+        <label className="search-control">
+          <Search size={16} />
           <input
             type="search"
             placeholder="Tìm theo nội dung, tên hoặc email..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            style={{ paddingLeft: 34, width: '100%' }}
           />
-        </div>
+        </label>
 
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Tất cả trạng thái</option>
@@ -144,58 +163,104 @@ export function AdminComplaintsPage() {
           </div>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {complaints.map((c) => (
-            <div key={c.id} className="content-card" style={{ padding: 18, borderLeft: c.status === 'open' ? '4px solid var(--warn)' : '4px solid var(--line)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--forest)' }}>#KN-{String(c.id).padStart(4, '0')}</span>
+            <div
+              key={c.id}
+              className="content-card"
+              style={{
+                padding: '20px 22px',
+                borderLeft: c.status === 'open' ? '4px solid var(--warn)' : c.status === 'processing' ? '4px solid #38bdf8' : '4px solid var(--line)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <code style={{ fontSize: 13, fontWeight: 700, background: 'var(--surface)', padding: '3px 8px', borderRadius: 'var(--r-sm)' }}>
+                    #KN-{String(c.id).padStart(4, '0')}
+                  </code>
                   {statusBadge(c.status)}
-                  <span className="badge badge--neutral" style={{ fontSize: 11 }}>
+                  <span className="badge badge--soft" style={{ fontSize: 12 }}>
                     {categoryLabels[c.category] ?? c.category}
                   </span>
                 </div>
-                <small style={{ color: 'var(--muted)' }}>{formatDate(c.created_at)}</small>
+                <small style={{ color: 'var(--muted)', fontSize: 13 }}>{formatDate(c.created_at)}</small>
               </div>
 
-              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5, background: 'var(--surface)', padding: 12, borderRadius: 'var(--r-md)' }}>
-                "{c.content}"
-              </p>
+              {/* Nội dung phản ánh */}
+              <div
+                style={{
+                  fontSize: 14.5,
+                  color: 'var(--ink)',
+                  lineHeight: 1.6,
+                  background: 'var(--surface)',
+                  padding: '14px 16px',
+                  borderRadius: 'var(--r-md)',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                {c.content}
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, fontSize: 12, color: 'var(--soft)' }}>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {/* Thông tin người gửi, đơn đặt & Thao tác */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: 'var(--soft)' }}>
                   <span>
-                    <strong>Người gửi:</strong> {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
+                    <strong style={{ color: 'var(--ink)' }}>Người gửi:</strong>{' '}
+                    {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
+                    {c.direction === 'owner_to_customer' ? ' · chủ sân' : c.user ? ' · khách' : ''}
                   </span>
+                  {c.against && (
+                    <span>
+                      <strong style={{ color: 'var(--ink)' }}>Bị khiếu nại:</strong> {c.against.name}
+                    </span>
+                  )}
                   {c.booking && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <strong>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--ink)' }}>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
                       {c.booking.refund_status && (
-                        <span style={{ marginLeft: 6, color: c.booking.refund_status === 'pending' ? 'var(--warn)' : 'var(--pitch)', fontWeight: 600 }}>
+                        <span style={{ color: c.booking.refund_status === 'pending' ? 'var(--warn)' : 'var(--pitch)', fontWeight: 600 }}>
                           ({c.booking.refund_status === 'pending' ? 'Chờ hoàn cọc' : 'Đã hoàn'})
                         </span>
                       )}
-                      <button
-                        type="button"
-                        className="button button--ghost button--small"
-                        style={{ padding: '2px 8px', fontSize: 11 }}
-                        onClick={() => setProofBookingId(c.booking!.id)}
-                        title="Xem ảnh biên lai chuyển khoản của đơn này"
-                      >
-                        <Eye size={12} /> Biên lai
-                      </button>
                     </span>
                   )}
                 </div>
 
-                <button type="button" className="button button--sm button--brand" onClick={() => openHandleModal(c)}>
-                  {c.status === 'open' ? 'Xử lý khiếu nại' : 'Xem & Cập nhật'}
+                <button
+                  type="button"
+                  className="button button--brand button--small"
+                  onClick={() => openHandleModal(c)}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  {c.status === 'resolved' || c.status === 'rejected' ? 'Xem kết quả' : c.status === 'open' ? 'Xử lý khiếu nại' : 'Tiếp tục xử lý'}
                 </button>
               </div>
 
+              <EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'complainant')} label="Ảnh bên khiếu nại:" />
+
+              {c.against && (
+                <div style={{ padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
+                  {c.response ? (
+                    <><strong>Phản hồi của bên bị khiếu nại ({c.responded_at ? formatDateTime(c.responded_at) : ''}):</strong> {c.response}
+                      <div style={{ marginTop: 6 }}><EvidenceGallery attachments={c.attachments?.filter((a) => a.by === 'respondent')} label="Ảnh phản hồi:" /></div></>
+                  ) : c.status === 'open' || c.status === 'processing' ? (
+                    <span style={{ color: 'var(--warn)' }}>Chưa có phản hồi{c.respond_by ? ` · hạn ${formatDateTime(c.respond_by)}` : ''}</span>
+                  ) : (
+                    <span style={{ color: 'var(--muted)' }}>Bên bị khiếu nại không phản hồi.</span>
+                  )}
+                </div>
+              )}
+
               {c.resolution && (
-                <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--r-md)', fontSize: 12 }}>
+                <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
                   <strong style={{ color: '#166534' }}>Phương án giải quyết ({c.handler?.name ?? 'Admin'}):</strong> {c.resolution}
+                  {c.refund_amount ? <div>Đã hoàn thêm cho khách: <strong>{formatMoney(c.refund_amount)}</strong></div> : null}
+                  {c.attendance_confirmed ? <div>Đã xác nhận khách có đến sân (gỡ vắng mặt, trả 25 điểm uy tín).</div> : null}
+                  {c.trust_penalty ? <div>Đã trừ khách <strong>{c.trust_penalty}</strong> điểm uy tín.</div> : null}
                 </div>
               )}
             </div>
@@ -226,6 +291,49 @@ export function AdminComplaintsPage() {
               </div>
             </div>
 
+            {activeComplaint.against && (
+              <div className="content-card" style={{ padding: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 13, display: 'grid', gap: 6 }}>
+                <div>
+                  <strong>Bên bị khiếu nại:</strong> {activeComplaint.against.name}
+                  {activeComplaint.parties?.respondent && (
+                    <span style={{ color: 'var(--muted)' }}>
+                      {' '}· huỷ đơn đã thanh toán 90 ngày: {activeComplaint.parties.respondent.owner_cancellations_90d} · vắng mặt: {activeComplaint.parties.respondent.no_shows} · khiếu nại đã nhận: {activeComplaint.parties.respondent.complaints_received} (đã chấp nhận {activeComplaint.parties.respondent.complaints_upheld})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>Phản hồi:</strong>{' '}
+                  {activeComplaint.response ? <em>"{activeComplaint.response}"</em> : <span style={{ color: 'var(--muted)' }}>chưa có{activeComplaint.respond_by ? ` (hạn ${formatDateTime(activeComplaint.respond_by)})` : ''}</span>}
+                </div>
+              </div>
+            )}
+
+            {activeComplaint.booking && (
+              <div className="content-card" style={{ padding: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 13 }}>
+                <div>
+                  <strong>Đơn #BK-{String(activeComplaint.booking.id).padStart(5, '0')}:</strong> {activeComplaint.booking.field_name ?? 'Sân'} · khách đã trả{' '}
+                  {formatMoney(activeComplaint.booking.payment_amount ?? 0)}
+                  {activeComplaint.booking.no_show ? ' · đang bị ghi nhận vắng mặt' : ''}
+                </div>
+                {activeComplaint.status !== 'resolved' && activeComplaint.status !== 'rejected' && activeComplaint.direction !== 'owner_to_customer' && (
+                  <div style={{ marginTop: 4, color: 'var(--muted)' }}>
+                    Trong lúc khiếu nại chưa đóng, đơn này được giữ lại, chưa tính vào kỳ chi trả cho chủ sân.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeComplaint.status === 'resolved' || activeComplaint.status === 'rejected' ? (
+              <div className="form-stack">
+                <div className="notice notice--warn" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                  Khiếu nại đã đóng ({activeComplaint.status === 'resolved' ? 'chấp nhận' : 'từ chối'}) nên không sửa lại được.
+                  {activeComplaint.resolution && <div style={{ marginTop: 6 }}><strong>Phương án:</strong> {activeComplaint.resolution}</div>}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="button button--ghost" onClick={() => setActiveComplaint(null)}>Đóng</button>
+                </div>
+              </div>
+            ) : (
             <div className="form-stack">
               <label>
                 <span>Trạng thái xử lý</span>
@@ -235,6 +343,42 @@ export function AdminComplaintsPage() {
                   <option value="rejected">Từ chối khiếu nại (không có cơ sở)</option>
                 </select>
               </label>
+
+              {handleStatus === 'resolved' && activeComplaint.booking && activeComplaint.direction === 'owner_to_customer' && (
+                <fieldset style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '10px 12px', margin: 0 }}>
+                  <legend style={{ fontSize: 13, fontWeight: 600, padding: '0 6px' }}>Kết quả kèm theo (tuỳ chọn)</legend>
+                  <label>
+                    <span>Trừ điểm uy tín của khách (5–50 điểm)</span>
+                    <input inputMode="numeric" placeholder="Để trống nếu không trừ điểm" value={penaltyInput} onChange={(e) => setPenaltyInput(digitsOnly(e.target.value, 2))} />
+                  </label>
+                </fieldset>
+              )}
+
+              {handleStatus === 'resolved' && activeComplaint.booking && activeComplaint.direction !== 'owner_to_customer' && (
+                <fieldset style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '10px 12px', margin: 0 }}>
+                  <legend style={{ fontSize: 13, fontWeight: 600, padding: '0 6px' }}>Kết quả kèm theo (tuỳ chọn)</legend>
+                  {(activeComplaint.booking.refundable ?? 0) > 0 ? (
+                    <label>
+                      <span>Hoàn thêm cho khách (tối đa {formatMoney(activeComplaint.booking.refundable ?? 0)})</span>
+                      <input
+                        inputMode="numeric"
+                        placeholder="Để trống nếu không hoàn tiền"
+                        value={refundInput}
+                        onChange={(e) => setRefundInput(digitsOnly(e.target.value, 9))}
+                      />
+                      <small className="form-help">Ghi nhận khoản hoàn chờ chuyển; sau khi chuyển khoản, đánh dấu "đã hoàn" ở trang Đơn đặt sân. Hoa hồng tính lại trên phần còn lại.</small>
+                    </label>
+                  ) : (
+                    <small className="form-help" style={{ display: 'block' }}>Đơn này không còn khoản nào để hoàn thêm (không thu qua SportHub hoặc đã hoàn đủ).</small>
+                  )}
+                  {activeComplaint.booking.no_show && (
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+                      <input type="checkbox" checked={confirmAttendance} onChange={(e) => setConfirmAttendance(e.target.checked)} style={{ marginTop: 3 }} />
+                      <span>Xác nhận khách đã đến sân: gỡ ghi nhận vắng mặt và trả lại 25 điểm uy tín.</span>
+                    </label>
+                  )}
+                </fieldset>
+              )}
 
               <label>
                 <span>Phương án xử lý / Lý do phản hồi (sẽ gửi qua email)</span>
@@ -256,16 +400,10 @@ export function AdminComplaintsPage() {
                 </button>
               </div>
             </div>
+            )}
           </form>
         )}
       </Modal>
-
-      <PaymentProofModal
-        isOpen={!!proofBookingId}
-        onClose={() => setProofBookingId(null)}
-        proofUrl={proofBookingId ? `/api/v1/bookings/${proofBookingId}/payment-proof` : null}
-        title={`Biên lai đơn #BK-${proofBookingId ?? ''}`}
-      />
     </div>
   )
 }

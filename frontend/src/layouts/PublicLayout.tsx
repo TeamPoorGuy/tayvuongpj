@@ -1,5 +1,4 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
-import { DemoNoticeBanner } from '../components/DemoNoticeBanner'
 import { CookieNotice } from '../components/CookieNotice'
 import { Building2, CalendarDays, LogOut, Menu, UserRound, X, Mail, Phone } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -32,7 +31,6 @@ export function PublicLayout() {
 
   return (
     <div className="app-shell">
-      <DemoNoticeBanner />
       <VerifyEmailBanner />
       <header className="topbar">
         <div className="shell topbar__inner">
@@ -172,9 +170,6 @@ export function PublicLayout() {
           <div className="reveal" style={{ '--i': 0 } as React.CSSProperties}>
             <Brand />
             <p>Nền tảng tìm và đặt sân thể thao nhanh chóng, minh bạch cho cộng đồng Việt Nam.</p>
-            <small style={{ color: 'var(--muted)', display: 'block', marginTop: 8 }}>
-              🎓 Bản demo đồ án công nghệ — Không phát sinh giao dịch thật.
-            </small>
           </div>
           <div className="reveal" style={{ '--i': 1 } as React.CSSProperties}>
             <strong>Khám phá</strong>
@@ -188,7 +183,7 @@ export function PublicLayout() {
           <div className="reveal" style={{ '--i': 2 } as React.CSSProperties}>
             <strong>Chính sách & Quy định</strong>
             <Link to="/dieu-khoan">Điều khoản sử dụng</Link>
-            <Link to="/chinh-sach-bao-mat">Chính sách bảo mật (NĐ 13/2023)</Link>
+            <Link to="/chinh-sach-bao-mat">Chính sách bảo mật</Link>
             <Link to="/chinh-sach-huy-hoan">Chính sách hủy & hoàn cọc</Link>
             <Link to="/quy-che-chu-san">Quy chế đối tác chủ sân</Link>
           </div>

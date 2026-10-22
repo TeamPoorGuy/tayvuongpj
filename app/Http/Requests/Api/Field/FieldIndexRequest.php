@@ -14,7 +14,9 @@ class FieldIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'keyword' => ['nullable', 'string', 'max:255'],
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'district' => ['nullable', 'string', 'max:100'],
             'category' => ['nullable', 'string', 'max:255'],
             'type_id' => ['nullable', 'integer', 'exists:field_types,id'],
             'min_price' => ['nullable', 'numeric', 'min:0'],

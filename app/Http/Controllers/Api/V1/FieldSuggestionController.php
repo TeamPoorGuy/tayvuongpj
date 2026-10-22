@@ -20,14 +20,22 @@ class FieldSuggestionController extends Controller
             ->where('status', 'approved')
             ->firstOrFail();
 
+        // Khoảng giờ đang kín: theo khung giờ có sẵn (slot_id) hoặc giờ chọn trên lưới.
         $validated = $request->validate([
-            'slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            'slot_id' => ['required_without:start_time', 'nullable', 'integer', 'exists:time_slots,id'],
+            'start_time' => ['required_without:slot_id', 'nullable', 'date_format:H:i'],
+            'end_time' => ['required_with:start_time', 'nullable', 'date_format:H:i', 'after:start_time'],
             'date' => ['required', 'date_format:Y-m-d'],
         ]);
 
-        $slot = TimeSlot::where('sports_field_id', $field->id)->findOrFail($validated['slot_id']);
+        if (! empty($validated['slot_id'])) {
+            $slot = TimeSlot::where('sports_field_id', $field->id)->findOrFail($validated['slot_id']);
+            [$start, $end] = [$slot->start_time, $slot->end_time];
+        } else {
+            [$start, $end] = [$validated['start_time'], $validated['end_time']];
+        }
 
-        $suggestions = $this->service->getSuggestions($field, $slot, $validated['date']);
+        $suggestions = $this->service->getSuggestions($field, $start, $end, $validated['date']);
 
         return response()->json([
             'data' => $suggestions,

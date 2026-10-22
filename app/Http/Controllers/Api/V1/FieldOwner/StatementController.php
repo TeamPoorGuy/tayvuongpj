@@ -9,6 +9,7 @@ use App\Models\OwnerStatement;
 use App\Services\StatementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class StatementController extends Controller
 {
@@ -64,7 +65,7 @@ class StatementController extends Controller
         ]);
     }
 
-    public function exportBookingsCsv(Request $request, OwnerStatement $statement): \Symfony\Component\HttpFoundation\Response
+    public function exportBookingsCsv(Request $request, OwnerStatement $statement): Response
     {
         $profile = $request->user()->fieldOwnerProfile;
         abort_unless($profile && $statement->owner_profile_id === $profile->id, 403, 'Bạn không có quyền xuất kỳ đối soát này.');
@@ -74,20 +75,6 @@ class StatementController extends Controller
         return response($csv, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="doi-soat-thang-'.$statement->period.'.csv"',
-        ]);
-    }
-
-    public function report(Request $request, OwnerStatement $statement): JsonResponse
-    {
-        $request->validate([
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $updated = $this->statementService->report($request->user(), $statement, $request->input('note'));
-
-        return response()->json([
-            'message' => 'Đã gửi thông báo thanh toán thành công. Ban quản trị sẽ đối soát và xác nhận.',
-            'data' => new OwnerStatementResource($updated),
         ]);
     }
 }

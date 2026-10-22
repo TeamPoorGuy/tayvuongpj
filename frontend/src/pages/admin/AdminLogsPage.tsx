@@ -63,7 +63,7 @@ export function AdminLogsPage() {
           ))}
         </select>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, flexWrap: 'wrap' }}>
           <span style={{ color: 'var(--muted)' }}>Từ ngày:</span>
           <input
             type="date"

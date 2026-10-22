@@ -4,14 +4,14 @@ import { Calendar, Clock, ShieldCheck } from 'lucide-react'
 import { Modal } from './Modal'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 import { formatMoney, formatDate } from '../utils/format'
-import type { SportsField, TimeSlot } from '../types/api'
+import type { GridBlock } from '../utils/grid'
 
 interface BookingConfirmModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (isRecurring: boolean, weeks: number) => void
-  field: SportsField
-  slot: TimeSlot
+  /** Các khoảng giờ đã chọn trên lưới (có thể nhiều sân). */
+  blocks: GridBlock[]
   date: string
   totalPrice: number
   notes?: string
@@ -24,8 +24,7 @@ export function BookingConfirmModal({
   isOpen,
   onClose,
   onConfirm,
-  field,
-  slot,
+  blocks,
   date,
   totalPrice,
   notes,
@@ -40,11 +39,13 @@ export function BookingConfirmModal({
 
   const effectiveTotalPrice = totalPrice * (isRecurring ? weeks : 1)
   const depositPercent = settings?.deposit_percent ?? 30
-  const perMatchDeposit = Math.min(totalPrice, Math.ceil((totalPrice * depositPercent) / 100 / 1000) * 1000)
-  const depositAmount = isRecurring ? perMatchDeposit : Math.min(totalPrice, Math.ceil((totalPrice * depositPercent) / 100 / 1000) * 1000)
-  const remainingAmount = Math.max(0, effectiveTotalPrice - (isRecurring ? perMatchDeposit * weeks : depositAmount))
-  const paymentWindowHours = settings?.payment_window_hours ?? 2
-  const freeCancelHours = settings?.free_cancel_hours ?? 4
+  // Cọc tính trên tổng cả lượt (kể cả chuỗi nhiều tuần), trả một lần vào tài khoản SportHub.
+  const perMatchDeposit = Math.min(effectiveTotalPrice, Math.ceil((effectiveTotalPrice * depositPercent) / 100 / 1000) * 1000)
+  const remainingAmount = Math.max(0, effectiveTotalPrice - perMatchDeposit)
+  const holdMinutes = settings?.payment_hold_minutes ?? 15
+  const refundFullHours = settings?.refund_full_hours ?? 24
+  const refundPartialHours = settings?.refund_partial_hours ?? 6
+  const refundPartialPercent = settings?.refund_partial_percent ?? 50
 
   const handleClose = () => {
     setAgreed(false)
@@ -59,7 +60,7 @@ export function BookingConfirmModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel="Xác nhận yêu cầu đặt sân">
+    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel="Xác nhận đặt sân">
       <div style={{ maxWidth: 500 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--pitch-soft, rgba(11, 48, 37, 0.08))', display: 'grid', placeItems: 'center', color: 'var(--pitch, #0b3025)' }}>
@@ -67,14 +68,14 @@ export function BookingConfirmModal({
           </div>
           <div>
             <h2 style={{ fontSize: 18, margin: 0, color: 'var(--forest, #0b3025)' }}>
-              {isRecurring ? 'Xác nhận đặt cố định hàng tuần' : 'Xác nhận yêu cầu đặt sân'}
+              {isRecurring ? 'Xác nhận đặt cố định hàng tuần' : 'Xác nhận đặt sân'}
             </h2>
             <small style={{ color: 'var(--muted)' }}>Vui lòng kiểm tra lại thông tin và chính sách</small>
           </div>
         </div>
 
-        {/* Tuỳ chọn đặt cố định định kỳ */}
-        <div style={{ padding: '12px 14px', background: 'var(--surface-sunken, #f8fafc)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
+        {/* Tuỳ chọn đặt cố định định kỳ: chỉ khi chọn đúng một khoảng giờ */}
+        {blocks.length === 1 && <div style={{ padding: '12px 14px', background: 'var(--surface-sunken, #f8fafc)', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', margin: 0, fontWeight: 600, fontSize: 13 }}>
             <input
               type="checkbox"
@@ -99,7 +100,7 @@ export function BookingConfirmModal({
               </select>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Cảnh báo trùng ngày nếu có */}
         {conflicts && conflicts.length > 0 && (
@@ -130,15 +131,15 @@ export function BookingConfirmModal({
 
         {/* Thông tin đơn */}
         <div className="content-card" style={{ padding: 16, background: 'var(--surface)', marginBottom: 16, fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: 'var(--muted)' }}>Sân thể thao:</span>
-            <strong>{field.name}</strong>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: 'var(--muted)' }}>Lịch chơi:</span>
-            <span>
-              {slot.start_time} – {slot.end_time}, {formatDate(date)}
-              {isRecurring ? ` (và ${weeks - 1} tuần tiếp theo)` : ''}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+            <span style={{ color: 'var(--muted)' }}>Lịch chơi ({formatDate(date)}):</span>
+            <span style={{ textAlign: 'right' }}>
+              {blocks.map((b) => (
+                <span key={`${b.fieldId}-${b.start}`} style={{ display: 'block' }}>
+                  {b.fieldName}: {b.start} – {b.end}
+                </span>
+              ))}
+              {isRecurring ? `(và ${weeks - 1} tuần tiếp theo)` : ''}
             </span>
           </div>
           {notes && (
@@ -153,12 +154,12 @@ export function BookingConfirmModal({
             <strong>{formatMoney(effectiveTotalPrice)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--pitch)', fontWeight: 600, marginBottom: 4 }}>
-            <span>{isRecurring ? `Tiền cọc mỗi buổi (${depositPercent}%):` : `Tiền đặt cọc giữ chỗ (${depositPercent}%):`}</span>
+            <span>{`Tiền cọc (${depositPercent}%${isRecurring ? ', cả chuỗi' : ''}):`}</span>
             <span>{formatMoney(perMatchDeposit)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
-            <span>{isRecurring ? 'Thanh toán cọc:' : 'Thanh toán còn lại tại sân:'}</span>
-            <span>{isRecurring ? 'Từng buổi trước trận đấu' : formatMoney(remainingAmount)}</span>
+            <span>Còn lại trả tại sân (nếu đặt cọc):</span>
+            <span>{formatMoney(remainingAmount)}</span>
           </div>
         </div>
 
@@ -167,13 +168,13 @@ export function BookingConfirmModal({
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <Clock size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Hạn chuyển khoản:</strong> Sau khi chủ sân duyệt, bạn có <strong>{paymentWindowHours} giờ</strong> để chuyển khoản cọc giữ sân. Quá hạn đơn sẽ tự huỷ.
+              <strong>Giữ chỗ {holdMinutes} phút:</strong> chuyển khoản vào tài khoản SportHub (cọc hoặc trả hết) để đơn được xác nhận ngay. Quá hạn chỗ sẽ được nhả cho người khác.
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <ShieldCheck size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Chính sách hoàn cọc:</strong> Hủy trước giờ chơi tối thiểu <strong>{freeCancelHours} giờ</strong> (hoặc trong <strong>2 giờ sau khi duyệt</strong> nếu đặt cận giờ) để được hoàn 100% cọc. Hủy sát giờ bị trừ 15 điểm uy tín và mất cọc.
+              <strong>Chính sách huỷ:</strong> huỷ trước <strong>{refundFullHours} giờ</strong> hoàn 100%, trước <strong>{refundPartialHours} giờ</strong> hoàn {refundPartialPercent}%, sát giờ hơn không hoàn. Chủ sân huỷ thì bạn được hoàn đủ.
             </span>
           </div>
         </div>
