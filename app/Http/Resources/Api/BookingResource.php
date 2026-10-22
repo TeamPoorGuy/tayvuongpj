@@ -42,11 +42,9 @@ class BookingResource extends JsonResource
                 // Đơn thu hộ lấy mã và hạn từ lượt thanh toán; đơn kiểu cũ giữ cột trên chính đơn.
                 'code' => $this->payment?->code ?? $this->payment_code,
                 'due_at' => ($this->payment?->due_at ?? $this->payment_due_at)?->toISOString(),
-                'reported_at' => $this->payment_reported_at?->toISOString(),
                 'paid_at' => $this->paid_at?->toISOString(),
                 'deposit_amount' => $this->depositAmount(),
                 'deposit_percent' => Settings::getInt('deposit_percent', 30),
-                'proof_url' => $this->payment_proof_path ? url("/api/v1/bookings/{$this->id}/payment-proof") : null,
             ],
             'refund' => $this->refund_status !== null ? [
                 'status' => $this->refund_status,

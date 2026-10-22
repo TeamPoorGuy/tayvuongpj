@@ -387,7 +387,7 @@ export function AdminComplaintsPage() {
                   rows={4}
                   value={resolution}
                   onChange={(e) => setResolution(e.target.value)}
-                  placeholder="Ví dụ: Đã đối chiếu với chủ sân, xác nhận chủ sân đã chuyển khoản hoàn lại tiền cọc..."
+                  placeholder="Ví dụ: Đã đối chiếu với chủ sân và ảnh chứng cứ, xác nhận lỗi thuộc về chủ sân nên hoàn tiền cho khách..."
                 />
               </label>
 

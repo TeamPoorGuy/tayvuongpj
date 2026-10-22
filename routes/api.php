@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\V1\FieldSuggestionController;
 use App\Http\Controllers\Api\V1\MatchmakingController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\SettingController;
-use App\Http\Controllers\Api\V1\BookingProofController;
 use App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Api\V1\FieldOwner;
 use Illuminate\Support\Facades\Route;
@@ -54,7 +53,6 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::post('/contact', [Customer\ComplaintController::class, 'store'])->middleware('throttle:writes');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
-        Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
         Route::get('/me/badges', \App\Http\Controllers\Api\V1\BadgeController::class);
         // Ví SportHub: dùng chung cho khách và chủ sân.
         Route::get('/wallet', [\App\Http\Controllers\Api\V1\WalletController::class, 'show']);

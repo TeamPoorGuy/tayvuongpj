@@ -182,12 +182,6 @@ class FieldOwnerService
             throw new ConflictException('Đơn đang giữ chỗ chờ khách thanh toán và sẽ tự huỷ nếu quá hạn.');
         }
 
-        if (in_array($next, [BookingStatus::Rejected, BookingStatus::Cancelled], true)) {
-            if ($booking->payment_status === 'reported') {
-                throw new ConflictException('Khách đã báo chuyển khoản, vui lòng xác nhận hoặc đối soát thanh toán thay vì từ chối/huỷ.');
-            }
-        }
-
         if ($next === BookingStatus::Cancelled && $booking->startsAt()->isPast()) {
             throw new ConflictException('Đơn đã quá giờ bắt đầu, không thể huỷ.');
         }

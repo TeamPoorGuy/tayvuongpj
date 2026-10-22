@@ -50,7 +50,7 @@ class AdminService
 
         $periodConfirmedOrCompleted = $periodBookings->filter(fn ($b) => in_array($b->status?->value ?? $b->status, ['confirmed', 'completed'], true));
         $periodGmv = (float) $periodConfirmedOrCompleted->sum('total_price');
-        $periodPaidAmount = (float) $periodBookings->filter(fn ($b) => in_array($b->payment_status, ['paid', 'reported'], true))->sum('payment_amount');
+        $periodPaidAmount = (float) $periodBookings->filter(fn ($b) => $b->payment_status === 'paid')->sum('payment_amount');
 
         // Tính hoa hồng tại chỗ bằng computeCommission() nếu chưa chốt đối soát (commission_amount == null)
         $periodCommissionAccrued = (float) $periodConfirmedOrCompleted->sum(function (Booking $b) {
@@ -497,7 +497,6 @@ class AdminService
             $payLabel = match ($b->payment_status) {
                 'unpaid' => 'Chưa thanh toán',
                 'awaiting' => 'Chờ chuyển khoản',
-                'reported' => 'Đã báo chuyển',
                 'paid' => 'Đã thanh toán',
                 default => (string) $b->payment_status,
             };

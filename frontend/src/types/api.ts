@@ -236,16 +236,14 @@ export interface Payment {
 export interface BookingPayment {
   /** Lượt thanh toán thu hộ chứa đơn này (null với đơn kiểu cũ). */
   id?: number | null
-  status: 'awaiting' | 'reported' | 'paid' | null
+  status: 'awaiting' | 'paid' | null
   option: 'deposit' | 'full' | null
   amount: number | null
   code: string | null
   due_at: string | null
-  reported_at: string | null
   paid_at: string | null
   deposit_amount: number
   deposit_percent: number
-  proof_url?: string | null
 }
 
 export interface OwnerStatement {

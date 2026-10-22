@@ -31,7 +31,6 @@ import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
-import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
 import { useToast } from '../../components/Toast'
 import type {
   ApiEnvelope,
@@ -109,7 +108,7 @@ export function OwnerDashboardPage() {
           label="Đang giữ chỗ chờ thanh toán"
           value={data?.pending_bookings ?? 0}
           note={data?.pending_bookings ? 'Khách đang chuyển khoản, tự xác nhận khi có tiền' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
-          to={data?.pending_bookings ? '/owner/bookings?status=pending' : undefined}
+          to={data?.pending_bookings ? '/owner/bookings?status=pay:awaiting' : undefined}
         />
         <Stat
           label="Doanh thu thực nhận"
@@ -1155,7 +1154,6 @@ export function OwnerBookingsPage() {
   const [page, setPage] = useState(1)
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [rejectScope, setRejectScope] = useState<'single' | 'recurring'>('single')
   const [complainingBooking, setComplainingBooking] = useState<Booking | null>(null)
   const [complaintCategory, setComplaintCategory] = useState('property_damage')
   const [complaintContent, setComplaintContent] = useState('')
@@ -1205,7 +1203,6 @@ export function OwnerBookingsPage() {
       toast.success(`Đã ${label} đơn đặt sân #BK-${vars.booking.id}.`)
       setRejectingBooking(null)
       setRejectReason('')
-      setRejectScope('single')
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
@@ -1214,25 +1211,8 @@ export function OwnerBookingsPage() {
     },
   })
 
-  const rejectRecurring = useMutation({
-    mutationFn: async ({ groupId, reason }: { groupId: string; reason?: string }) =>
-      api.patch(`/field-owner/bookings/recurring/${groupId}/reject`, { reason }),
-    onSuccess: () => {
-      toast.success('Đã từ chối toàn bộ chuỗi đặt sân cố định.')
-      setRejectingBooking(null)
-      setRejectReason('')
-      setRejectScope('single')
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể từ chối chuỗi đơn')
-    },
-  })
-
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [checkInInputCode, setCheckInInputCode] = useState('')
-  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
 
   const complain = useMutation({
     mutationFn: async () =>
@@ -1248,20 +1228,6 @@ export function OwnerBookingsPage() {
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
     },
     onError: (err) => toast.error(errorMessage(err), 'Không thể gửi khiếu nại'),
-  })
-
-  const noShow = useMutation({
-    mutationFn: async (booking: Booking) =>
-      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
-      setNoShowingBooking(null)
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
-    },
   })
 
   const checkIn = useMutation({
@@ -1303,7 +1269,7 @@ export function OwnerBookingsPage() {
         icon={<CalendarDays />}
         kicker="Vận hành"
         title="Đơn đặt sân"
-        copy="Duyệt yêu cầu, đối chiếu tiền chuyển khoản theo nội dung, xác nhận khách đến sân và hoàn tất lượt chơi."
+        copy="Đơn được xác nhận tự động khi khách thanh toán qua SportHub. Bạn chỉ cần xác nhận khách đến sân; đơn tự hoàn tất khi hết giờ và tiền về ví sau 48 giờ."
         action={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
@@ -1322,7 +1288,6 @@ export function OwnerBookingsPage() {
       <div className="toolbar">
         <select value={status} onChange={(event) => handleFilterChange(event.target.value)}>
           <option value="">Mọi trạng thái</option>
-          <option value="pending">Chờ xử lý (tất cả)</option>
           <option value="pay:awaiting">Chờ khách thanh toán</option>
           <option value="confirmed">Đã xác nhận</option>
           <option value="completed">Hoàn thành</option>
@@ -1365,9 +1330,6 @@ export function OwnerBookingsPage() {
             bookings={bookings.data?.data ?? []}
             actions={(booking) => (
               <>
-                {booking.status === 'pending' && (
-                  <OwnerPaymentActions booking={booking} onReject={() => setRejectingBooking(booking)} />
-                )}
                 {booking.status === 'confirmed' && (
                   <>
                     {!booking.checked_in_at && (
@@ -1380,47 +1342,6 @@ export function OwnerBookingsPage() {
                         <UserCheck size={13} /> Khách đã đến
                       </button>
                     )}
-                    {(() => {
-                      const matchEnded = (() => {
-                        if (!booking.booking_date || !booking.time_slot?.end_time) return false
-                        const matchEndTime = new Date(`${booking.booking_date}T${booking.time_slot.end_time}`).getTime()
-                        return !isNaN(matchEndTime) && matchEndTime <= Date.now()
-                      })()
-
-                      const matchStarted = (() => {
-                        if (!booking.booking_date || !booking.time_slot?.start_time) return false
-                        const matchStartTime = new Date(`${booking.booking_date}T${booking.time_slot.start_time}`).getTime()
-                        return !isNaN(matchStartTime) && matchStartTime <= Date.now()
-                      })()
-
-                      if (booking.checked_in_at && matchEnded) {
-                        return (
-                          <button
-                            className="button button--dark button--small"
-                            onClick={() => update.mutate({ booking, status: 'completed' })}
-                            disabled={update.isPending}
-                          >
-                            Hoàn thành
-                          </button>
-                        )
-                      }
-
-                      if (!booking.checked_in_at && matchStarted) {
-                        return (
-                          <button
-                            className="button button--ghost button--small"
-                            style={{ color: '#b45309', borderColor: '#fde68a' }}
-                            onClick={() => setNoShowingBooking(booking)}
-                            disabled={noShow.isPending}
-                            title="Ghi nhận khách không tới sân theo lịch"
-                          >
-                            Vắng mặt
-                          </button>
-                        )
-                      }
-
-                      return null
-                    })()}
                     <button
                       className="button button--danger button--small"
                       onClick={() => setRejectingBooking(booking)}
@@ -1476,61 +1397,23 @@ export function OwnerBookingsPage() {
         onClose={() => {
           setRejectingBooking(null)
           setRejectReason('')
-          setRejectScope('single')
-        }}
+            }}
         title={rejectingBooking?.status === 'confirmed' ? 'Huỷ đơn đã xác nhận' : 'Từ chối đơn đặt sân'}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
           if (!rejectingBooking) return
-          if (rejectScope === 'recurring' && rejectingBooking.recurring_group_id) {
-            rejectRecurring.mutate({
-              groupId: rejectingBooking.recurring_group_id,
-              reason: rejectReason || 'Chủ sân không thể tiếp tục nhận chuỗi đặt cố định.',
-            })
-          } else {
-            update.mutate({
-              booking: rejectingBooking,
-              status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
-              reason: rejectReason || 'Chủ sân bận khung giờ này.',
-            })
-          }
+          update.mutate({
+            booking: rejectingBooking,
+            status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
+            reason: rejectReason || 'Chủ sân bận khung giờ này.',
+          })
         }}
       >
         <p>
           Bạn có chắc chắn muốn {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} đơn <strong>#BK-{rejectingBooking?.id}</strong> của khách hàng{' '}
           <strong>{rejectingBooking?.customer?.name}</strong>?
         </p>
-
-        {rejectingBooking?.recurring_group_id && (
-          <div style={{ padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, border: '1px solid var(--border)', margin: '12px 0' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--forest)' }}>
-              <Repeat size={14} /> Đơn thuộc chuỗi đặt cố định hằng tuần:
-            </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="radio"
-                  name="reject_scope"
-                  value="single"
-                  checked={rejectScope === 'single'}
-                  onChange={() => setRejectScope('single')}
-                />
-                <span>Chỉ {rejectingBooking.status === 'confirmed' ? 'huỷ' : 'từ chối'} buổi này (#BK-{rejectingBooking.id})</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="radio"
-                  name="reject_scope"
-                  value="recurring"
-                  checked={rejectScope === 'recurring'}
-                  onChange={() => setRejectScope('recurring')}
-                />
-                <span>{rejectingBooking.status === 'confirmed' ? 'Huỷ' : 'Từ chối'} toàn bộ các buổi trong chuỗi cố định</span>
-              </label>
-            </div>
-          </div>
-        )}
 
         <label style={{ marginTop: 12 }}>
           <span>Lý do {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} (thông báo tới khách)</span>
@@ -1549,23 +1432,16 @@ export function OwnerBookingsPage() {
             onClick={() => {
               setRejectingBooking(null)
               setRejectReason('')
-              setRejectScope('single')
-            }}
+                    }}
           >
             Đóng
           </button>
           <button
             type="submit"
-            disabled={update.isPending || rejectRecurring.isPending}
+            disabled={update.isPending}
             className="button button--danger"
           >
-            {update.isPending || rejectRecurring.isPending
-              ? 'Đang xử lý...'
-              : rejectScope === 'recurring'
-                ? 'Từ chối toàn bộ chuỗi'
-                : rejectingBooking?.status === 'confirmed'
-                  ? 'Xác nhận huỷ đơn'
-                  : 'Xác nhận từ chối'}
+            {update.isPending ? 'Đang xử lý...' : rejectingBooking?.status === 'confirmed' ? 'Xác nhận huỷ đơn' : 'Xác nhận từ chối'}
           </button>
         </div>
       </Modal>
@@ -1661,21 +1537,6 @@ export function OwnerBookingsPage() {
 
       <ComplaintRespondModal complaintId={respondingId} role="field-owner" onClose={() => setRespondingId(null)} />
 
-      <ConfirmModal
-        isOpen={!!noShowingBooking}
-        title="Ghi nhận khách vắng mặt (No-show)"
-        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
-        confirmText="Xác nhận vắng mặt"
-        cancelText="Đóng"
-        danger
-        busy={noShow.isPending}
-        onClose={() => setNoShowingBooking(null)}
-        onConfirm={() => {
-          if (noShowingBooking) {
-            noShow.mutate(noShowingBooking)
-          }
-        }}
-      />
     </>
   )
 }

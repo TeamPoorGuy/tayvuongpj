@@ -172,37 +172,6 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $this->assertSame(100, $this->customer->fresh()->trust_score); // Khách không có lỗi
     }
 
-    public function test_owner_cannot_reject_or_cancel_reported_booking(): void
-    {
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => today()->addDay()->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 450000,
-            'payment_status' => 'reported',
-            'payment_amount' => 135000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-
-        // Thử từ chối đơn reported
-        $resReject = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", [
-            'status' => 'rejected',
-            'reason' => 'Không muốn nhận',
-        ]);
-        $resReject->assertStatus(409);
-        $resReject->assertJsonFragment(['message' => 'Khách đã báo chuyển khoản, vui lòng xác nhận hoặc đối soát thanh toán thay vì từ chối/huỷ.']);
-
-        // Thử huỷ đơn reported
-        $resCancel = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", [
-            'status' => 'cancelled',
-            'reason' => 'Huỷ ngang',
-        ]);
-        $resCancel->assertStatus(409);
-    }
-
     public function test_owner_cannot_cancel_booking_after_start_time(): void
     {
         $booking = Booking::create([

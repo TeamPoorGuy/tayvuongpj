@@ -38,8 +38,6 @@ class Booking extends Model
         'payment_amount',
         'payment_code',
         'payment_due_at',
-        'payment_reported_at',
-        'payment_proof_path',
         'paid_at',
         'refund_status',
         'refund_amount',
@@ -63,7 +61,6 @@ class Booking extends Model
         'no_show_at' => 'datetime',
         'payment_amount' => 'decimal:2',
         'payment_due_at' => 'datetime',
-        'payment_reported_at' => 'datetime',
         'paid_at' => 'datetime',
         'refund_amount' => 'decimal:2',
         'refunded_at' => 'datetime',
@@ -290,8 +287,7 @@ class Booking extends Model
     public function canBeCancelled(): bool
     {
         return match ($this->status) {
-            // Đơn kiểu cũ: khách đã báo chuyển khoản thì phải chờ đối chiếu, không tự huỷ khi tiền đang treo.
-            BookingStatus::Pending => $this->payment_status !== 'reported',
+            BookingStatus::Pending => true,
             BookingStatus::Confirmed => $this->startsAt()->isFuture(),
             default => false,
         };
@@ -325,7 +321,7 @@ class Booking extends Model
         $refundAmount = null;
 
         // Tiền đang do nền tảng giữ: khách tự huỷ hoàn theo bậc giờ; chủ sân/admin/hệ thống huỷ hoàn đủ.
-        if (in_array($this->payment_status, ['reported', 'paid'], true)) {
+        if ($this->payment_status === 'paid') {
             $refundAmount = $by === 'customer' ? $this->refundAmountIfCancelledNow() : (float) $this->payment_amount;
         }
 

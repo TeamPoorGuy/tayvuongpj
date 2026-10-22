@@ -8,7 +8,6 @@ import {
   Clock,
   Clock3,
   DollarSign,
-  Eye,
   Filter,
   Info,
   List,
@@ -22,11 +21,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
-import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { StatusBadge } from '../../components/StatusBadge'
-import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { getLocalTodayString } from '../../utils/date'
@@ -93,10 +89,6 @@ export function OwnerSchedulePage() {
 
   // Booking detail modal
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
-  const [isRejecting, setIsRejecting] = useState(false)
-  const [showProof, setShowProof] = useState(false)
-  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
 
   // 1. Fetch Owner Fields
   const fieldsQuery = useQuery({
@@ -133,41 +125,6 @@ export function OwnerSchedulePage() {
 
   const bookings = bookingsQuery.data ?? []
 
-  // 4. Update status mutation
-  const updateStatus = useMutation({
-    mutationFn: async ({
-      bookingId,
-      status,
-      reason,
-    }: {
-      bookingId: number
-      status: string
-      reason?: string
-    }) =>
-      api.patch(`/field-owner/bookings/${bookingId}/status`, {
-        status,
-        ...(reason ? { reason } : {}),
-      }),
-    onSuccess: (_, vars) => {
-      const label =
-        vars.status === 'confirmed'
-          ? 'xác nhận'
-          : vars.status === 'completed'
-            ? 'hoàn thành'
-            : 'từ chối'
-      toast.success(`Đã ${label} đơn đặt sân #BK-${vars.bookingId}.`)
-      setIsRejecting(false)
-      setRejectReason('')
-      setDetailBooking(null)
-      void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Cập nhật trạng thái thất bại')
-    },
-  })
-
   // 5. Quick Check-In Mutation
   const checkIn = useMutation({
     mutationFn: async (booking: Booking) =>
@@ -181,23 +138,6 @@ export function OwnerSchedulePage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
-    },
-  })
-
-  // 6. Record No-Show Mutation
-  const noShow = useMutation({
-    mutationFn: async (booking: Booking) =>
-      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
-      setNoShowingBooking(null)
-      setDetailBooking(null)
-      void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
     },
   })
 
@@ -660,7 +600,6 @@ export function OwnerSchedulePage() {
         isOpen={!!detailBooking}
         onClose={() => {
           setDetailBooking(null)
-          setIsRejecting(false)
         }}
         title={`Chi tiết đơn #BK-${detailBooking?.id ?? ''}`}
       >
@@ -725,16 +664,6 @@ export function OwnerSchedulePage() {
                     ? `SportHub đã thu hộ ${formatMoney(detailBooking.payment.amount ?? 0)} (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
                     : 'Khách đang chuyển khoản vào tài khoản SportHub; đơn tự xác nhận khi có tiền'}
                 </small>
-                {detailBooking.payment?.proof_url && (
-                  <button
-                    type="button"
-                    className="button button--ghost button--small"
-                    style={{ marginTop: 6 }}
-                    onClick={() => setShowProof(true)}
-                  >
-                    <Eye size={13} /> Xem biên lai chuyển khoản
-                  </button>
-                )}
               </div>
 
               <div className="detail-item">
@@ -760,45 +689,8 @@ export function OwnerSchedulePage() {
               </div>
             )}
 
-            {/* Reject reason input view */}
-            {isRejecting ? (
-              <div className="reject-reason-form">
-                <label>
-                  <span>Lý do từ chối đơn đặt</span>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="VD: Sân bảo trì đột xuất, trùng lịch giải đấu..."
-                    rows={3}
-                    autoFocus
-                  />
-                </label>
-                <div className="modal__actions" style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    onClick={() => setIsRejecting(false)}
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--danger"
-                    disabled={updateStatus.isPending}
-                    onClick={() =>
-                      updateStatus.mutate({
-                        bookingId: detailBooking.id,
-                        status: 'rejected',
-                        reason: rejectReason || 'Chủ sân từ chối đơn này.',
-                      })
-                    }
-                  >
-                    {updateStatus.isPending ? 'Đang gửi...' : 'Xác nhận từ chối'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Modal Actions Toolbar */
+            {/* Modal Actions Toolbar */}
+            {(
               <div className="modal__actions" style={{ marginTop: 24, justifyContent: 'space-between' }}>
                 <button
                   type="button"
@@ -809,15 +701,6 @@ export function OwnerSchedulePage() {
                 </button>
 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {detailBooking.status === 'pending' && (
-                    <OwnerPaymentActions
-                      booking={detailBooking}
-                      size=""
-                      onReject={() => setIsRejecting(true)}
-                      onDone={() => setDetailBooking(null)}
-                    />
-                  )}
-
                   {detailBooking.status === 'confirmed' && (
                     <>
                       {!detailBooking.checked_in_at && (
@@ -831,51 +714,6 @@ export function OwnerSchedulePage() {
                           <UserCheck size={15} /> Khách đã đến (+10đ)
                         </button>
                       )}
-                      {(() => {
-                        const matchEnded = (() => {
-                          if (!detailBooking.booking_date || !detailBooking.time_slot?.end_time) return false
-                          const matchEndTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.end_time}`).getTime()
-                          return !isNaN(matchEndTime) && matchEndTime <= Date.now()
-                        })()
-
-                        const matchStarted = (() => {
-                          if (!detailBooking.booking_date || !detailBooking.time_slot?.start_time) return false
-                          const matchStartTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.start_time}`).getTime()
-                          return !isNaN(matchStartTime) && matchStartTime <= Date.now()
-                        })()
-
-                        if (detailBooking.checked_in_at && matchEnded) {
-                          return (
-                            <button
-                              type="button"
-                              className="button button--brand"
-                              disabled={updateStatus.isPending}
-                              onClick={() =>
-                                updateStatus.mutate({ bookingId: detailBooking.id, status: 'completed' })
-                              }
-                            >
-                              Hoàn tất lượt chơi
-                            </button>
-                          )
-                        }
-
-                        if (!detailBooking.checked_in_at && matchStarted) {
-                          return (
-                            <button
-                              type="button"
-                              className="button button--ghost"
-                              style={{ color: '#b45309', borderColor: '#fde68a' }}
-                              disabled={noShow.isPending}
-                              onClick={() => setNoShowingBooking(detailBooking)}
-                              title="Ghi nhận khách không tới sân theo lịch"
-                            >
-                              Vắng mặt
-                            </button>
-                          )
-                        }
-
-                        return null
-                      })()}
                     </>
                   )}
                 </div>
@@ -885,28 +723,6 @@ export function OwnerSchedulePage() {
         )}
       </Modal>
 
-      <ConfirmModal
-        isOpen={!!noShowingBooking}
-        title="Ghi nhận khách vắng mặt (No-show)"
-        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
-        confirmText="Xác nhận vắng mặt"
-        cancelText="Đóng"
-        danger
-        busy={noShow.isPending}
-        onClose={() => setNoShowingBooking(null)}
-        onConfirm={() => {
-          if (noShowingBooking) {
-            noShow.mutate(noShowingBooking)
-          }
-        }}
-      />
-
-      <PaymentProofModal
-        isOpen={showProof}
-        onClose={() => setShowProof(false)}
-        proofUrl={detailBooking?.payment?.proof_url}
-        title={`Biên lai đơn #BK-${detailBooking ? String(detailBooking.id).padStart(5, '0') : ''}`}
-      />
     </div>
   )
 }

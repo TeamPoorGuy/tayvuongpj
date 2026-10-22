@@ -419,12 +419,6 @@ export function CustomerBookingsPage() {
                       {booking.payment.due_at && ` trước ${formatDateTime(booking.payment.due_at)}`}, quá hạn chỗ sẽ được nhả cho người khác.
                     </p>
                   )}
-                  {booking.status === 'pending' && booking.payment?.status === 'reported' && (
-                    <p className="form-help">
-                      Bạn đã báo chuyển {formatMoney(booking.payment.amount ?? 0)} (nội dung {booking.payment.code}). Đang chờ
-                      chủ sân xác nhận đã nhận tiền.
-                    </p>
-                  )}
                   {booking.status === 'confirmed' && !booking.checked_in_at && booking.check_in_code && (
                     <div style={{ background: 'var(--pitch-soft, #e4f1e6)', border: '1px solid rgba(31, 135, 94, 0.3)', borderRadius: 10, padding: '10px 14px', margin: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

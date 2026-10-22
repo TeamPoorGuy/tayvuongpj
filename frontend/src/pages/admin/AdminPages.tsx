@@ -27,7 +27,6 @@ import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { Pagination } from '../../components/Pagination'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
@@ -1213,7 +1212,6 @@ export function AdminBookingsPage() {
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
   const [adminCancelReason, setAdminCancelReason] = useState('')
-  const [proofBooking, setProofBooking] = useState<Booking | null>(null)
 
   const bookings = useQuery({
     queryKey: ['admin', 'bookings', status, date, search, page],
@@ -1339,16 +1337,6 @@ export function AdminBookingsPage() {
               >
                 <Eye size={14} /> Chi tiết
               </button>
-              {booking.payment?.proof_url && (
-                <button
-                  type="button"
-                  className="button button--small button--ghost"
-                  onClick={() => setProofBooking(booking)}
-                  title="Xem ảnh chứng từ chuyển khoản"
-                >
-                  <FileText size={14} /> Biên lai
-                </button>
-              )}
               {booking.status !== 'completed' && booking.status !== 'cancelled' && (
                 <button
                   type="button"
@@ -1414,7 +1402,7 @@ export function AdminBookingsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span>Khách đã thanh toán:</span>
                 <strong style={{ color: viewingBooking.payment?.status === 'paid' ? 'var(--pitch)' : 'var(--warn)' }}>
-                  {formatMoney(viewingBooking.payment?.amount ?? 0)} ({viewingBooking.payment?.status === 'paid' ? 'Đã nhận' : viewingBooking.payment?.status === 'reported' ? 'Báo chuyển' : 'Chờ'})
+                  {formatMoney(viewingBooking.payment?.amount ?? 0)} ({viewingBooking.payment?.status === 'paid' ? 'Đã nhận' : 'Chờ'})
                 </strong>
               </div>
               {viewingBooking.payment?.code && (
@@ -1431,19 +1419,8 @@ export function AdminBookingsPage() {
               )}
               {viewingBooking.refund && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, padding: '8px 10px', background: '#fef3c7', borderRadius: 6, color: '#92400e' }}>
-                  <span>Tiền cọc cần hoàn trả:</span>
-                  <strong>{formatMoney(viewingBooking.refund.amount)} ({viewingBooking.refund.status === 'done' ? 'Đã chuyển hoàn' : viewingBooking.refund.status === 'waived' ? 'Miễn hoàn' : 'Chờ chuyển'})</strong>
-                </div>
-              )}
-              {viewingBooking.payment?.proof_url && (
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-start' }}>
-                  <button
-                    type="button"
-                    className="button button--ghost button--small"
-                    onClick={() => setProofBooking(viewingBooking)}
-                  >
-                    <Eye size={13} /> Xem biên lai chuyển khoản
-                  </button>
+                  <span>Tiền hoàn cho khách (vào ví):</span>
+                  <strong>{formatMoney(viewingBooking.refund.amount)} ({viewingBooking.refund.status === 'waived' ? 'Miễn hoàn' : 'Đã vào ví'})</strong>
                 </div>
               )}
             </div>
@@ -1477,13 +1454,6 @@ export function AdminBookingsPage() {
           </div>
         )}
       </Modal>
-
-      <PaymentProofModal
-        isOpen={!!proofBooking}
-        onClose={() => setProofBooking(null)}
-        proofUrl={proofBooking?.payment?.proof_url}
-        title={`Biên lai đơn #BK-${proofBooking?.id ?? ''}`}
-      />
 
       {/* Modal Admin huỷ đơn */}
       <Modal
