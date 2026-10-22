@@ -213,15 +213,19 @@ export interface BookingRefund {
 /** Một lần chuyển khoản vào tài khoản nền tảng, gộp một hay nhiều đơn. */
 export interface Payment {
   id: number
+  purpose?: 'booking' | 'topup'
   code: string
   option: 'deposit' | 'full'
   total: number
   amount: number
+  /** Phần đã trừ từ ví và phần còn phải chuyển khoản. */
+  wallet_amount: number
+  due_amount: number
   deposit_percent: number
   status: 'awaiting' | 'paid' | 'expired' | 'cancelled' | 'refunded'
   due_at: string
   paid_at: string | null
-  source: 'webhook' | 'admin' | null
+  source: 'webhook' | 'admin' | 'wallet' | null
   bank_ref: string | null
   bank: { name: string; code: string; account_number: string; account_holder: string; qr_url: string | null }
   customer?: User
@@ -549,3 +553,41 @@ export interface AdminUserDetail {
   recent_trust_scores: TrustScoreLog[]
 }
 
+
+export interface WalletTransaction {
+  id: number
+  type: 'refund' | 'topup' | 'booking_payment' | 'booking_payment_return' | 'withdrawal' | 'withdrawal_return' | 'owner_earning' | 'owner_adjustment'
+  amount: number
+  balance_after: number
+  description: string
+  booking_id: number | null
+  created_at: string
+}
+
+export interface WalletData {
+  balance: number
+  /** Chủ sân: tiền các đơn đã thanh toán nhưng chưa tới hạn cộng vào ví; null với khách thường. */
+  pending_earnings: number | null
+  transactions: WalletTransaction[]
+}
+
+export interface Withdrawal {
+  id: number
+  amount: number
+  status: 'pending' | 'paid' | 'rejected'
+  auto: boolean
+  reference: string | null
+  reason: string | null
+  bank: { bin: string; name: string; account_number: string; account_holder: string; qr_url: string | null }
+  user?: { id: number; name: string; email: string } | null
+  processed_at: string | null
+  created_at: string
+}
+
+export interface WithdrawalInfo {
+  data: Withdrawal[]
+  saved_bank: { bank_bin: string; account_number: string; account_holder: string } | null
+  bank_locked: boolean
+  auto_limit: number
+  min_amount: number
+}

@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Calendar, Clock, ShieldCheck } from 'lucide-react'
+import { Calendar, Clock, ShieldCheck, Wallet } from 'lucide-react'
 import { Modal } from './Modal'
 import { usePublicSettings } from '../hooks/usePublicSettings'
+import { useWallet } from '../hooks/useWallet'
 import { formatMoney, formatDate } from '../utils/format'
 import type { GridBlock } from '../utils/grid'
 
 interface BookingConfirmModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (isRecurring: boolean, weeks: number) => void
+  onConfirm: (isRecurring: boolean, weeks: number, useWallet: boolean) => void
   /** Các khoảng giờ đã chọn trên lưới (có thể nhiều sân). */
   blocks: GridBlock[]
   date: string
@@ -36,6 +37,8 @@ export function BookingConfirmModal({
   const [agreed, setAgreed] = useState(false)
   const [isRecurring, setIsRecurring] = useState(false)
   const [weeks, setWeeks] = useState(4)
+  const [useWalletBalance, setUseWalletBalance] = useState(true)
+  const walletBalance = useWallet(1, isOpen).data?.data.balance ?? 0
 
   const effectiveTotalPrice = totalPrice * (isRecurring ? weeks : 1)
   const depositPercent = settings?.deposit_percent ?? 30
@@ -55,7 +58,7 @@ export function BookingConfirmModal({
 
   const handleConfirm = () => {
     if (!agreed || busy) return
-    onConfirm(isRecurring, weeks)
+    onConfirm(isRecurring, weeks, useWalletBalance && walletBalance > 0)
     setAgreed(false)
   }
 
@@ -163,18 +166,33 @@ export function BookingConfirmModal({
           </div>
         </div>
 
+        {/* Ví SportHub: trừ trước, đủ thì xác nhận ngay không cần quét QR */}
+        {walletBalance > 0 && (
+          <label className="check-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: '10px 12px', borderRadius: 10, background: 'var(--pitch-soft, rgba(11, 48, 37, 0.08))' }}>
+            <input type="checkbox" checked={useWalletBalance} onChange={(e) => setUseWalletBalance(e.target.checked)} style={{ marginTop: 3 }} />
+            <span style={{ lineHeight: 1.4 }}>
+              <Wallet size={14} /> Dùng số dư ví <strong>{formatMoney(walletBalance)}</strong>
+              {useWalletBalance && (
+                <small style={{ display: 'block', color: 'var(--soft)' }}>
+                  {walletBalance >= perMatchDeposit ? 'Đủ tiền cọc: đơn được xác nhận ngay, không cần chuyển khoản.' : `Còn ${formatMoney(perMatchDeposit - walletBalance)} cần chuyển khoản để giữ chỗ.`}
+                </small>
+              )}
+            </span>
+          </label>
+        )}
+
         {/* Tóm tắt chính sách & hạn chuyển tiền */}
         <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--soft)', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <Clock size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Giữ chỗ {holdMinutes} phút:</strong> chuyển khoản vào tài khoản SportHub (cọc hoặc trả hết) để đơn được xác nhận ngay. Quá hạn chỗ sẽ được nhả cho người khác.
+              <strong>Giữ chỗ {holdMinutes} phút:</strong> thanh toán bằng ví hoặc chuyển khoản vào tài khoản SportHub (cọc hoặc trả hết) để đơn được xác nhận ngay. Quá hạn chỗ sẽ được nhả cho người khác.
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <ShieldCheck size={14} style={{ color: 'var(--pitch)', marginTop: 2, flexShrink: 0 }} />
             <span>
-              <strong>Chính sách huỷ:</strong> huỷ trước <strong>{refundFullHours} giờ</strong> hoàn 100%, trước <strong>{refundPartialHours} giờ</strong> hoàn {refundPartialPercent}%, sát giờ hơn không hoàn. Chủ sân huỷ thì bạn được hoàn đủ.
+              <strong>Chính sách huỷ:</strong> huỷ trước <strong>{refundFullHours} giờ</strong> hoàn 100%, trước <strong>{refundPartialHours} giờ</strong> hoàn {refundPartialPercent}%, sát giờ hơn không hoàn. Chủ sân huỷ thì bạn được hoàn đủ. Tiền hoàn về thẳng ví SportHub của bạn.
             </span>
           </div>
         </div>

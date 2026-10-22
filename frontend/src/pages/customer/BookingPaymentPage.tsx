@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle2, Copy, CreditCard, Download, QrCode, ShieldAlert, Timer } from 'lucide-react'
+import { useWallet } from '../../hooks/useWallet'
+import { ArrowLeft, CheckCircle2, Copy, CreditCard, Download, QrCode, ShieldAlert, Timer, Wallet } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../../api/client'
@@ -37,6 +38,7 @@ export function BookingPaymentPage() {
   const { data: settings } = usePublicSettings()
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [downloadingQr, setDownloadingQr] = useState(false)
+  const wallet = useWallet(1)
 
   const query = useQuery({
     queryKey: ['customer', 'payment', id],
@@ -49,6 +51,15 @@ export function BookingPaymentPage() {
     mutationFn: async (option: 'deposit' | 'full') => api.patch(`/customer/payments/${id}`, { option }),
     onSuccess: () => void query.refetch(),
     onError: (err) => toast.error(errorMessage(err), 'Không đổi được hình thức thanh toán'),
+  })
+
+  const useWalletNow = useMutation({
+    mutationFn: async () => (await api.post<{ message: string }>(`/customer/payments/${id}/use-wallet`)).data,
+    onSuccess: (res) => {
+      toast.success(res.message)
+      void query.refetch()
+    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể trả bằng ví'),
   })
 
   const cancel = useMutation({
@@ -75,11 +86,11 @@ export function BookingPaymentPage() {
     <PageTitle
       icon={<CreditCard />}
       kicker="Thanh toán"
-      title="Chuyển khoản giữ sân"
-      copy="Chuyển khoản vào tài khoản SportHub đúng số tiền và nội dung. Hệ thống tự xác nhận đơn khi nhận được tiền."
+      title={payment?.purpose === 'topup' ? 'Nạp tiền vào ví' : 'Chuyển khoản giữ sân'}
+      copy={payment?.purpose === 'topup' ? 'Chuyển khoản vào tài khoản SportHub đúng nội dung. Tiền tự cộng vào ví ngay khi ngân hàng báo có.' : 'Chuyển khoản vào tài khoản SportHub đúng số tiền và nội dung. Hệ thống tự xác nhận đơn khi nhận được tiền.'}
       action={
-        <Link to="/bookings" className="button button--ghost">
-          <ArrowLeft size={16} /> Đơn đặt của tôi
+        <Link to={payment?.purpose === 'topup' ? '/wallet' : '/bookings'} className="button button--ghost">
+          <ArrowLeft size={16} /> {payment?.purpose === 'topup' ? 'Ví của tôi' : 'Đơn đặt của tôi'}
         </Link>
       }
     />
@@ -146,10 +157,11 @@ export function BookingPaymentPage() {
           {payment.status === 'awaiting' && <Countdown until={payment.due_at} />}
         </div>
 
-        {summary}
+        {payment.purpose === 'topup' ? <dl className="payment-rows">{row('Số tiền nạp', formatMoney(payment.total))}</dl> : summary}
 
         {payment.status === 'awaiting' && (
           <>
+            {payment.purpose !== 'topup' && (
             <div className="payment-options" role="radiogroup" aria-label="Hình thức thanh toán">
               <button type="button" role="radio" aria-checked={payment.option === 'deposit'} disabled={changeOption.isPending} className={`payment-option ${payment.option === 'deposit' ? 'is-active' : ''}`} onClick={() => changeOption.mutate('deposit')}>
                 <small>Đặt cọc {payment.deposit_percent}%</small>
@@ -162,6 +174,16 @@ export function BookingPaymentPage() {
                 <small>Không phải trả thêm khi đến sân</small>
               </button>
             </div>
+            )}
+
+            {payment.purpose !== 'topup' && (wallet.data?.data.balance ?? 0) > 0 && (
+              <div className="notice notice--success" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+                <span><Wallet size={16} /> Ví SportHub của bạn đang có <strong>{formatMoney(wallet.data?.data.balance ?? 0)}</strong>.</span>
+                <button type="button" className="button button--brand button--small" disabled={useWalletNow.isPending} onClick={() => useWalletNow.mutate()}>
+                  Trả bằng số dư ví
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: payment.bank.qr_url ? 'repeat(auto-fit, minmax(260px, 1fr))' : '1fr', gap: 16, alignItems: 'start' }}>
               {payment.bank.qr_url && (
@@ -171,7 +193,7 @@ export function BookingPaymentPage() {
                   </span>
                   <img src={payment.bank.qr_url} alt="Mã VietQR thanh toán" style={{ width: '100%', maxWidth: 240, height: 'auto', display: 'block', borderRadius: 6, background: '#fff' }} />
                   <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                    Tự điền số tiền {formatMoney(payment.amount)} và nội dung {payment.code}
+                    Tự điền số tiền {formatMoney(payment.due_amount)} và nội dung {payment.code}
                   </p>
                   <button type="button" onClick={() => void handleDownloadQr()} disabled={downloadingQr} className="button button--ghost button--small" style={{ marginTop: 8 }}>
                     <Download size={13} /> {downloadingQr ? 'Đang tải...' : 'Tải mã QR'}
@@ -180,7 +202,8 @@ export function BookingPaymentPage() {
               )}
 
               <dl className="payment-rows" style={{ borderRadius: 8 }}>
-                {row('Số tiền cần chuyển', formatMoney(payment.amount), 'số tiền', 'payment-rows__amount', String(payment.amount))}
+                {payment.wallet_amount > 0 && row('Đã trừ từ ví SportHub', formatMoney(payment.wallet_amount))}
+                {row('Số tiền cần chuyển', formatMoney(payment.due_amount), 'số tiền', 'payment-rows__amount', String(payment.due_amount))}
                 {row('Ngân hàng', payment.bank.name)}
                 {row('Số tài khoản', payment.bank.account_number, 'số tài khoản')}
                 {row('Chủ tài khoản', payment.bank.account_holder)}
@@ -208,16 +231,30 @@ export function BookingPaymentPage() {
           </>
         )}
 
-        {payment.status === 'paid' && (
+        {payment.status === 'paid' && payment.purpose === 'topup' && (
           <div className="notice notice--success">
-            <CheckCircle2 size={18} /> SportHub đã nhận <strong>{formatMoney(payment.amount)}</strong> lúc {payment.paid_at ? formatDateTime(payment.paid_at) : ''}.
-            Đơn đã được xác nhận{payment.option === 'deposit' && `, còn ${formatMoney(payment.total - payment.amount)} trả tại sân`}.
+            <CheckCircle2 size={18} /> Đã nạp tiền vào ví SportHub của bạn.
+            <Link to="/wallet" className="button button--brand button--small" style={{ marginLeft: 10 }}>Xem ví</Link>
+          </div>
+        )}
+
+        {payment.status === 'paid' && payment.purpose !== 'topup' && (
+          <div className="notice notice--success" style={{ display: 'grid', gap: 8 }}>
+            <span>
+              <CheckCircle2 size={18} /> SportHub đã nhận <strong>{formatMoney(payment.amount)}</strong>
+              {payment.wallet_amount > 0 && <> (trong đó {formatMoney(payment.wallet_amount)} từ ví)</>} lúc {payment.paid_at ? formatDateTime(payment.paid_at) : ''}.
+              Đơn đã được xác nhận{payment.option === 'deposit' && `, còn ${formatMoney(payment.total - payment.amount)} trả tại sân`}.
+            </span>
+            {bookings[0]?.check_in_code && (
+              <span>Mã check-in khi đến sân: <strong style={{ letterSpacing: 2 }}>{bookings[0].check_in_code}</strong>{bookings.length > 1 ? ' (mã của từng đơn xem ở mục Đơn đặt của tôi)' : ''}</span>
+            )}
+            <span><Link to="/bookings" className="button button--brand button--small">Xem đơn đặt của tôi</Link></span>
           </div>
         )}
 
         {payment.status === 'refunded' && (
           <div className="notice notice--warn">
-            SportHub đã nhận tiền nhưng giữ chỗ đã hết hạn và sân đã có người khác đặt. Khoản tiền đã được hoàn vào ví SportHub của bạn.
+            SportHub đã nhận tiền nhưng giữ chỗ đã hết hạn và sân đã có người khác đặt. Khoản tiền đã được hoàn vào ví SportHub của bạn, bạn có thể dùng để đặt sân khác hoặc rút về ngân hàng.
           </div>
         )}
 

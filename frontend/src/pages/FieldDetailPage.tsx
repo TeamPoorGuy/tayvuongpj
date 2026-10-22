@@ -85,7 +85,7 @@ export function FieldDetailPage() {
   })
 
   const [recurringConflicts, setRecurringConflicts] = useState<Array<{ date: string; reason: string }> | null>(null)
-  const [pendingRecurringConfig, setPendingRecurringConfig] = useState<{ isRecurring: boolean; weeks: number } | null>(null)
+  const [pendingRecurringConfig, setPendingRecurringConfig] = useState<{ isRecurring: boolean; weeks: number; useWallet: boolean } | null>(null)
 
   const schedule = useQuery({
     queryKey: ['schedule', field.data?.id, date],
@@ -190,7 +190,7 @@ export function FieldDetailPage() {
 
   const navigate = useNavigate()
   const booking = useMutation({
-    mutationFn: async ({ isRecurring, weeks, skipConflicts }: { isRecurring: boolean; weeks: number; skipConflicts?: boolean }) => {
+    mutationFn: async ({ isRecurring, weeks, skipConflicts, useWallet }: { isRecurring: boolean; weeks: number; skipConflicts?: boolean; useWallet: boolean }) => {
       if (isRecurring) {
         const block = blocks[0]
         return (await api.post('/customer/bookings/recurring', {
@@ -201,12 +201,14 @@ export function FieldDetailPage() {
           weeks,
           notes,
           skip_conflicts: skipConflicts ?? false,
+          use_wallet: useWallet,
         })).data
       }
       return (await api.post('/customer/bookings', {
         booking_date: date,
         items: blocks.map((b) => ({ sports_field_id: b.fieldId, start_time: b.start, end_time: b.end })),
         notes,
+        use_wallet: useWallet,
       })).data
     },
     onSuccess: (res, vars) => {
@@ -216,11 +218,17 @@ export function FieldDetailPage() {
       setPicked(new Set())
       setHint(null)
       setNotes('')
-      success(vars.isRecurring ? `Đã giữ chỗ ${vars.weeks} buổi. Thanh toán một lần cho cả chuỗi.` : 'Đã giữ chỗ. Hãy chuyển khoản để hoàn tất.', 'Đã giữ chỗ')
+      const payment = vars.isRecurring ? res?.data?.payment : res?.payment
       void queryClient.invalidateQueries({ queryKey: ['schedule'] })
       void queryClient.invalidateQueries({ queryKey: ['customer', 'bookings'] })
-      const paymentId = vars.isRecurring ? res?.data?.payment?.id : res?.payment?.id
-      if (paymentId) navigate(`/payments/${paymentId}`)
+      // Ví đủ tiền: đơn đã được xác nhận, không cần quét QR.
+      if (payment?.status === 'paid') {
+        success('Đã trả bằng số dư ví và xác nhận đơn đặt sân.', 'Đặt sân thành công')
+        navigate('/bookings')
+        return
+      }
+      success(vars.isRecurring ? `Đã giữ chỗ ${vars.weeks} buổi. Thanh toán một lần cho cả chuỗi.` : 'Đã giữ chỗ. Hãy chuyển khoản để hoàn tất.', 'Đã giữ chỗ')
+      if (payment?.id) navigate(`/payments/${payment.id}`)
     },
     onError: (err: any) => {
       const data = err?.response?.data
@@ -778,9 +786,9 @@ export function FieldDetailPage() {
             setRecurringConflicts(null)
             setPendingRecurringConfig(null)
           }}
-          onConfirm={(isRecurring, weeks) => {
-            setPendingRecurringConfig({ isRecurring, weeks })
-            booking.mutate({ isRecurring, weeks, skipConflicts: false })
+          onConfirm={(isRecurring, weeks, useWallet) => {
+            setPendingRecurringConfig({ isRecurring, weeks, useWallet })
+            booking.mutate({ isRecurring, weeks, skipConflicts: false, useWallet })
           }}
           blocks={blocks}
           date={date}
@@ -793,6 +801,7 @@ export function FieldDetailPage() {
               booking.mutate({
                 isRecurring: pendingRecurringConfig.isRecurring,
                 weeks: pendingRecurringConfig.weeks,
+                useWallet: pendingRecurringConfig.useWallet,
                 skipConflicts: true,
               })
             }

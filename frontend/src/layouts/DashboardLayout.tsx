@@ -16,6 +16,7 @@ import {
   Sliders,
   Trophy,
   UsersRound,
+  Wallet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
@@ -26,6 +27,7 @@ import { Avatar } from '../components/Avatar'
 
 const customerNav = [
   { to: '/bookings', label: 'Lịch chơi của tôi', icon: CalendarDays },
+  { to: '/wallet', label: 'Ví SportHub', icon: Wallet },
   { to: '/profile', label: 'Hồ sơ cá nhân', icon: CircleUserRound },
 ]
 
@@ -34,7 +36,8 @@ const ownerNav = [
   { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
-  { to: '/owner/statements', label: 'Đối soát & Chi trả', icon: Receipt },
+  { to: '/owner/wallet', label: 'Ví & Rút tiền', icon: Wallet },
+  { to: '/owner/statements', label: 'Báo cáo đối soát', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
   { to: '/owner/complaints', label: 'Khiếu nại', icon: AlertCircle },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },

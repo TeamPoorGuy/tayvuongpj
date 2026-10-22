@@ -460,14 +460,9 @@ export function CustomerBookingsPage() {
                   {(booking.status === 'cancelled' || booking.status === 'rejected') && booking.cancel_reason && (
                     <p className="form-help">Lý do: {booking.cancel_reason}</p>
                   )}
-                  {booking.refund?.status === 'pending' && (
-                    <div className="notice notice--warn" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      <strong>Khoản hoàn tiền:</strong> SportHub sẽ hoàn {formatMoney(booking.refund.amount)} cho bạn. Nếu sau 24h chưa nhận được, hãy bấm &quot;Khiếu nại&quot; bên dưới để được hỗ trợ.
-                    </div>
-                  )}
                   {booking.refund?.status === 'done' && (
                     <div className="notice notice--success" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-                      Đã hoàn trả {formatMoney(booking.refund.amount)}{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}.
+                      Đã hoàn {formatMoney(booking.refund.amount)} vào ví SportHub của bạn{booking.refund.refunded_at ? ` lúc ${formatDateTime(booking.refund.refunded_at)}` : ''}. <Link to="/wallet" style={{ textDecoration: 'underline' }}>Xem ví</Link>
                     </div>
                   )}
                   {booking.no_show && canAppealNoShow(booking) && !booking.complaint && (

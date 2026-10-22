@@ -63,14 +63,20 @@ class WalletController extends Controller
     public function withdrawals(Request $request): JsonResponse
     {
         $user = $request->user();
+        $owner = $user->isApprovedOwner();
+        $profile = $owner ? $user->fieldOwnerProfile : null;
+        $bin = $owner ? ($profile->bank_bin ?? Banks::guessBin($profile->bank_name)) : $user->bank_bin;
+        $bank = $bin ? [
+            'bank_bin' => $bin,
+            'account_number' => $owner ? $profile->bank_account_number : $user->bank_account_number,
+            'account_holder' => $owner ? $profile->bank_account_holder : $user->bank_account_holder,
+        ] : null;
 
         return response()->json([
             'data' => WithdrawalResource::collection($user->withdrawals()->latest('id')->limit(20)->get()),
-            'saved_bank' => $user->bank_bin ? [
-                'bank_bin' => $user->bank_bin,
-                'account_number' => $user->bank_account_number,
-                'account_holder' => $user->bank_account_holder,
-            ] : null,
+            'saved_bank' => $bank,
+            // Chủ sân luôn rút về tài khoản trong hồ sơ cơ sở, không nhập lại.
+            'bank_locked' => $owner,
             'auto_limit' => (int) \App\Support\Settings::getInt('withdraw_auto_limit', 2000000),
             'min_amount' => WithdrawalService::MIN_AMOUNT,
         ]);

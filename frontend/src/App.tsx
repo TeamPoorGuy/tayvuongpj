@@ -15,6 +15,7 @@ import { OwnerApplicationPage } from './pages/customer/OwnerApplicationPage'
 import { OwnerBookingsPage, OwnerDashboardPage, OwnerFieldsPage, OwnerProfilePage, OwnerReviewsPage } from './pages/owner/OwnerPages'
 import { OwnerSchedulePage } from './pages/owner/OwnerSchedulePage'
 import { OwnerComplaintsPage } from './pages/owner/OwnerComplaintsPage'
+import { WalletPage } from './pages/WalletPage'
 import { OwnerStatementsPage } from './pages/owner/OwnerStatementsPage'
 import { AdminBookingsPage, AdminCategoriesPage, AdminFieldsPage, AdminMatchesPage, AdminOwnersPage, AdminReviewsPage, AdminUsersPage } from './pages/admin/AdminPages'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
@@ -61,6 +62,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="bookings" element={<CustomerBookingsPage />} />
           <Route path="payments/:id" element={<BookingPaymentPage />} />
+          <Route path="wallet" element={<WalletPage />} />
           <Route path="profile" element={<CustomerProfilePage />} />
           <Route path="become-owner" element={<OwnerApplicationPage />} />
         </Route>
@@ -75,6 +77,7 @@ export default function App() {
           <Route path="owner/statements" element={<OwnerStatementsPage />} />
           <Route path="owner/reviews" element={<OwnerReviewsPage />} />
           <Route path="owner/complaints" element={<OwnerComplaintsPage />} />
+          <Route path="owner/wallet" element={<WalletPage owner />} />
           <Route path="owner/profile" element={<OwnerProfilePage />} />
         </Route>
       </Route>
