@@ -55,6 +55,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/bookings/{booking}/payment-proof', [BookingProofController::class, 'show']);
+        Route::get('/me/badges', \App\Http\Controllers\Api\V1\BadgeController::class);
         // Ví SportHub: dùng chung cho khách và chủ sân.
         Route::get('/wallet', [\App\Http\Controllers\Api\V1\WalletController::class, 'show']);
         Route::get('/wallet/withdrawals', [\App\Http\Controllers\Api\V1\WalletController::class, 'withdrawals']);

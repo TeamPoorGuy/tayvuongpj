@@ -19,7 +19,9 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { api } from '../api/client'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
@@ -92,6 +94,15 @@ export function DashboardLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   useReveal([location.pathname])
+
+  // Số việc đang chờ theo đường dẫn menu (khiếu nại cần phản hồi, đơn chờ duyệt...), tự làm mới mỗi phút.
+  const badges = useQuery({
+    queryKey: ['badges', user?.id],
+    enabled: !!user,
+    refetchInterval: 60_000,
+    queryFn: async () => (await api.get<{ data: Record<string, number> }>('/me/badges')).data.data,
+  }).data
+  const badge = (to: string) => (badges?.[to] ? <b className="sidebar__badge" aria-label={`${badges[to]} việc đang chờ`}>{badges[to]}</b> : null)
 
   const isAdmin = user?.role === 'admin'
   const isApprovedOwner = user?.field_owner_profile?.verification_status === 'approved'
@@ -191,6 +202,7 @@ export function DashboardLayout() {
                       )}
                       <Icon size={16} />
                       <span>{label}</span>
+                      {badge(to)}
                     </NavLink>
                   )
                 })}
@@ -211,6 +223,7 @@ export function DashboardLayout() {
                   )}
                   <Icon size={16} />
                   <span>{label}</span>
+                  {badge(to)}
                 </NavLink>
               )
             })
