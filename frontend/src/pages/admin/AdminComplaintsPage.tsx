@@ -9,6 +9,7 @@ import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { formatDate, formatMoney } from '../../utils/format'
 import type { Complaint } from '../../types/api'
+import { PageTitle } from '../customer/CustomerPages'
 
 const categoryLabels: Record<string, string> = {
   refund_pending: 'Chưa nhận được tiền hoàn cọc',
@@ -21,13 +22,13 @@ const categoryLabels: Record<string, string> = {
 const statusBadge = (status: Complaint['status']) => {
   switch (status) {
     case 'open':
-      return <span className="badge badge--warn">Chờ xử lý</span>
+      return <span className="status status--pending"><i />Chờ xử lý</span>
     case 'processing':
-      return <span className="badge badge--info" style={{ background: '#e0f2fe', color: '#0369a1' }}>Đang xác minh</span>
+      return <span className="status status--awaiting"><i />Đang xác minh</span>
     case 'resolved':
-      return <span className="badge badge--success">Đã giải quyết</span>
+      return <span className="status status--approved"><i />Đã giải quyết</span>
     case 'rejected':
-      return <span className="badge badge--muted">Đã từ chối</span>
+      return <span className="status status--rejected"><i />Đã từ chối</span>
   }
 }
 
@@ -92,25 +93,24 @@ export function AdminComplaintsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 24, margin: '0 0 4px', color: 'var(--forest)' }}>Khiếu nại & Tranh chấp</h1>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-          Tiếp nhận và xử lý các phản ánh, khiếu nại về hoàn cọc, chất lượng sân bãi và dịch vụ.
-        </p>
-      </div>
+      <PageTitle
+        icon={<MessageSquare />}
+        kicker="Quản trị dịch vụ"
+        title="Khiếu nại & Tranh chấp"
+        copy="Tiếp nhận và xử lý các phản ánh, khiếu nại về hoàn cọc, chất lượng sân bãi và dịch vụ."
+      />
 
-      {/* Filters */}
-      <div className="filter-bar" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <Search size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--muted)' }} />
+      {/* Filters Toolbar */}
+      <div className="toolbar">
+        <label className="search-control">
+          <Search size={16} />
           <input
             type="search"
             placeholder="Tìm theo nội dung, tên hoặc email..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            style={{ paddingLeft: 34, width: '100%' }}
           />
-        </div>
+        </label>
 
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Tất cả trạng thái</option>
@@ -144,57 +144,88 @@ export function AdminComplaintsPage() {
           </div>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {complaints.map((c) => (
-            <div key={c.id} className="content-card" style={{ padding: 18, borderLeft: c.status === 'open' ? '4px solid var(--warn)' : '4px solid var(--line)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--forest)' }}>#KN-{String(c.id).padStart(4, '0')}</span>
+            <div
+              key={c.id}
+              className="content-card"
+              style={{
+                padding: '20px 22px',
+                borderLeft: c.status === 'open' ? '4px solid var(--warn)' : c.status === 'processing' ? '4px solid #38bdf8' : '4px solid var(--line)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <code style={{ fontSize: 13, fontWeight: 700, background: 'var(--surface)', padding: '3px 8px', borderRadius: 'var(--r-sm)' }}>
+                    #KN-{String(c.id).padStart(4, '0')}
+                  </code>
                   {statusBadge(c.status)}
-                  <span className="badge badge--neutral" style={{ fontSize: 11 }}>
+                  <span className="badge badge--soft" style={{ fontSize: 12 }}>
                     {categoryLabels[c.category] ?? c.category}
                   </span>
                 </div>
-                <small style={{ color: 'var(--muted)' }}>{formatDate(c.created_at)}</small>
+                <small style={{ color: 'var(--muted)', fontSize: 13 }}>{formatDate(c.created_at)}</small>
               </div>
 
-              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5, background: 'var(--surface)', padding: 12, borderRadius: 'var(--r-md)' }}>
-                "{c.content}"
-              </p>
+              {/* Nội dung phản ánh */}
+              <div
+                style={{
+                  fontSize: 14.5,
+                  color: 'var(--ink)',
+                  lineHeight: 1.6,
+                  background: 'var(--surface)',
+                  padding: '14px 16px',
+                  borderRadius: 'var(--r-md)',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                {c.content}
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, fontSize: 12, color: 'var(--soft)' }}>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {/* Thông tin người gửi, đơn đặt & Thao tác */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: 'var(--soft)' }}>
                   <span>
-                    <strong>Người gửi:</strong> {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
+                    <strong style={{ color: 'var(--ink)' }}>Người gửi:</strong>{' '}
+                    {c.user ? `${c.user.name} (${c.user.email})` : 'Khách liên hệ vãng lai'}
                   </span>
                   {c.booking && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <strong>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--ink)' }}>Đơn đặt:</strong> #BK-{String(c.booking.id).padStart(5, '0')} · {c.booking.field_name ?? 'Sân'} · {formatMoney(c.booking.total_price)}
                       {c.booking.refund_status && (
-                        <span style={{ marginLeft: 6, color: c.booking.refund_status === 'pending' ? 'var(--warn)' : 'var(--pitch)', fontWeight: 600 }}>
+                        <span style={{ color: c.booking.refund_status === 'pending' ? 'var(--warn)' : 'var(--pitch)', fontWeight: 600 }}>
                           ({c.booking.refund_status === 'pending' ? 'Chờ hoàn cọc' : 'Đã hoàn'})
                         </span>
                       )}
                       <button
                         type="button"
                         className="button button--ghost button--small"
-                        style={{ padding: '2px 8px', fontSize: 11 }}
+                        style={{ minHeight: 30, height: 30, padding: '0 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
                         onClick={() => setProofBookingId(c.booking!.id)}
                         title="Xem ảnh biên lai chuyển khoản của đơn này"
                       >
-                        <Eye size={12} /> Biên lai
+                        <Eye size={13} /> Biên lai
                       </button>
                     </span>
                   )}
                 </div>
 
-                <button type="button" className="button button--sm button--brand" onClick={() => openHandleModal(c)}>
+                <button
+                  type="button"
+                  className="button button--brand button--small"
+                  onClick={() => openHandleModal(c)}
+                  style={{ marginLeft: 'auto' }}
+                >
                   {c.status === 'open' ? 'Xử lý khiếu nại' : 'Xem & Cập nhật'}
                 </button>
               </div>
 
               {c.resolution && (
-                <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--r-md)', fontSize: 12 }}>
+                <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--r-md)', fontSize: 13, lineHeight: 1.5 }}>
                   <strong style={{ color: '#166534' }}>Phương án giải quyết ({c.handler?.name ?? 'Admin'}):</strong> {c.resolution}
                 </div>
               )}
