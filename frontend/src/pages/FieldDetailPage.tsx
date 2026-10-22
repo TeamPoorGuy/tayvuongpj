@@ -39,6 +39,10 @@ const minutesOf = (time: string) => {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
 }
+const minutesOfNow = () => {
+  const d = new Date()
+  return d.getHours() * 60 + d.getMinutes()
+}
 const shiftTime = (time: string, minutes: number) => {
   const total = minutesOf(time) + minutes
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
@@ -88,9 +92,25 @@ export function FieldDetailPage() {
     enabled: !!field.data,
     queryFn: async () =>
       (await api.get<ApiEnvelope<{ date: string; fields: GridField[] }>>(`/fields/${field.data?.id}/schedule?date=${date}`)).data.data,
+    // Người khác có thể đặt / nhả ô bất cứ lúc nào: tự cập nhật lưới thay vì bắt khách tải lại trang.
+    refetchInterval: 20_000,
   })
 
-  const gridFields = useMemo(() => schedule.data?.fields ?? [], [schedule.data?.fields])
+  // Đồng hồ cho lưới: ô trống đã quá giờ bắt đầu chuyển sang "Đã qua" ngay, không chờ lần tải kế tiếp.
+  const [nowMinutes, setNowMinutes] = useState(() => minutesOfNow())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMinutes(minutesOfNow()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const gridFields = useMemo(() => {
+    const fields = schedule.data?.fields ?? []
+    if (date !== getLocalTodayString()) return fields
+    return fields.map((f) => ({
+      ...f,
+      cells: f.cells.map((c) => (c.state === 'free' && minutesOf(c.start) <= nowMinutes ? { ...c, state: 'past' as const } : c)),
+    }))
+  }, [schedule.data?.fields, date, nowMinutes])
   const viewedRow = gridFields[0]
   const isDateClosed = !!viewedRow?.is_closed
   const closureReason = viewedRow?.closure_reason
