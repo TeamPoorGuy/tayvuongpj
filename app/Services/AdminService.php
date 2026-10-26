@@ -11,6 +11,7 @@ use App\Exceptions\ForbiddenException;
 use App\Mail\AccountStatusChanged;
 use App\Mail\BookingStatusChanged;
 use App\Mail\MatchCancelled;
+use App\Mail\Notice;
 use App\Mail\OwnerApplicationVerified;
 use App\Models\AdminLog;
 use App\Models\Booking;
@@ -49,7 +50,7 @@ class AdminService
 
         $periodConfirmedOrCompleted = $periodBookings->filter(fn ($b) => in_array($b->status?->value ?? $b->status, ['confirmed', 'completed'], true));
         $periodGmv = (float) $periodConfirmedOrCompleted->sum('total_price');
-        $periodPaidAmount = (float) $periodBookings->filter(fn ($b) => in_array($b->payment_status, ['paid', 'reported'], true))->sum('payment_amount');
+        $periodPaidAmount = (float) $periodBookings->filter(fn ($b) => $b->payment_status === 'paid')->sum('payment_amount');
 
         // Tính hoa hồng tại chỗ bằng computeCommission() nếu chưa chốt đối soát (commission_amount == null)
         $periodCommissionAccrued = (float) $periodConfirmedOrCompleted->sum(function (Booking $b) {
@@ -69,7 +70,8 @@ class AdminService
         $commissionCollected = (float) \App\Models\OwnerStatement::where('status', 'paid')
             ->whereBetween('paid_at', [$start, $end])
             ->sum('commission_amount');
-        $totalCommissionDebt = (float) \App\Models\OwnerStatement::whereIn('status', ['unpaid', 'reported'])
+        // Hoa hồng của các kỳ chưa chi trả (SportHub đang giữ trong tiền thu hộ).
+        $totalCommissionDebt = (float) \App\Models\OwnerStatement::where('status', 'unpaid')
             ->sum('commission_amount');
 
         // Daily series for SVG chart
@@ -114,8 +116,7 @@ class AdminService
             'pending_owners' => FieldOwnerProfile::where('verification_status', VerificationStatus::Pending)->count(),
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'open_complaints' => \App\Models\Complaint::where('status', 'open')->count(),
-            'reported_statements' => \App\Models\OwnerStatement::where('status', 'reported')->count(),
-            'pending_refunds' => Booking::where('refund_status', 'pending')->count(),
+            'pending_withdrawals' => \App\Models\Withdrawal::where('status', 'pending')->count(),
         ];
 
         return [
@@ -180,11 +181,7 @@ class AdminService
                 SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
             }
 
-            app(WaitlistService::class)->handleSlotFreed(
-                $booking->sports_field_id,
-                $booking->time_slot_id,
-                $booking->booking_date->toDateString()
-            );
+            app(WaitlistService::class)->handleBookingFreed($booking);
 
             $count++;
         }
@@ -416,6 +413,19 @@ class AdminService
             'cancel_future_bookings' => $cancelFutureBookings,
         ]);
 
+        // Chủ sân biết kết quả duyệt ngay, không phải vào xem.
+        $field->loadMissing('owner');
+        if ($field->owner?->email && in_array($next, [FieldStatus::Approved, FieldStatus::Rejected], true)) {
+            SafeMail::queue($field->owner->email, new Notice(
+                $next === FieldStatus::Approved ? "Sân {$field->name} đã được duyệt" : "Sân {$field->name} không được duyệt",
+                $next === FieldStatus::Approved
+                    ? ['Sân của bạn đã hiển thị cho khách và nhận đặt được ngay.']
+                    : ['Sân chưa đạt yêu cầu duyệt'.($reason ? ": {$reason}" : '.'), 'Bạn có thể chỉnh sửa thông tin sân rồi gửi duyệt lại.'],
+                'Quản lý sân',
+                '/owner/fields',
+            ));
+        }
+
         return $field->refresh()->load(['owner.fieldOwnerProfile', 'fieldType.sportCategory', 'primaryImage', 'reviews']);
     }
 
@@ -442,11 +452,7 @@ class AdminService
 
         $booking->markCancelled('admin', $reason);
 
-        app(WaitlistService::class)->handleSlotFreed(
-            $booking->sports_field_id,
-            $booking->time_slot_id,
-            $booking->booking_date->toDateString()
-        );
+        app(WaitlistService::class)->handleBookingFreed($booking);
 
         AdminLog::record('admin_cancel_booking', $booking, [
             'reason' => $reason,
@@ -457,30 +463,6 @@ class AdminService
         if ($booking->customer?->email) {
             SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
         }
-
-        return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
-    }
-
-    public function updateBookingRefund(Booking $booking, string $refundStatus, ?float $refundAmount, User $admin): Booking
-    {
-        if ($booking->status !== BookingStatus::Cancelled && $booking->status !== BookingStatus::Rejected) {
-            throw new ConflictException('Chỉ có thể cập nhật trạng thái hoàn tiền cho đơn đã huỷ hoặc bị từ chối.');
-        }
-
-        $fill = [
-            'refund_status' => $refundStatus,
-            'refunded_at' => $refundStatus === 'done' ? now() : null,
-        ];
-        if ($refundAmount !== null) {
-            $fill['refund_amount'] = $refundAmount;
-        }
-
-        $booking->update($fill);
-
-        AdminLog::record('update_booking_refund', $booking, [
-            'refund_status' => $refundStatus,
-            'refund_amount' => $booking->refund_amount,
-        ], $admin);
 
         return $booking->refresh()->load(Booking::resourceRelations(withCustomer: true));
     }
@@ -515,7 +497,6 @@ class AdminService
             $payLabel = match ($b->payment_status) {
                 'unpaid' => 'Chưa thanh toán',
                 'awaiting' => 'Chờ chuyển khoản',
-                'reported' => 'Đã báo chuyển',
                 'paid' => 'Đã thanh toán',
                 default => (string) $b->payment_status,
             };
@@ -533,7 +514,7 @@ class AdminService
                 '"'.str_replace('"', '""', $b->customer?->phone ?? 'N/A').'"',
                 '"'.str_replace('"', '""', $b->sportsField?->name ?? 'N/A').'"',
                 $b->booking_date->toDateString(),
-                ($b->timeSlot ? $b->timeSlot->start_time.'-'.$b->timeSlot->end_time : 'N/A'),
+                ($b->start_time ? substr($b->start_time, 0, 5).'-'.substr($b->end_time, 0, 5) : 'N/A'),
                 (int) $b->total_price,
                 '"'.$statusLabel.'"',
                 '"'.$payLabel.'"',

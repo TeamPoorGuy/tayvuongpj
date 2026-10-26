@@ -15,6 +15,7 @@ export interface User {
   is_field_owner?: boolean
   field_owner_profile?: OwnerProfile | null
 }
+
 export interface OwnerProfile {
   id: number
   owner_name: string | null
@@ -54,11 +55,18 @@ export interface FieldType {
   category?: Pick<Category, 'id' | 'name' | 'slug' | 'icon'>
 }
 
+export interface LocationGroup {
+  city: string
+  districts: string[]
+}
+
 export interface SportsField {
   id: number
   name: string
   slug: string
   address: string
+  city?: string | null
+  district?: string | null
   latitude?: number | string | null
   longitude?: number | string | null
   description: string | null
@@ -83,6 +91,9 @@ export interface FieldClosure {
   sports_field_id: number
   start_date: string
   end_date: string
+  /** Cả hai null = đóng cả ngày. */
+  start_time?: string | null
+  end_time?: string | null
   reason: string
   created_at?: string
 }
@@ -96,6 +107,27 @@ export interface TimeSlot {
   is_past?: boolean
   is_held?: boolean
   price_per_hour?: number | null
+  /** Ngày áp dụng (ISO 1 = thứ 2 … 7 = chủ nhật); rỗng = mọi ngày. */
+  days_of_week?: number[]
+}
+
+/** Ô 30 phút trên lưới đặt sân (locked = khoá hoặc ngoài giờ mở cửa). */
+export interface GridCell {
+  start: string
+  end: string
+  price_per_hour: number | null
+  state: 'free' | 'booked' | 'held' | 'locked' | 'past'
+}
+
+/** Một hàng của lưới: một sân trong cụm sân cùng địa chỉ. */
+export interface GridField {
+  id: number
+  name: string
+  slug: string
+  price_per_hour: number
+  is_closed: boolean
+  closure_reason: string | null
+  cells: GridCell[]
 }
 
 export interface Review {
@@ -110,6 +142,28 @@ export interface Review {
   created_at: string
 }
 
+export interface ComplaintAttachment {
+  id: number
+  name: string
+  url: string
+  by: 'complainant' | 'respondent'
+}
+
+export interface ComplaintBrief {
+  id: number
+  category: string
+  status: 'open' | 'processing' | 'resolved' | 'rejected'
+  content: string
+  resolution: string | null
+  response: string | null
+  respond_by: string | null
+  refund_amount: number | null
+  attendance_confirmed: boolean
+  trust_penalty: number | null
+  attachments?: ComplaintAttachment[]
+  can_respond: boolean
+}
+
 export interface Booking {
   id: number
   booking_date: string
@@ -122,8 +176,16 @@ export interface Booking {
   can_be_cancelled: boolean
   cancel_penalty?: boolean
   cancel_until?: string | null
+  /** Số tiền hoàn nếu huỷ ngay bây giờ (đơn đã thanh toán), theo bậc giờ. */
+  refund_if_cancelled?: number | null
   confirmed_at?: string | null
   no_show?: boolean
+  /** Hạn khách khiếu nại "đã đến sân" khi bị ghi vắng mặt. */
+  no_show_appeal_until?: string | null
+  /** Khiếu nại gần nhất do chính người xem gửi về đơn này. */
+  complaint?: ComplaintBrief | null
+  /** Khiếu nại nhắm vào người xem (khách bị chủ sân khiếu nại, hoặc chủ sân bị khách khiếu nại). */
+  complaint_against?: ComplaintBrief | null
   check_in_code?: string | null
   checked_in_at?: string | null
   payment?: BookingPayment
@@ -134,7 +196,6 @@ export interface Booking {
     base: number
     statement_id?: number | null
   }
-  bank?: { bank_name: string | null; bank_bin?: string | null; account_number: string | null; account_holder: string | null }
   field?: SportsField
   customer?: User
   time_slot?: TimeSlot
@@ -149,17 +210,40 @@ export interface BookingRefund {
 }
 
 /** Thanh toán chuyển khoản: null = chưa duyệt, awaiting = chờ khách chuyển, reported = khách báo đã chuyển, paid = đã nhận tiền. */
+/** Một lần chuyển khoản vào tài khoản nền tảng, gộp một hay nhiều đơn. */
+export interface Payment {
+  id: number
+  purpose?: 'booking' | 'topup'
+  code: string
+  option: 'deposit' | 'full'
+  total: number
+  amount: number
+  /** Phần đã trừ từ ví và phần còn phải chuyển khoản. */
+  wallet_amount: number
+  due_amount: number
+  deposit_percent: number
+  status: 'awaiting' | 'paid' | 'expired' | 'cancelled' | 'refunded'
+  due_at: string
+  paid_at: string | null
+  source: 'webhook' | 'admin' | 'wallet' | null
+  bank_ref: string | null
+  bank: { name: string; code: string; account_number: string; account_holder: string; qr_url: string | null }
+  customer?: User
+  bookings?: Booking[]
+  created_at: string
+}
+
 export interface BookingPayment {
-  status: 'awaiting' | 'reported' | 'paid' | null
+  /** Lượt thanh toán thu hộ chứa đơn này (null với đơn kiểu cũ). */
+  id?: number | null
+  status: 'awaiting' | 'paid' | null
   option: 'deposit' | 'full' | null
   amount: number | null
   code: string | null
   due_at: string | null
-  reported_at: string | null
   paid_at: string | null
   deposit_amount: number
   deposit_percent: number
-  proof_url?: string | null
 }
 
 export interface OwnerStatement {
@@ -168,18 +252,24 @@ export interface OwnerStatement {
   period: string
   booking_count: number
   gmv: number
+  /** Tiền khách đã trả qua SportHub (thu hộ) trong kỳ. */
+  collected_amount: number
+  refunded_amount: number
   commission_amount: number
-  status: 'unpaid' | 'reported' | 'paid' | 'waived'
+  /** Số SportHub chuyển cho chủ sân = thu hộ − hoàn khách − hoa hồng. */
+  payout_amount: number
+  /** unpaid = SportHub chưa chi trả, paid = đã chi trả. */
+  status: 'unpaid' | 'paid'
   due_at: string | null
   is_overdue: boolean
   transfer_code: string
-  reported_at: string | null
+  payout_ref: string | null
   paid_at: string | null
   note: string | null
-  platform_bank?: {
-    bank_name: string
-    account_number: string
-    account_holder: string
+  payout_bank?: {
+    bank_name: string | null
+    account_number: string | null
+    account_holder: string | null
     qr_url: string | null
   }
   owner?: {
@@ -212,9 +302,11 @@ export interface CurrentStatementSummary {
   period: string
   booking_count: number
   estimated_gmv: number
+  collected: number
+  refunded: number
   estimated_commission: number
+  estimated_payout: number
   commission_rate: number
-  has_overdue_debt: boolean
 }
 
 export interface HomeData {
@@ -243,7 +335,6 @@ export interface OwnerDashboard {
   current_month_collected?: number
   current_month_commission?: number
   current_month_net_revenue?: number
-  has_overdue_debt?: boolean
   statement_summary?: CurrentStatementSummary
   most_booked_field: SportsField | null
   recent_bookings: Booking[]
@@ -275,12 +366,11 @@ export interface SlotSuggestion {
   field_id: number
   field_name: string
   field_slug: string
-  time_slot_id: number
   start_time: string
   end_time: string
   date: string
   date_label: string
-  price_per_hour: number
+  price_per_hour: number | null
   badge: string
 }
 
@@ -331,8 +421,12 @@ export interface PublicSettings {
   commission_percent: number
   statement_due_days: number
   deposit_percent: number
-  payment_window_hours: number
+  payment_hold_minutes: number
+  min_minutes: number
   free_cancel_hours: number
+  refund_full_hours: number
+  refund_partial_hours: number
+  refund_partial_percent: number
   max_pending_bookings: number
   max_advance_days: number
   platform_bank_name: string
@@ -355,6 +449,13 @@ export interface AdminLog {
   admin?: Pick<User, 'id' | 'name' | 'email'>
 }
 
+export interface ComplaintPartyStats {
+  owner_cancellations_90d: number
+  no_shows: number
+  complaints_received: number
+  complaints_upheld: number
+}
+
 export interface Complaint {
   id: number
   user_id: number | null
@@ -367,14 +468,32 @@ export interface Complaint {
     total_price: number
     refund_status: 'pending' | 'done' | 'waived' | null
     refund_amount: number | null
+    /** Tiền khách đã trả qua SportHub. */
+    payment_amount?: number
+    /** Số còn hoàn thêm được (khách đã trả trừ phần đã/đang hoàn). */
+    refundable?: number
+    no_show?: boolean
     field_name?: string
   } | null
+  direction?: 'customer_to_owner' | 'owner_to_customer'
+  against_user_id?: number | null
+  against?: Pick<User, 'id' | 'name'> | null
+  /** Số liệu hai bên cho admin cân nhắc. */
+  parties?: { complainant: ComplaintPartyStats | null; respondent: ComplaintPartyStats | null }
+  attachments?: ComplaintAttachment[]
+  response?: string | null
+  responded_at?: string | null
+  respond_by?: string | null
+  can_respond?: boolean
+  trust_penalty?: number | null
   subject_type: 'booking' | 'contact'
   subject_id: string | null
   category: string
   content: string
   status: 'open' | 'processing' | 'resolved' | 'rejected'
   resolution: string | null
+  refund_amount?: number | null
+  attendance_confirmed?: boolean
   handled_by: number | null
   handler?: Pick<User, 'id' | 'name'> | null
   handled_at: string | null
@@ -412,8 +531,7 @@ export interface AdminDashboardData {
     pending_owners: number
     pending_fields: number
     open_complaints: number
-    reported_statements: number
-    pending_refunds: number
+    pending_withdrawals: number
   }
   total_gmv?: number
   total_commission_collected?: number
@@ -430,4 +548,43 @@ export interface AdminUserDetail {
   }
   recent_bookings: Booking[]
   recent_trust_scores: TrustScoreLog[]
+}
+
+
+export interface WalletTransaction {
+  id: number
+  type: 'refund' | 'topup' | 'booking_payment' | 'booking_payment_return' | 'withdrawal' | 'withdrawal_return' | 'owner_earning' | 'owner_adjustment'
+  amount: number
+  balance_after: number
+  description: string
+  booking_id: number | null
+  created_at: string
+}
+
+export interface WalletData {
+  balance: number
+  /** Chủ sân: tiền các đơn đã thanh toán nhưng chưa tới hạn cộng vào ví; null với khách thường. */
+  pending_earnings: number | null
+  transactions: WalletTransaction[]
+}
+
+export interface Withdrawal {
+  id: number
+  amount: number
+  status: 'pending' | 'paid' | 'rejected'
+  auto: boolean
+  reference: string | null
+  reason: string | null
+  bank: { bin: string; name: string; account_number: string; account_holder: string; qr_url: string | null }
+  user?: { id: number; name: string; email: string } | null
+  processed_at: string | null
+  created_at: string
+}
+
+export interface WithdrawalInfo {
+  data: Withdrawal[]
+  saved_bank: { bank_bin: string; account_number: string; account_holder: string } | null
+  bank_locked: boolean
+  auto_limit: number
+  min_amount: number
 }

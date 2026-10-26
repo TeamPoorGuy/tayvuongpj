@@ -7,9 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Booking\CancelBookingRequest;
 use App\Http\Requests\Api\Booking\CreateBookingRequest;
 use App\Http\Resources\Api\BookingResource;
+use App\Http\Resources\Api\PaymentResource;
 use App\Models\Booking;
-use App\Services\BookingPaymentService;
 use App\Services\BookingService;
+use App\Support\InputRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -27,9 +28,16 @@ class BookingController extends Controller
 
     public function store(CreateBookingRequest $request): JsonResponse
     {
-        $booking = $this->bookingService->create($request->user(), CreateBookingData::fromRequest($request));
+        $payment = $this->bookingService->create($request->user(), CreateBookingData::fromRequest($request));
+        $payment->load(['bookings' => fn ($q) => $q->with(Booking::resourceRelations())]);
 
-        return response()->json(['message' => 'Yêu cầu đặt sân đã được gửi.', 'data' => new BookingResource($booking)], 201);
+        return response()->json([
+            'message' => $payment->status === 'paid'
+                ? 'Đã đặt sân thành công, thanh toán bằng số dư ví SportHub.'
+                : 'Đã giữ chỗ. Vui lòng chuyển khoản trước '.$payment->due_at->format('H:i').' để hoàn tất đặt sân.',
+            'data' => new BookingResource($payment->bookings->first()),
+            'payment' => new PaymentResource($payment),
+        ], 201);
     }
 
     public function show(Request $request, Booking $booking): JsonResponse
@@ -39,24 +47,6 @@ class BookingController extends Controller
         return response()->json(['data' => new BookingResource(
             $booking->load([...Booking::resourceRelations(), 'sportsField.owner.fieldOwnerProfile'])
         )]);
-    }
-
-    public function reportPayment(Request $request, Booking $booking, BookingPaymentService $payments): JsonResponse
-    {
-        $validated = $request->validate([
-            'option' => ['required', 'in:deposit,full'],
-            'proof' => ['nullable', 'file', 'image', 'max:5120'],
-        ]);
-
-        return response()->json([
-            'message' => 'Đã ghi nhận. Chủ sân sẽ đối chiếu và xác nhận đã nhận tiền.',
-            'data' => new BookingResource($payments->report(
-                $request->user(),
-                $booking,
-                $validated['option'],
-                $request->file('proof')
-            )),
-        ]);
     }
 
     public function cancel(CancelBookingRequest $request, Booking $booking): JsonResponse
@@ -70,10 +60,15 @@ class BookingController extends Controller
     {
         $validated = $request->validate([
             'sports_field_id' => ['required', 'integer', 'exists:sports_fields,id'],
-            'time_slot_id' => ['required', 'integer', 'exists:time_slots,id'],
+            // Một khung giờ có sẵn, hoặc một khoảng giờ trên lưới 30 phút.
+            'time_slot_id' => ['required_without:start_time', 'nullable', 'integer', 'exists:time_slots,id'],
+            'start_time' => ['required_without:time_slot_id', 'nullable', 'date_format:H:i', InputRules::HALF_HOUR],
+            'end_time' => ['required_with:start_time', 'nullable', 'date_format:H:i', 'after:start_time', InputRules::HALF_HOUR],
             'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'weeks' => ['required', 'integer', 'min:2', 'max:8'],
             'skip_conflicts' => ['nullable', 'boolean'],
+            'payment_option' => ['sometimes', 'in:deposit,full'],
+            'use_wallet' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
         ], [
             'sports_field_id.required' => 'Vui lòng chọn sân.',
@@ -90,9 +85,12 @@ class BookingController extends Controller
         }
 
         return response()->json([
-            'message' => 'Đã gửi yêu cầu đặt cố định ' . $result['total_bookings'] . ' buổi.',
+            'message' => $result['payment']->status === 'paid'
+                ? 'Đã đặt '.$result['total_bookings'].' buổi cố định, thanh toán bằng số dư ví SportHub.'
+                : 'Đã giữ chỗ '.$result['total_bookings'].' buổi cố định. Vui lòng thanh toán một lần cho cả chuỗi.',
             'data' => [
                 'recurring_group_id' => $result['recurring_group_id'],
+                'payment' => new PaymentResource($result['payment']),
                 'total_bookings' => $result['total_bookings'],
                 'bookings' => BookingResource::collection($result['bookings']),
                 'skipped_dates' => $result['skipped_dates'],
@@ -102,7 +100,7 @@ class BookingController extends Controller
 
     public function cancelRecurring(Request $request, string $groupId): JsonResponse
     {
-        $reason = $request->input('cancel_reason');
+        $reason = $request->validate(['cancel_reason' => ['nullable', 'string', 'max:500']])['cancel_reason'] ?? null;
         $cancelled = $this->bookingService->cancelRecurring($request->user(), $groupId, $reason);
 
         return response()->json([

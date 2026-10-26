@@ -59,7 +59,7 @@ export function CookieNotice() {
           <strong style={{ display: 'block', marginBottom: 2, color: 'var(--forest)' }}>
             Thông báo Cookie & Quyền riêng tư
           </strong>
-          SportHub sử dụng cookie kỹ thuật và lưu trữ cục bộ để duy trì phiên đăng nhập và tối ưu trải nghiệm theo Nghị định 13/2023/NĐ-CP.{' '}
+          SportHub sử dụng cookie kỹ thuật và lưu trữ cục bộ để duy trì phiên đăng nhập và tối ưu trải nghiệm.{' '}
           <Link
             to="/chinh-sach-bao-mat"
             style={{ color: 'var(--pitch)', fontWeight: 600, textDecoration: 'underline' }}

@@ -1,26 +1,15 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Copy,
-  CreditCard,
-  Download,
-  Eye,
-  QrCode,
-  ShieldAlert,
-  Timer,
-  Upload,
-  X,
-} from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useWallet } from '../../hooks/useWallet'
+import { ArrowLeft, CheckCircle2, Copy, CreditCard, Download, QrCode, ShieldAlert, Timer, Wallet } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
-import { StatusBadge } from '../../components/StatusBadge'
+import { ConfirmModal } from '../../components/ConfirmModal'
 import { useToast } from '../../components/Toast'
-import type { ApiEnvelope, Booking } from '../../types/api'
-import { formatDate, formatMoney } from '../../utils/format'
+import { usePublicSettings } from '../../hooks/usePublicSettings'
+import type { ApiEnvelope, Payment } from '../../types/api'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 import { PageTitle } from './CustomerPages'
 
 const secondsUntil = (until: string) => Math.max(0, Math.floor((new Date(until).getTime() - Date.now()) / 1000))
@@ -35,69 +24,52 @@ function Countdown({ until }: { until: string }) {
 
   const pad = (value: number) => value.toString().padStart(2, '0')
   return (
-    <span className={`countdown-chip ${seconds < 600 ? 'countdown-chip--danger' : ''}`}>
+    <span className={`countdown-chip ${seconds < 300 ? 'countdown-chip--danger' : ''}`}>
       <Timer size={13} />{' '}
-      {seconds > 0
-        ? `Còn ${Math.floor(seconds / 3600)}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)} để chuyển khoản`
-        : 'Đã hết hạn chuyển khoản'}
+      {seconds > 0 ? `Giữ chỗ còn ${Math.floor(seconds / 60)}:${pad(seconds % 60)}` : 'Đã hết thời gian giữ chỗ'}
     </span>
   )
 }
 
+/** Trang chuyển khoản cho một lượt thanh toán (có thể gồm nhiều ô / nhiều sân / nhiều tuần). */
 export function BookingPaymentPage() {
   const { id } = useParams()
   const toast = useToast()
-  const [option, setOption] = useState<'deposit' | 'full'>('deposit')
-  const [checked, setChecked] = useState(false)
-  const [proofFile, setProofFile] = useState<File | null>(null)
-  const [proofPreview, setProofPreview] = useState<string | null>(null)
-  const [showProofModal, setShowProofModal] = useState(false)
+  const { data: settings } = usePublicSettings()
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const [downloadingQr, setDownloadingQr] = useState(false)
-
-  const handleDownloadQr = async () => {
-    if (!vietQrUrl) return
-    try {
-      setDownloadingQr(true)
-      const res = await fetch(vietQrUrl)
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `vietqr-${payment?.code ?? 'booking'}.png`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      window.open(vietQrUrl, '_blank')
-    } finally {
-      setDownloadingQr(false)
-    }
-  }
+  const wallet = useWallet(1)
 
   const query = useQuery({
-    queryKey: ['customer', 'booking', id],
-    queryFn: async () => (await api.get<ApiEnvelope<Booking>>(`/customer/bookings/${id}`)).data.data,
-    // Đang chờ chủ sân duyệt/đối chiếu: tự làm mới để thấy kết quả mà không cần tải lại trang.
-    refetchInterval: (state) => (state.state.data?.status === 'pending' ? 30_000 : false),
+    queryKey: ['customer', 'payment', id],
+    queryFn: async () => (await api.get<ApiEnvelope<Payment>>(`/customer/payments/${id}`)).data.data,
+    // Chờ ngân hàng báo có tiền: tự làm mới để đơn chuyển sang "đã xác nhận" mà không cần tải lại trang.
+    refetchInterval: (state) => (state.state.data?.status === 'awaiting' ? 5_000 : false),
   })
 
-  const report = useMutation({
-    mutationFn: async () => {
-      const fd = new FormData()
-      fd.append('option', option)
-      if (proofFile) {
-        fd.append('proof', proofFile)
-      }
-      return api.post(`/customer/bookings/${id}/payment`, fd)
-    },
-    onSuccess: () => {
-      toast.success('Đã ghi nhận. Chủ sân sẽ đối chiếu và xác nhận.', 'Đã báo chuyển khoản')
-      setProofFile(null)
-      setProofPreview(null)
+  const changeOption = useMutation({
+    mutationFn: async (option: 'deposit' | 'full') => api.patch(`/customer/payments/${id}`, { option }),
+    onSuccess: () => void query.refetch(),
+    onError: (err) => toast.error(errorMessage(err), 'Không đổi được hình thức thanh toán'),
+  })
+
+  const useWalletNow = useMutation({
+    mutationFn: async () => (await api.post<{ message: string }>(`/customer/payments/${id}/use-wallet`)).data,
+    onSuccess: (res) => {
+      toast.success(res.message)
       void query.refetch()
     },
-    onError: (err) => toast.error(errorMessage(err), 'Không thể ghi nhận'),
+    onError: (err) => toast.error(errorMessage(err), 'Không thể trả bằng ví'),
+  })
+
+  const cancel = useMutation({
+    mutationFn: async () => api.post(`/customer/payments/${id}/cancel`),
+    onSuccess: () => {
+      toast.success('Đã huỷ giữ chỗ.')
+      setConfirmCancel(false)
+      void query.refetch()
+    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể huỷ giữ chỗ'),
   })
 
   const copy = async (value: string, label: string) => {
@@ -109,57 +81,46 @@ export function BookingPaymentPage() {
     }
   }
 
-  const handleProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
-      toast.error('Vui lòng chọn tệp ảnh hợp lệ (JPG, PNG, WebP).')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh biên lai tối đa là 5MB.')
-      return
-    }
-    setProofFile(file)
-    setProofPreview(URL.createObjectURL(file))
-  }
-
-  const removeProof = () => {
-    setProofFile(null)
-    if (proofPreview) {
-      URL.revokeObjectURL(proofPreview)
-      setProofPreview(null)
-    }
-  }
-
-  const booking = query.data
-  const payment = booking?.payment
+  const payment = query.data
   const title = (
     <PageTitle
       icon={<CreditCard />}
       kicker="Thanh toán"
-      title="Chuyển khoản giữ sân"
-      copy="Chuyển khoản trực tiếp cho chủ sân đúng số tiền và nội dung, rồi bấm xác nhận để chủ sân đối chiếu."
+      title={payment?.purpose === 'topup' ? 'Nạp tiền vào ví' : 'Chuyển khoản giữ sân'}
+      copy={payment?.purpose === 'topup' ? 'Chuyển khoản vào tài khoản SportHub đúng nội dung. Tiền tự cộng vào ví ngay khi ngân hàng báo có.' : 'Chuyển khoản vào tài khoản SportHub đúng số tiền và nội dung. Hệ thống tự xác nhận đơn khi nhận được tiền.'}
       action={
-        <Link to="/bookings" className="button button--ghost">
-          <ArrowLeft size={16} /> Đơn đặt của tôi
+        <Link to={payment?.purpose === 'topup' ? '/wallet' : '/bookings'} className="button button--ghost">
+          <ArrowLeft size={16} /> {payment?.purpose === 'topup' ? 'Ví của tôi' : 'Đơn đặt của tôi'}
         </Link>
       }
     />
   )
 
-  if (query.isPending) return <>{title}<div className="query-state query-state--loading">Đang tải đơn đặt sân...</div></>
-  if (query.isError || !booking || !payment) {
-    return <>{title}<div className="notice notice--error" role="alert">{errorMessage(query.error) || 'Không tìm thấy đơn đặt sân.'}</div></>
+  if (query.isPending) return <>{title}<div className="query-state query-state--loading">Đang tải thông tin thanh toán...</div></>
+  if (query.isError || !payment) {
+    return <>{title}<div className="notice notice--error" role="alert">{errorMessage(query.error) || 'Không tìm thấy lượt thanh toán.'}</div></>
   }
 
-  const amount = option === 'full' ? booking.total_price : payment.deposit_amount
+  const bookings = payment.bookings ?? []
+  const depositAmount = Math.min(Math.ceil((payment.total * payment.deposit_percent) / 100 / 1000) * 1000, payment.total)
 
-  // VietQR URL if bank BIN and account number are present
-  const vietQrUrl =
-    booking.bank?.bank_bin && booking.bank?.account_number
-      ? `https://img.vietqr.io/image/${booking.bank.bank_bin}-${booking.bank.account_number}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(payment.code ?? '')}&accountName=${encodeURIComponent(booking.bank.account_holder ?? '')}`
-      : null
+  const handleDownloadQr = async () => {
+    if (!payment.bank.qr_url) return
+    try {
+      setDownloadingQr(true)
+      const blob = await (await fetch(payment.bank.qr_url)).blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `vietqr-${payment.code}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(payment.bank.qr_url, '_blank')
+    } finally {
+      setDownloadingQr(false)
+    }
+  }
 
   // copyValue: giá trị thô để dán vào app ngân hàng (vd số tiền không có dấu chấm).
   const row = (label: string, value: string | null | undefined, copyLabel?: string, className?: string, copyValue?: string) => (
@@ -178,10 +139,12 @@ export function BookingPaymentPage() {
 
   const summary = (
     <dl className="payment-rows">
-      {row('Mã đơn', `#BK-${String(booking.id).padStart(5, '0')}`)}
-      {row('Sân', booking.field?.name)}
-      {row('Lịch chơi', `${booking.time_slot?.start_time} – ${booking.time_slot?.end_time}, ${formatDate(booking.booking_date)}`)}
-      {row('Tổng tiền thuê sân', formatMoney(booking.total_price))}
+      {bookings.map((b) => (
+        <Fragment key={b.id}>
+          {row(`${b.field?.name ?? 'Sân'} · ${formatDate(b.booking_date)}`, `${b.time_slot?.start_time} – ${b.time_slot?.end_time} · ${formatMoney(b.total_price)}`)}
+        </Fragment>
+      ))}
+      {row('Tổng tiền thuê sân', formatMoney(payment.total))}
     </dl>
   )
 
@@ -190,251 +153,128 @@ export function BookingPaymentPage() {
       {title}
       <section className="content-card payment-card" style={{ maxWidth: 760 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <StatusBadge status={booking.status} payment={payment.status} />
-          {payment.status === 'awaiting' && payment.due_at && <Countdown until={payment.due_at} />}
+          <strong>Mã thanh toán {payment.code}</strong>
+          {payment.status === 'awaiting' && <Countdown until={payment.due_at} />}
         </div>
 
-        {booking.status === 'pending' && !payment.status && (
-          <>
-            {summary}
-            <div className="notice notice--soft">Đơn đang chờ chủ sân duyệt. Thông tin chuyển khoản sẽ hiện ở đây ngay sau khi được duyệt.</div>
-          </>
-        )}
+        {payment.purpose === 'topup' ? <dl className="payment-rows">{row('Số tiền nạp', formatMoney(payment.total))}</dl> : summary}
 
-        {booking.status === 'pending' && payment.status === 'awaiting' && (
+        {payment.status === 'awaiting' && (
           <>
+            {payment.purpose !== 'topup' && (
             <div className="payment-options" role="radiogroup" aria-label="Hình thức thanh toán">
-              <button type="button" role="radio" aria-checked={option === 'deposit'} className={`payment-option ${option === 'deposit' ? 'is-active' : ''}`} onClick={() => setOption('deposit')}>
+              <button type="button" role="radio" aria-checked={payment.option === 'deposit'} disabled={changeOption.isPending} className={`payment-option ${payment.option === 'deposit' ? 'is-active' : ''}`} onClick={() => changeOption.mutate('deposit')}>
                 <small>Đặt cọc {payment.deposit_percent}%</small>
-                <strong>{formatMoney(payment.deposit_amount)}</strong>
-                <small>Còn {formatMoney(booking.total_price - payment.deposit_amount)} trả tại sân</small>
+                <strong>{formatMoney(depositAmount)}</strong>
+                <small>Còn {formatMoney(payment.total - depositAmount)} trả tại sân</small>
               </button>
-              <button type="button" role="radio" aria-checked={option === 'full'} className={`payment-option ${option === 'full' ? 'is-active' : ''}`} onClick={() => setOption('full')}>
+              <button type="button" role="radio" aria-checked={payment.option === 'full'} disabled={changeOption.isPending} className={`payment-option ${payment.option === 'full' ? 'is-active' : ''}`} onClick={() => changeOption.mutate('full')}>
                 <small>Trả hết</small>
-                <strong>{formatMoney(booking.total_price)}</strong>
+                <strong>{formatMoney(payment.total)}</strong>
                 <small>Không phải trả thêm khi đến sân</small>
               </button>
             </div>
+            )}
 
-            {/* VietQR & Transfer Details Grid */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: vietQrUrl ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
-                gap: 16,
-                alignItems: 'start',
-              }}
-            >
-              {vietQrUrl && (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    padding: 16,
-                    borderRadius: 12,
-                    background: 'var(--surface-sunken, #f8fafc)',
-                    border: '1px solid var(--border)',
-                    textAlign: 'center',
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: 'var(--pitch, #0b3025)',
-                      marginBottom: 10,
-                    }}
-                  >
+            {payment.purpose !== 'topup' && (wallet.data?.data.balance ?? 0) > 0 && (
+              <div className="notice notice--success" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+                <span><Wallet size={16} /> Ví SportHub của bạn đang có <strong>{formatMoney(wallet.data?.data.balance ?? 0)}</strong>.</span>
+                <button type="button" className="button button--brand button--small" disabled={useWalletNow.isPending} onClick={() => useWalletNow.mutate()}>
+                  Trả bằng số dư ví
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: payment.bank.qr_url ? 'repeat(auto-fit, minmax(260px, 1fr))' : '1fr', gap: 16, alignItems: 'start' }}>
+              {payment.bank.qr_url && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16, borderRadius: 12, background: 'var(--surface-sunken, #f8fafc)', border: '1px solid var(--border)', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--pitch, #0b3025)', marginBottom: 10 }}>
                     <QrCode size={16} /> Quét mã VietQR
                   </span>
-                  <div
-                    style={{
-                      background: '#fff',
-                      padding: 8,
-                      borderRadius: 12,
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-                      display: 'inline-block',
-                    }}
-                  >
-                    <img
-                      src={vietQrUrl}
-                      alt="Mã VietQR thanh toán"
-                      style={{
-                        width: '100%',
-                        maxWidth: 240,
-                        height: 'auto',
-                        display: 'block',
-                        borderRadius: 6,
-                      }}
-                    />
-                  </div>
-                  <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-muted, #64748b)' }}>
-                    Tự động điền số tiền {formatMoney(amount)} & nội dung {payment.code}
+                  <img src={payment.bank.qr_url} alt="Mã VietQR thanh toán" style={{ width: '100%', maxWidth: 240, height: 'auto', display: 'block', borderRadius: 6, background: '#fff' }} />
+                  <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                    Tự điền số tiền {formatMoney(payment.due_amount)} và nội dung {payment.code}
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleDownloadQr}
-                    disabled={downloadingQr}
-                    className="button button--ghost button--small"
-                    style={{ marginTop: 8 }}
-                  >
+                  <button type="button" onClick={() => void handleDownloadQr()} disabled={downloadingQr} className="button button--ghost button--small" style={{ marginTop: 8 }}>
                     <Download size={13} /> {downloadingQr ? 'Đang tải...' : 'Tải mã QR'}
                   </button>
                 </div>
               )}
 
-              <div>
-                <dl className="payment-rows" style={{ borderRadius: 8 }}>
-                  {row('Mã đơn', `#BK-${String(booking.id).padStart(5, '0')}`)}
-                  {row('Số tiền cần chuyển', formatMoney(amount), 'số tiền', 'payment-rows__amount', String(amount))}
-                  {row('Ngân hàng', booking.bank?.bank_name)}
-                  {row('Số tài khoản', booking.bank?.account_number, 'số tài khoản')}
-                  {row('Chủ tài khoản', booking.bank?.account_holder)}
-                  {row('Nội dung chuyển khoản', payment.code, 'nội dung chuyển khoản')}
-                </dl>
-              </div>
+              <dl className="payment-rows" style={{ borderRadius: 8 }}>
+                {payment.wallet_amount > 0 && row('Đã trừ từ ví SportHub', formatMoney(payment.wallet_amount))}
+                {row('Số tiền cần chuyển', formatMoney(payment.due_amount), 'số tiền', 'payment-rows__amount', String(payment.due_amount))}
+                {row('Ngân hàng', payment.bank.name)}
+                {row('Số tài khoản', payment.bank.account_number, 'số tài khoản')}
+                {row('Chủ tài khoản', payment.bank.account_holder)}
+                {row('Nội dung chuyển khoản', payment.code, 'nội dung chuyển khoản')}
+              </dl>
             </div>
 
             <div className="notice notice--warn" style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.5 }}>
               <ShieldAlert size={18} />
               <span>
-                <strong>Cảnh báo an toàn:</strong> Chỉ chuyển khoản đúng tài khoản hiển thị ở trên. SportHub tuyệt đối không yêu cầu chuyển qua Zalo/số điện thoại riêng. Mọi giao dịch ngoài nền tảng đều không được bảo vệ.
+                <strong>Chỉ chuyển vào tài khoản SportHub ở trên.</strong> SportHub giữ tiền và chuyển cho chủ sân sau khi trận đấu diễn ra.
+                Không chuyển thẳng cho chủ sân hay qua Zalo/số điện thoại riêng — giao dịch ngoài nền tảng không được bảo vệ hoặc hoàn tiền.
               </span>
             </div>
 
             <p className="form-help" style={{ margin: 0 }}>
-              Ghi đúng nội dung <strong>{payment.code}</strong> để chủ sân đối chiếu được giao dịch của bạn. Huỷ đơn trong thời hạn
-              cho phép thì chủ sân hoàn lại tiền; huỷ sát giờ chơi hoặc vắng mặt thì mất tiền cọc.
+              Ghi đúng nội dung <strong>{payment.code}</strong>; đơn được xác nhận tự động trong vài giây sau khi tiền vào. Huỷ đơn đã thanh toán:
+              trước {settings?.refund_full_hours ?? 24} giờ hoàn 100%, trước {settings?.refund_partial_hours ?? 6} giờ hoàn{' '}
+              {settings?.refund_partial_percent ?? 50}%, sát giờ hơn thì không hoàn.
             </p>
 
-            {/* Receipt / Proof Upload */}
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 10,
-                border: '1px dashed var(--border)',
-                background: 'var(--surface-sunken, #f8fafc)',
-              }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                Đính kèm biên lai chuyển khoản (tùy chọn)
-              </span>
-              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted, #64748b)' }}>
-                Giúp chủ sân đối chiếu và xác nhận nhanh hơn (ảnh chụp màn hình chuyển khoản thành công).
-              </p>
-
-              {proofPreview ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <img
-                    src={proofPreview}
-                    alt="Xem trước biên lai"
-                    style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong style={{ fontSize: 13, display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      {proofFile?.name}
-                    </strong>
-                    <small style={{ color: 'var(--text-muted)' }}>
-                      {(proofFile ? proofFile.size / 1024 : 0).toFixed(0)} KB
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    className="button button--ghost button--icon button--small"
-                    onClick={removeProof}
-                    title="Xóa ảnh này"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <label
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    padding: '8px 14px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border)',
-                    background: '#fff',
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  <Upload size={14} /> Chọn ảnh biên lai...
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    style={{ display: 'none' }}
-                    onChange={handleProofChange}
-                  />
-                </label>
-              )}
-            </div>
-
-            <label className="check-line">
-              <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-              Tôi đã chuyển đúng {formatMoney(amount)} với nội dung {payment.code}
-            </label>
-            <button type="button" className="button button--brand button--block" disabled={!checked || report.isPending} onClick={() => report.mutate()}>
-              {report.isPending ? 'Đang ghi nhận...' : 'Tôi đã chuyển khoản'}
+            <button type="button" className="button button--ghost" disabled={cancel.isPending} onClick={() => setConfirmCancel(true)}>
+              Huỷ giữ chỗ
             </button>
           </>
         )}
 
-        {booking.status === 'pending' && payment.status === 'reported' && (
-          <>
-            {summary}
-            <div className="notice notice--soft">
-              Bạn đã báo chuyển <strong>{formatMoney(payment.amount ?? 0)}</strong> ({payment.option === 'full' ? 'trả hết' : 'đặt cọc'}) với nội dung{' '}
-              <strong>{payment.code}</strong>. Đang chờ chủ sân đối chiếu; trang này sẽ tự cập nhật.
-            </div>
-          </>
+        {payment.status === 'paid' && payment.purpose === 'topup' && (
+          <div className="notice notice--success">
+            <CheckCircle2 size={18} /> Đã nạp tiền vào ví SportHub của bạn.
+            <Link to="/wallet" className="button button--brand button--small" style={{ marginLeft: 10 }}>Xem ví</Link>
+          </div>
         )}
 
-        {payment.status === 'paid' && (
-          <>
-            {summary}
-            <div className="notice notice--success">
-              <CheckCircle2 size={18} /> Chủ sân đã nhận <strong>{formatMoney(payment.amount ?? 0)}</strong>. Đơn đã được xác nhận
-              {payment.option === 'deposit' && `, còn ${formatMoney(booking.total_price - (payment.amount ?? 0))} trả tại sân`}.
-            </div>
-          </>
+        {payment.status === 'paid' && payment.purpose !== 'topup' && (
+          <div className="notice notice--success" style={{ display: 'grid', gap: 8 }}>
+            <span>
+              <CheckCircle2 size={18} /> SportHub đã nhận <strong>{formatMoney(payment.amount)}</strong>
+              {payment.wallet_amount > 0 && <> (trong đó {formatMoney(payment.wallet_amount)} từ ví)</>} lúc {payment.paid_at ? formatDateTime(payment.paid_at) : ''}.
+              Đơn đã được xác nhận{payment.option === 'deposit' && `, còn ${formatMoney(payment.total - payment.amount)} trả tại sân`}.
+            </span>
+            {bookings[0]?.check_in_code && (
+              <span>Mã check-in khi đến sân: <strong style={{ letterSpacing: 2 }}>{bookings[0].check_in_code}</strong>{bookings.length > 1 ? ' (mã của từng đơn xem ở mục Đơn đặt của tôi)' : ''}</span>
+            )}
+            <span><Link to="/bookings" className="button button--brand button--small">Xem đơn đặt của tôi</Link></span>
+          </div>
         )}
 
-        {(booking.status === 'cancelled' || booking.status === 'rejected') && (
-          <>
-            {summary}
-            <div className="notice notice--error">Đơn đã đóng{booking.cancel_reason ? `: ${booking.cancel_reason}` : '.'}</div>
-          </>
+        {payment.status === 'refunded' && (
+          <div className="notice notice--warn">
+            SportHub đã nhận tiền nhưng giữ chỗ đã hết hạn và sân đã có người khác đặt. Khoản tiền đã được hoàn vào ví SportHub của bạn, bạn có thể dùng để đặt sân khác hoặc rút về ngân hàng.
+          </div>
         )}
 
-        {payment.proof_url && (
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="button button--ghost button--small"
-              onClick={() => setShowProofModal(true)}
-            >
-              <Eye size={14} /> Xem ảnh biên lai đã gửi
-            </button>
+        {(payment.status === 'expired' || payment.status === 'cancelled') && (
+          <div className="notice notice--error">
+            {payment.status === 'expired' ? 'Đã hết thời gian giữ chỗ nên đơn tự huỷ.' : 'Bạn đã huỷ giữ chỗ.'} Nếu bạn lỡ chuyển khoản, hệ thống tự xác nhận đơn khi sân còn trống, nếu không thì hoàn tiền vào ví SportHub của bạn.
           </div>
         )}
       </section>
 
-      {/* Payment Proof Viewer */}
-      {payment?.proof_url && (
-        <PaymentProofModal
-          isOpen={showProofModal}
-          onClose={() => setShowProofModal(false)}
-          proofUrl={payment.proof_url}
-        />
-      )}
+      <ConfirmModal
+        isOpen={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={() => cancel.mutate()}
+        title="Huỷ giữ chỗ?"
+        message={`Toàn bộ ${bookings.length} khung giờ trong lượt này sẽ được nhả cho người khác đặt.`}
+        confirmText="Huỷ giữ chỗ"
+        danger
+        busy={cancel.isPending}
+      />
     </>
   )
 }

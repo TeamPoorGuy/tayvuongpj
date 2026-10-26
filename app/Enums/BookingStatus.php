@@ -26,7 +26,7 @@ enum BookingStatus: string
 
     /**
      * Field-owner-driven transitions: what a booking may become next.
-     * Pending → Confirmed không nằm ở đây: chỉ xảy ra khi chủ sân xác nhận đã nhận tiền (BookingPaymentService).
+     * Pending → Confirmed không nằm ở đây: chỉ xảy ra khi nền tảng ghi nhận tiền khách chuyển (PaymentService::markPaid).
      */
     public function canTransitionTo(self $next): bool
     {

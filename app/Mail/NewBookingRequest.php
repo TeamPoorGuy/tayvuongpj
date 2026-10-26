@@ -18,7 +18,7 @@ class NewBookingRequest extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Có đơn đặt sân mới #{$this->booking->id} chờ xác nhận");
+        return new Envelope(subject: "Đơn đặt sân mới #{$this->booking->id} đã được thanh toán");
     }
 
     public function content(): Content

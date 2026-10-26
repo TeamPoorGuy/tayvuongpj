@@ -7,7 +7,7 @@ Khung giờ bạn đang chờ trong danh sách hàng đợi tại **{{ $waitlist
 
 - **Sân:** {{ $waitlist->sportsField->name }}
 - **Ngày thi đấu:** {{ $waitlist->booking_date->format('d/m/Y') }}
-- **Khung giờ:** {{ substr($waitlist->timeSlot->start_time, 0, 5) }} – {{ substr($waitlist->timeSlot->end_time, 0, 5) }}
+- **Khung giờ:** {{ substr($waitlist->start_time, 0, 5) }} – {{ substr($waitlist->end_time, 0, 5) }}
 - **Thời hạn xác nhận:** {{ $waitlist->offer_expires_at?->format('H:i d/m/Y') }} (trong vòng 15 phút)
 
 Nhờ điểm uy tín cao (**{{ $waitlist->priority_score }} điểm**), bạn là người được ưu tiên nhận giữ chỗ trước. Vui lòng bấm vào nút bên dưới để nhận sân trước khi thời hạn kết thúc:

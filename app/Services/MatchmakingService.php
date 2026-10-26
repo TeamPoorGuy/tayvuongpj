@@ -62,12 +62,11 @@ class MatchmakingService
                 throw ValidationException::withMessages(['sports_field_id' => 'Sân này không thuộc môn thể thao đã chọn.']);
             }
 
-            $matchesSlot = TimeSlot::where('sports_field_id', $field->id)->where('is_active', true)->get()
-                ->contains(fn (TimeSlot $slot) => substr($slot->start_time, 0, 5) === $data['start_time']
-                    && substr($slot->end_time, 0, 5) === $data['end_time']);
-
-            if (! $matchesSlot) {
-                throw ValidationException::withMessages(['start_time' => 'Giờ chơi phải trùng một khung giờ của sân đã chọn.']);
+            // Giờ chơi nằm trong giờ mở cửa của sân hôm đó (priceFor ném lỗi nếu có ô ngoài giờ) và tròn 30 phút.
+            try {
+                $field->priceFor($data['play_date'], $data['start_time'], $data['end_time']);
+            } catch (DomainException) {
+                throw ValidationException::withMessages(['start_time' => 'Giờ chơi phải nằm trong giờ mở cửa của sân đã chọn.']);
             }
         }
 

@@ -1,6 +1,7 @@
+import { digitsOnly, toBankHolder } from '../../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
+  AlertCircle,
   Building2,
   CalendarDays,
   CalendarX,
@@ -22,18 +23,21 @@ import { Link, useSearchParams } from 'react-router'
 import { api, withMethodOverride } from '../../api/client'
 import { errorMessage } from '../../api/errors'
 import { AnimatedCounter } from '../../components/AnimatedCounter'
+import { ComplaintRespondModal } from '../../components/ComplaintRespond'
+import { EvidencePicker } from '../../components/EvidencePicker'
+import { complaintBody } from '../../utils/complaint'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { Pagination } from '../../components/Pagination'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
-import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
 import { useToast } from '../../components/Toast'
 import type {
   ApiEnvelope,
   Booking,
   FieldClosure,
   FieldType,
+  LocationGroup,
   OwnerDashboard,
   OwnerProfile,
   Paginated,
@@ -43,14 +47,16 @@ import type {
 } from '../../types/api'
 import { Empty, PageTitle } from '../customer/CustomerPages'
 import { Avatar } from '../../components/Avatar'
+import { useWallet } from '../../hooks/useWallet'
 import { VIETNAMESE_BANKS } from '../../utils/banks'
 import { getLocalTodayString } from '../../utils/date'
 import { formatDate, formatMoney } from '../../utils/format'
 
 export function OwnerDashboardPage() {
-
+  const wallet = useWallet(1).data?.data
   const dashboard = useQuery({
     queryKey: ['owner', 'dashboard'],
+    refetchInterval: 60_000,
     queryFn: async () => (await api.get<ApiEnvelope<OwnerDashboard>>('/field-owner/dashboard')).data.data,
   })
 
@@ -96,28 +102,13 @@ export function OwnerDashboardPage() {
         copy="Theo dõi sân, lượt đặt và doanh thu trong một màn hình."
       />
 
-      {data?.has_overdue_debt && (
-        <div className="alert-banner alert-banner--danger" style={{ marginBottom: 20 }}>
-          <AlertTriangle size={20} />
-          <div>
-            <strong>Tài khoản đang có kỳ đối soát nợ phí quá hạn!</strong>
-            <p>
-              Bạn đang bị tạm dừng duyệt đơn đặt sân mới. Vui lòng thanh toán phí đối soát để tiếp tục nhận và duyệt đơn.{' '}
-              <Link to="/owner/statements" style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
-                Đến trang đối soát &rarr;
-              </Link>
-            </p>
-          </div>
-        </div>
-      )}
-
       <div className="stats-grid">
         <Stat label="Tổng số sân" value={data?.total_fields ?? 0} />
         <Stat
-          label="Đơn chờ xác nhận"
+          label="Đang giữ chỗ chờ thanh toán"
           value={data?.pending_bookings ?? 0}
-          note={data?.pending_bookings ? 'Xử lý ngay' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
-          to={data?.pending_bookings ? '/owner/bookings?status=pending' : undefined}
+          note={data?.pending_bookings ? 'Khách đang chuyển khoản, tự xác nhận khi có tiền' : `${data?.total_bookings ?? 0} lượt đặt tổng cộng`}
+          to={data?.pending_bookings ? '/owner/bookings?status=pay:awaiting' : undefined}
         />
         <Stat
           label="Doanh thu thực nhận"
@@ -125,9 +116,15 @@ export function OwnerDashboardPage() {
           note={`GMV: ${formatMoney(data?.current_month_gmv ?? 0)}`}
         />
         <Stat
-          label="Phí sàn ước tính"
+          label="Ví SportHub"
+          value={formatMoney(wallet?.balance ?? 0)}
+          note={wallet?.pending_earnings ? `Sắp về ví: ${formatMoney(wallet.pending_earnings)} · bấm để rút` : 'Tiền đơn tự về ví sau 48 giờ · bấm để rút'}
+          to="/owner/wallet"
+        />
+        <Stat
+          label="Hoa hồng ước tính"
           value={formatMoney(data?.current_month_commission ?? 0)}
-          note="Xem chi tiết đối soát"
+          note="Đã tự trừ khi tiền về ví"
           to="/owner/statements"
         />
       </div>
@@ -135,7 +132,7 @@ export function OwnerDashboardPage() {
         <div className="data-panel__head">
           <div>
             <span>Hoạt động gần đây</span>
-            <h2>Yêu cầu đặt sân mới nhất</h2>
+            <h2>Lượt đặt sân mới nhất</h2>
           </div>
         </div>
         <BookingTable bookings={data?.recent_bookings ?? []} />
@@ -247,11 +244,11 @@ export function OwnerFieldsPage() {
             <tbody>
               {fields.data?.data.map((field) => (
                 <tr key={field.id}>
-                  <td>
+                  <td style={{ minWidth: 230 }}>
                     <strong>{field.name}</strong>
                     <small>{field.address}</small>
                   </td>
-                  <td>{field.field_type?.name}</td>
+                  <td style={{ minWidth: 120 }}>{field.field_type?.name}</td>
                   <td>{formatMoney(field.price_per_hour)}</td>
                   <td>
                     <StatusBadge status={field.status} />
@@ -429,6 +426,11 @@ function FieldModal({
   }
   const resolved = field ?? activeField
   const current = resolved === 'new' ? null : resolved
+  const locations = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => (await api.get<{ data: LocationGroup[] }>('/fields/locations')).data.data,
+    enabled: !!field,
+  })
   return (
     <Modal isOpen={!!field} onClose={onClose} wide asForm onSubmit={onSubmit}>
       <h2>{current ? 'Chỉnh sửa sân' : 'Thêm sân mới'}</h2>
@@ -448,23 +450,46 @@ function FieldModal({
             ))}
           </select>
         </label>
-        <label>
+        <label style={{ gridColumn: '1 / -1' }}>
           <span>Địa chỉ</span>
-          <input name="address" defaultValue={current?.address} required />
+          <input name="address" defaultValue={current?.address} required maxLength={255} placeholder="Số nhà, đường, quận/huyện, thành phố" />
+          <small className="form-help" style={{ margin: 0 }}>
+            Các sân của bạn có cùng địa chỉ sẽ hiện chung một lưới đặt giờ (Sân 1, Sân 2…), khách chọn nhiều sân và thanh toán một lần.
+          </small>
         </label>
         <label>
-          <span>Vĩ độ (tuỳ chọn)</span>
-          <input name="latitude" type="number" step="any" min="-90" max="90" placeholder="VD: 21.0285" defaultValue={current?.latitude ?? ''} />
+          <span>Quận / Huyện (tuỳ chọn)</span>
+          <input name="district" list="location-districts" maxLength={100} placeholder="VD: Thanh Xuân" defaultValue={current?.district ?? ''} />
+          <datalist id="location-districts">
+            {[...new Set(locations.data?.flatMap((l) => l.districts))].map((d) => <option value={d} key={d} />)}
+          </datalist>
         </label>
         <label>
-          <span>Kinh độ (tuỳ chọn)</span>
-          <input name="longitude" type="number" step="any" min="-180" max="180" placeholder="VD: 105.8542" defaultValue={current?.longitude ?? ''} />
+          <span>Thành phố (tuỳ chọn)</span>
+          <input name="city" list="location-cities" maxLength={100} placeholder="VD: Hà Nội" defaultValue={current?.city ?? ''} />
+          <datalist id="location-cities">
+            {locations.data?.map((l) => <option value={l.city} key={l.city} />)}
+          </datalist>
         </label>
         <label>
           <span>Giá cơ bản mỗi giờ (VNĐ)</span>
-          <input name="price_per_hour" type="number" defaultValue={current?.price_per_hour} required min="1000" step="1000" />
+          <input name="price_per_hour" type="number" inputMode="numeric" defaultValue={current?.price_per_hour} required min="1000" max="100000000" step="1000" placeholder="VD: 150000" />
+          <small className="form-help" style={{ margin: 0 }}>Giá giờ cao điểm / cuối tuần đặt riêng ở mục Quản lý khung giờ.</small>
         </label>
       </div>
+      <details className="form-more">
+        <summary>Toạ độ bản đồ (tuỳ chọn)</summary>
+        <div className="form-grid" style={{ marginTop: 10 }}>
+          <label>
+            <span>Vĩ độ</span>
+            <input name="latitude" type="number" step="any" min="-90" max="90" placeholder="VD: 21.0285" defaultValue={current?.latitude ?? ''} />
+          </label>
+          <label>
+            <span>Kinh độ</span>
+            <input name="longitude" type="number" step="any" min="-180" max="180" placeholder="VD: 105.8542" defaultValue={current?.longitude ?? ''} />
+          </label>
+        </div>
+      </details>
       <label>
         <span>Mô tả sân</span>
         <textarea name="description" defaultValue={current?.description ?? ''} rows={3} />
@@ -508,13 +533,14 @@ function SlotManagerModal({
   // Mặc định nối tiếp khung giờ cuối cùng để thêm liên tục không phải gõ lại giờ.
   const lastEnd = (field.time_slots ?? []).map((s) => s.end_time).sort().at(-1)
   const [startTime, setStartTime] = useState(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00')
-  const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 90))
+  const [endTime, setEndTime] = useState(shiftTime(lastEnd && lastEnd < '22:30' ? lastEnd : '06:00', 60))
   const [slotPrice, setSlotPrice] = useState('')
+  const [slotDays, setSlotDays] = useState<number[]>([])
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null)
   const [togglingSlot, setTogglingSlot] = useState<TimeSlot | null>(null)
 
   const addSlot = useMutation({
-    mutationFn: async (payload: { start_time: string; end_time: string; price_per_hour?: number | null }) =>
+    mutationFn: async (payload: { start_time: string; end_time: string; price_per_hour?: number | null; days_of_week?: number[] }) =>
       api.post(`/field-owner/fields/${field.id}/slots`, payload),
     onSuccess: () => {
       toast.success('Đã thêm khung giờ thành công.')
@@ -536,6 +562,7 @@ function SlotManagerModal({
         start_time: slot.start_time,
         end_time: slot.end_time,
         price_per_hour: slot.price_per_hour,
+        days_of_week: slot.days_of_week ?? [],
         is_active: !slot.is_active,
       }),
     onSuccess: () => {
@@ -567,6 +594,7 @@ function SlotManagerModal({
       start_time: startTime,
       end_time: endTime,
       price_per_hour: slotPrice ? Number(slotPrice) : null,
+      days_of_week: slotDays,
     })
   }
 
@@ -590,6 +618,7 @@ function SlotManagerModal({
                 <span>Giờ bắt đầu</span>
                 <input
                   type="time"
+                  step="1800"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
@@ -599,6 +628,7 @@ function SlotManagerModal({
                 <span>Giờ kết thúc</span>
                 <input
                   type="time"
+                  step="1800"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   required
@@ -608,13 +638,29 @@ function SlotManagerModal({
                 <span>Giá riêng/giờ (để trống nếu theo sân)</span>
                 <input
                   type="number"
+                  min="1000"
+                  max="100000000"
+                  step="1000"
                   placeholder={formatMoney(field.price_per_hour)}
                   value={slotPrice}
                   onChange={(e) => setSlotPrice(e.target.value)}
-                  min="1000"
-                  step="1000"
                 />
               </label>
+            </div>
+            <div className="weekday-picker" role="group" aria-label="Ngày áp dụng" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '8px 0 12px' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Áp dụng:</span>
+              {WEEKDAYS.map(([day, label]) => (
+                <label key={day} style={{ display: 'flex', alignItems: 'center', gap: 4, margin: 0, fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={slotDays.includes(day)}
+                    onChange={(e) => setSlotDays((prev) => (e.target.checked ? [...prev, day] : prev.filter((d) => d !== day)))}
+                    style={{ minHeight: 'auto', width: 'auto' }}
+                  />
+                  {label}
+                </label>
+              ))}
+              <small style={{ color: 'var(--muted)' }}>Không chọn = mọi ngày (dùng để đặt giá cuối tuần riêng).</small>
             </div>
             <button
               type="submit"
@@ -642,6 +688,7 @@ function SlotManagerModal({
                           ? `${formatMoney(slot.price_per_hour)}/h (riêng)`
                           : `${formatMoney(field.price_per_hour)}/h`}
                       </span>
+                      <span className="slot-item__price">{describeDays(slot.days_of_week)}</span>
                     </div>
                     <div className="slot-item__actions">
                       <button
@@ -871,6 +918,14 @@ function ImageGalleryModal({
   )
 }
 
+/** Nhãn thứ theo ISO (1 = thứ 2 … 7 = chủ nhật). */
+const WEEKDAYS: [number, string][] = [[1, 'T2'], [2, 'T3'], [3, 'T4'], [4, 'T5'], [5, 'T6'], [6, 'T7'], [7, 'CN']]
+
+function describeDays(days?: number[]) {
+  if (!days || days.length === 0 || days.length === 7) return 'Mọi ngày'
+  return WEEKDAYS.filter(([d]) => days.includes(d)).map(([, label]) => label).join(', ')
+}
+
 function FieldClosureModal({
   field,
   onClose,
@@ -885,6 +940,8 @@ function FieldClosureModal({
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
   const [reason, setReason] = useState('')
+  const [closeFrom, setCloseFrom] = useState('')
+  const [closeTo, setCloseTo] = useState('')
   const [deletingClosure, setDeletingClosure] = useState<FieldClosure | null>(null)
 
   const closuresQuery = useQuery({
@@ -927,6 +984,8 @@ function FieldClosureModal({
     addClosure.mutate({
       start_date: startDate,
       end_date: endDate,
+      // Để trống cả hai giờ = đóng cả ngày.
+      ...(closeFrom && closeTo ? { start_time: closeFrom, end_time: closeTo } : {}),
       reason: reason.trim(),
     })
   }
@@ -974,6 +1033,17 @@ function FieldClosureModal({
                 />
               </label>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Từ giờ (tuỳ chọn)</span>
+                <input type="time" step="1800" value={closeFrom} onChange={(e) => setCloseFrom(e.target.value)} required={!!closeTo} />
+              </label>
+              <label style={{ margin: 0 }}>
+                <span style={{ fontSize: 12 }}>Đến giờ</span>
+                <input type="time" step="1800" value={closeTo} onChange={(e) => setCloseTo(e.target.value)} required={!!closeFrom} />
+              </label>
+            </div>
+            <small className="form-help" style={{ display: 'block', margin: '-6px 0 12px' }}>Để trống cả hai ô giờ = đóng sân cả ngày. Điền giờ = chỉ khoá khoảng giờ đó (vd sửa đèn 17:00–20:00).</small>
             <label style={{ margin: '0 0 12px' }}>
               <span style={{ fontSize: 12 }}>Lý do nghỉ / đóng sân</span>
               <input
@@ -1029,6 +1099,7 @@ function FieldClosureModal({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <strong>
                         {formatDate(c.start_date)} {c.start_date !== c.end_date ? `→ ${formatDate(c.end_date)}` : ''}
+                        {c.start_time && c.end_time ? ` · ${c.start_time}–${c.end_time}` : ''}
                       </strong>
                       {isOngoing && <span className="badge badge--danger" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Đang đóng sân</span>}
                       {isUpcoming && <span className="badge badge--warning" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>Sắp tới</span>}
@@ -1083,10 +1154,15 @@ export function OwnerBookingsPage() {
   const [page, setPage] = useState(1)
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [rejectScope, setRejectScope] = useState<'single' | 'recurring'>('single')
+  const [complainingBooking, setComplainingBooking] = useState<Booking | null>(null)
+  const [complaintCategory, setComplaintCategory] = useState('property_damage')
+  const [complaintContent, setComplaintContent] = useState('')
+  const [complaintPhotos, setComplaintPhotos] = useState<File[]>([])
+  const [respondingId, setRespondingId] = useState<number | null>(null)
 
   const bookings = useQuery({
     queryKey: ['owner', 'bookings', status, date, page],
+    refetchInterval: 30_000,
     queryFn: async () =>
       (
         await api.get<Paginated<Booking>>('/field-owner/bookings', {
@@ -1127,7 +1203,6 @@ export function OwnerBookingsPage() {
       toast.success(`Đã ${label} đơn đặt sân #BK-${vars.booking.id}.`)
       setRejectingBooking(null)
       setRejectReason('')
-      setRejectScope('single')
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
       void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
@@ -1136,38 +1211,23 @@ export function OwnerBookingsPage() {
     },
   })
 
-  const rejectRecurring = useMutation({
-    mutationFn: async ({ groupId, reason }: { groupId: string; reason?: string }) =>
-      api.patch(`/field-owner/bookings/recurring/${groupId}/reject`, { reason }),
-    onSuccess: () => {
-      toast.success('Đã từ chối toàn bộ chuỗi đặt sân cố định.')
-      setRejectingBooking(null)
-      setRejectReason('')
-      setRejectScope('single')
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể từ chối chuỗi đơn')
-    },
-  })
-
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [checkInInputCode, setCheckInInputCode] = useState('')
-  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
 
-  const noShow = useMutation({
-    mutationFn: async (booking: Booking) =>
-      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
-      setNoShowingBooking(null)
+  const complain = useMutation({
+    mutationFn: async () =>
+      api.post(
+        '/field-owner/complaints',
+        complaintBody({ booking_id: complainingBooking?.id, category: complaintCategory, content: complaintContent }, complaintPhotos),
+      ),
+    onSuccess: () => {
+      toast.success('Đã gửi khiếu nại. Khách sẽ được báo và có thể phản hồi trước khi Ban quản trị quyết định.')
+      setComplainingBooking(null)
+      setComplaintContent('')
+      setComplaintPhotos([])
       void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
     },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
-    },
+    onError: (err) => toast.error(errorMessage(err), 'Không thể gửi khiếu nại'),
   })
 
   const checkIn = useMutation({
@@ -1209,7 +1269,7 @@ export function OwnerBookingsPage() {
         icon={<CalendarDays />}
         kicker="Vận hành"
         title="Đơn đặt sân"
-        copy="Duyệt yêu cầu, đối chiếu tiền chuyển khoản theo nội dung, xác nhận khách đến sân và hoàn tất lượt chơi."
+        copy="Đơn được xác nhận tự động khi khách thanh toán qua SportHub. Bạn chỉ cần xác nhận khách đến sân; đơn tự hoàn tất khi hết giờ và tiền về ví sau 48 giờ."
         action={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
@@ -1228,9 +1288,7 @@ export function OwnerBookingsPage() {
       <div className="toolbar">
         <select value={status} onChange={(event) => handleFilterChange(event.target.value)}>
           <option value="">Mọi trạng thái</option>
-          <option value="pending">Chờ xử lý (tất cả)</option>
           <option value="pay:awaiting">Chờ khách thanh toán</option>
-          <option value="pay:reported">Chờ xác nhận tiền</option>
           <option value="confirmed">Đã xác nhận</option>
           <option value="completed">Hoàn thành</option>
           <option value="cancelled">Đã hủy</option>
@@ -1272,9 +1330,6 @@ export function OwnerBookingsPage() {
             bookings={bookings.data?.data ?? []}
             actions={(booking) => (
               <>
-                {booking.status === 'pending' && (
-                  <OwnerPaymentActions booking={booking} onReject={() => setRejectingBooking(booking)} />
-                )}
                 {booking.status === 'confirmed' && (
                   <>
                     {!booking.checked_in_at && (
@@ -1287,47 +1342,6 @@ export function OwnerBookingsPage() {
                         <UserCheck size={13} /> Khách đã đến
                       </button>
                     )}
-                    {(() => {
-                      const matchEnded = (() => {
-                        if (!booking.booking_date || !booking.time_slot?.end_time) return false
-                        const matchEndTime = new Date(`${booking.booking_date}T${booking.time_slot.end_time}`).getTime()
-                        return !isNaN(matchEndTime) && matchEndTime <= Date.now()
-                      })()
-
-                      const matchStarted = (() => {
-                        if (!booking.booking_date || !booking.time_slot?.start_time) return false
-                        const matchStartTime = new Date(`${booking.booking_date}T${booking.time_slot.start_time}`).getTime()
-                        return !isNaN(matchStartTime) && matchStartTime <= Date.now()
-                      })()
-
-                      if (booking.checked_in_at && matchEnded) {
-                        return (
-                          <button
-                            className="button button--dark button--small"
-                            onClick={() => update.mutate({ booking, status: 'completed' })}
-                            disabled={update.isPending}
-                          >
-                            Hoàn thành
-                          </button>
-                        )
-                      }
-
-                      if (!booking.checked_in_at && matchStarted) {
-                        return (
-                          <button
-                            className="button button--ghost button--small"
-                            style={{ color: '#b45309', borderColor: '#fde68a' }}
-                            onClick={() => setNoShowingBooking(booking)}
-                            disabled={noShow.isPending}
-                            title="Ghi nhận khách không tới sân theo lịch"
-                          >
-                            Vắng mặt
-                          </button>
-                        )
-                      }
-
-                      return null
-                    })()}
                     <button
                       className="button button--danger button--small"
                       onClick={() => setRejectingBooking(booking)}
@@ -1337,6 +1351,34 @@ export function OwnerBookingsPage() {
                     </button>
                   </>
                 )}
+                {(booking.status === 'confirmed' || booking.status === 'completed') && (() => {
+                  const started = !!booking.booking_date && !!booking.time_slot?.start_time && new Date(`${booking.booking_date}T${booking.time_slot.start_time}`).getTime() <= Date.now()
+                  if (booking.complaint_against?.can_respond) {
+                    return (
+                      <button className="button button--brand button--small" onClick={() => setRespondingId(booking.complaint_against!.id)} title="Khách đã khiếu nại về đơn này, bạn có một lần phản hồi">
+                        <AlertCircle size={13} /> Phản hồi khiếu nại
+                      </button>
+                    )
+                  }
+                  if (booking.complaint && (booking.complaint.status === 'open' || booking.complaint.status === 'processing')) {
+                    return <span className="badge badge--soft"><AlertCircle size={12} /> Đã khiếu nại khách</span>
+                  }
+                  if (!started) return null
+                  return (
+                    <button
+                      className="button button--ghost button--small"
+                      onClick={() => {
+                        setComplainingBooking(booking)
+                        setComplaintCategory('property_damage')
+                        setComplaintContent('')
+                        setComplaintPhotos([])
+                      }}
+                      title="Khiếu nại về hành vi của khách trong đơn này"
+                    >
+                      <AlertCircle size={13} /> Khiếu nại khách
+                    </button>
+                  )
+                })()}
               </>
             )}
           />
@@ -1355,61 +1397,23 @@ export function OwnerBookingsPage() {
         onClose={() => {
           setRejectingBooking(null)
           setRejectReason('')
-          setRejectScope('single')
-        }}
+            }}
         title={rejectingBooking?.status === 'confirmed' ? 'Huỷ đơn đã xác nhận' : 'Từ chối đơn đặt sân'}
         asForm
         onSubmit={(e) => {
           e.preventDefault()
           if (!rejectingBooking) return
-          if (rejectScope === 'recurring' && rejectingBooking.recurring_group_id) {
-            rejectRecurring.mutate({
-              groupId: rejectingBooking.recurring_group_id,
-              reason: rejectReason || 'Chủ sân không thể tiếp tục nhận chuỗi đặt cố định.',
-            })
-          } else {
-            update.mutate({
-              booking: rejectingBooking,
-              status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
-              reason: rejectReason || 'Chủ sân bận khung giờ này.',
-            })
-          }
+          update.mutate({
+            booking: rejectingBooking,
+            status: rejectingBooking.status === 'confirmed' ? 'cancelled' : 'rejected',
+            reason: rejectReason || 'Chủ sân bận khung giờ này.',
+          })
         }}
       >
         <p>
           Bạn có chắc chắn muốn {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} đơn <strong>#BK-{rejectingBooking?.id}</strong> của khách hàng{' '}
           <strong>{rejectingBooking?.customer?.name}</strong>?
         </p>
-
-        {rejectingBooking?.recurring_group_id && (
-          <div style={{ padding: '10px 14px', background: 'var(--surface-sunken)', borderRadius: 8, border: '1px solid var(--border)', margin: '12px 0' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--forest)' }}>
-              <Repeat size={14} /> Đơn thuộc chuỗi đặt cố định hằng tuần:
-            </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="radio"
-                  name="reject_scope"
-                  value="single"
-                  checked={rejectScope === 'single'}
-                  onChange={() => setRejectScope('single')}
-                />
-                <span>Chỉ {rejectingBooking.status === 'confirmed' ? 'huỷ' : 'từ chối'} buổi này (#BK-{rejectingBooking.id})</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="radio"
-                  name="reject_scope"
-                  value="recurring"
-                  checked={rejectScope === 'recurring'}
-                  onChange={() => setRejectScope('recurring')}
-                />
-                <span>{rejectingBooking.status === 'confirmed' ? 'Huỷ' : 'Từ chối'} toàn bộ các buổi trong chuỗi cố định</span>
-              </label>
-            </div>
-          </div>
-        )}
 
         <label style={{ marginTop: 12 }}>
           <span>Lý do {rejectingBooking?.status === 'confirmed' ? 'huỷ' : 'từ chối'} (thông báo tới khách)</span>
@@ -1428,23 +1432,16 @@ export function OwnerBookingsPage() {
             onClick={() => {
               setRejectingBooking(null)
               setRejectReason('')
-              setRejectScope('single')
-            }}
+                    }}
           >
             Đóng
           </button>
           <button
             type="submit"
-            disabled={update.isPending || rejectRecurring.isPending}
+            disabled={update.isPending}
             className="button button--danger"
           >
-            {update.isPending || rejectRecurring.isPending
-              ? 'Đang xử lý...'
-              : rejectScope === 'recurring'
-                ? 'Từ chối toàn bộ chuỗi'
-                : rejectingBooking?.status === 'confirmed'
-                  ? 'Xác nhận huỷ đơn'
-                  : 'Xác nhận từ chối'}
+            {update.isPending ? 'Đang xử lý...' : rejectingBooking?.status === 'confirmed' ? 'Xác nhận huỷ đơn' : 'Xác nhận từ chối'}
           </button>
         </div>
       </Modal>
@@ -1501,21 +1498,45 @@ export function OwnerBookingsPage() {
         </div>
       </Modal>
 
-      <ConfirmModal
-        isOpen={!!noShowingBooking}
-        title="Ghi nhận khách vắng mặt (No-show)"
-        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
-        confirmText="Xác nhận vắng mặt"
-        cancelText="Đóng"
-        danger
-        busy={noShow.isPending}
-        onClose={() => setNoShowingBooking(null)}
-        onConfirm={() => {
-          if (noShowingBooking) {
-            noShow.mutate(noShowingBooking)
-          }
+      <Modal
+        isOpen={!!complainingBooking}
+        onClose={() => setComplainingBooking(null)}
+        title={`Khiếu nại khách · đơn #BK-${complainingBooking?.id ?? ''}`}
+        asForm
+        onSubmit={(e) => {
+          e.preventDefault()
+          complain.mutate()
         }}
-      />
+      >
+        <p className="form-help" style={{ marginTop: 0 }}>
+          Khách ({complainingBooking?.customer?.name ?? 'khách hàng'}) sẽ được báo và có một lần phản hồi. Ban quản trị xem xét ý kiến hai bên rồi quyết định, có thể trừ điểm uy tín của khách.
+        </p>
+        <div className="form-stack">
+          <label>
+            <span>Vấn đề gặp phải</span>
+            <select value={complaintCategory} onChange={(e) => setComplaintCategory(e.target.value)}>
+              <option value="property_damage">Khách làm hư hỏng / mất tài sản</option>
+              <option value="customer_misconduct">Khách gây rối / thái độ không phù hợp</option>
+              <option value="overtime">Khách chơi quá giờ</option>
+              <option value="other">Vấn đề khác</option>
+            </select>
+          </label>
+          <label>
+            <span>Mô tả chi tiết (5–3000 ký tự)</span>
+            <textarea required rows={4} minLength={5} maxLength={3000} value={complaintContent} onChange={(e) => setComplaintContent(e.target.value)} placeholder="Nêu rõ sự việc, thời điểm, thiệt hại (nếu có)..." />
+          </label>
+          <EvidencePicker files={complaintPhotos} onChange={setComplaintPhotos} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" className="button button--ghost" onClick={() => setComplainingBooking(null)}>Đóng</button>
+            <button type="submit" className="button button--brand" disabled={complain.isPending}>
+              {complain.isPending ? 'Đang gửi...' : 'Gửi khiếu nại'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <ComplaintRespondModal complaintId={respondingId} role="field-owner" onClose={() => setRespondingId(null)} />
+
     </>
   )
 }
@@ -1773,7 +1794,7 @@ export function OwnerProfilePage() {
           </label>
           <label>
             <span>SĐT kinh doanh</span>
-            <input name="business_phone" defaultValue={profile.data?.business_phone} required />
+            <input name="business_phone" type="tel" inputMode="numeric" maxLength={11} pattern="0[0-9]{9,10}" title="Số điện thoại gồm 10–11 chữ số, bắt đầu bằng 0" onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))} defaultValue={profile.data?.business_phone} required />
           </label>
           <label>
             <span>Địa chỉ kinh doanh</span>
@@ -1825,13 +1846,16 @@ export function OwnerProfilePage() {
               name="bank_account_number"
               defaultValue={profile.data?.bank_account_number ?? ''}
               inputMode="numeric"
+              required
+              maxLength={20}
               pattern="[0-9]{6,20}"
               title="Số tài khoản gồm 6–20 chữ số"
+              onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 20))}
             />
           </label>
           <label>
             <span>Chủ tài khoản</span>
-            <input name="bank_account_holder" defaultValue={profile.data?.bank_account_holder ?? ''} placeholder="NGUYEN VAN A" />
+            <input name="bank_account_holder" required maxLength={50} onInput={(e) => (e.currentTarget.value = toBankHolder(e.currentTarget.value))} defaultValue={profile.data?.bank_account_holder ?? ''} placeholder="NGUYEN VAN A" />
           </label>
         </div>
         {update.isError && <div className="notice notice--error">{errorMessage(update.error)}</div>}

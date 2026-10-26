@@ -1,8 +1,10 @@
+import { digitsOnly } from '../utils/input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  ExternalLink,
   Filter,
   MapPin,
   Phone,
@@ -24,7 +26,7 @@ import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/auth-context'
-import type { ApiEnvelope, Category, MatchParticipant, MatchRequest, Paginated, SportsField, TimeSlot } from '../types/api'
+import type { ApiEnvelope, Category, GridField, MatchParticipant, MatchRequest, Paginated, SportsField } from '../types/api'
 import { formatDay, getLocalTodayString } from '../utils/date'
 import { formatMoney } from '../utils/format'
 
@@ -373,26 +375,30 @@ export function MatchesPage() {
                     {match.start_time} – {match.end_time}
                   </span>
                   {match.sports_field && (
-                    <span>
-                      <MapPin size={15} />
-                      {match.sports_field.name}
-                      {match.sports_field.address ? ` · ${match.sports_field.address}` : ''}
-                    </span>
+                    <div className="match-card__location">
+                      <span className="match-card__location-text">
+                        <MapPin size={15} />
+                        <span>
+                          <strong>{match.sports_field.name}</strong>
+                          {match.sports_field.address ? ` · ${match.sports_field.address}` : ''}
+                        </span>
+                      </span>
+                      {match.sports_field?.slug && match.status !== 'cancelled' && match.status !== 'completed' && (
+                        <Link
+                          className="match-card__field-link"
+                          to={`/fields/${match.sports_field.slug}?date=${match.play_date}&start=${match.start_time}&end=${match.end_time}`}
+                          title={`Xem chi tiết sân & khung giờ đặt`}
+                        >
+                          <ExternalLink size={12} />
+                          <span>Xem sân / Đặt chỗ</span>
+                        </Link>
+                      )}
+                    </div>
                   )}
                 </div>
 
                 {match.description && (
                   <p className="match-card__desc">{match.description}</p>
-                )}
-
-                {match.sports_field?.slug && match.status !== 'cancelled' && match.status !== 'completed' && (
-                  <Link
-                    className="button button--ghost button--small"
-                    to={`/fields/${match.sports_field.slug}?date=${match.play_date}&start=${match.start_time}`}
-                    title={`Mở sân với ngày ${formatDay(match.play_date)}, khung ${match.start_time} – ${match.end_time}`}
-                  >
-                    Đặt sân này
-                  </Link>
                 )}
 
                 {/* Progress bar for slots */}
@@ -429,13 +435,15 @@ export function MatchesPage() {
                     {match.host?.name ? match.host.name.charAt(0).toUpperCase() : 'H'}
                   </div>
                   <div className="host-info">
-                    <span className="host-name">{match.host?.name ?? 'Chủ phòng'}</span>
-                    <span className="host-trust">
-                      <ShieldCheck size={12} /> {match.host?.trust_score ?? 100} điểm uy tín
-                    </span>
-                  </div>
-                  <div className="host-contact">
-                    <Phone size={13} /> {match.contact_phone ?? 'SĐT hiện sau khi chủ phòng chấp nhận'}
+                    <div className="host-header">
+                      <span className="host-name">{match.host?.name ?? 'Chủ phòng'}</span>
+                      <span className="host-trust">
+                        <ShieldCheck size={12} /> {match.host?.trust_score ?? 100} uy tín
+                      </span>
+                    </div>
+                    <div className="host-contact">
+                      <Phone size={13} /> {match.contact_phone ?? 'SĐT hiện sau khi chủ phòng chấp nhận'}
+                    </div>
                   </div>
                 </div>
 
@@ -450,26 +458,31 @@ export function MatchesPage() {
                       <UserCheck size={15} /> Quản lý phòng ({match.participants?.filter((p) => p.status === 'pending').length ?? 0} chờ duyệt)
                     </button>
                   ) : myParticipant ? (
-                    <div className="match-status-pill">
-                      {myParticipant.status === 'pending' && (
-                        <span className="badge badge--warning">
-                          ⏳ Đang chờ chủ phòng duyệt
-                        </span>
-                      )}
-                      {myParticipant.status === 'accepted' && (
-                        <span className="badge badge--success">
-                          ✓ Đã vào phòng thi đấu
-                        </span>
-                      )}
-                      {myParticipant.status === 'rejected' && (
-                        <span className="badge badge--danger">
-                          ✕ Đã bị từ chối
-                        </span>
-                      )}
+                    <div className={`match-participant-box match-participant-box--${myParticipant.status}`}>
+                      <div className="match-participant-box__status">
+                        {myParticipant.status === 'pending' && (
+                          <>
+                            <Clock3 size={15} />
+                            <span>Đang chờ chủ phòng duyệt</span>
+                          </>
+                        )}
+                        {myParticipant.status === 'accepted' && (
+                          <>
+                            <CheckCircle2 size={15} />
+                            <span>Đã vào phòng thi đấu</span>
+                          </>
+                        )}
+                        {myParticipant.status === 'rejected' && (
+                          <>
+                            <XCircle size={15} />
+                            <span>Bị từ chối tham gia</span>
+                          </>
+                        )}
+                      </div>
                       {myParticipant.status !== 'rejected' && (match.status === 'open' || match.status === 'full') && (
                         <button
                           type="button"
-                          className="button button--ghost button--small"
+                          className="button button--ghost button--small match-participant-box__leave"
                           disabled={leaveMatch.isPending}
                           onClick={() => setLeavingMatchId(match.id)}
                         >
@@ -597,13 +610,16 @@ export function MatchesPage() {
         isOpen={!!managingMatch}
         onClose={() => setManagingMatch(null)}
         title={`Quản lý phòng: ${managingMatch?.title ?? ''}`}
+        wide
       >
         <div className="manage-match-content">
           <div className="manage-match-stats">
             <span>
               Tiến độ: <strong>{managingMatch?.joined_count} / {(managingMatch?.players_needed ?? 0) + 1} người</strong>
             </span>
-            <span>Trạng thái: <strong>{matchStatusLabels[managingMatch?.status ?? 'open']}</strong></span>
+            <span>
+              Trạng thái: <strong>{matchStatusLabels[managingMatch?.status ?? 'open']}</strong>
+            </span>
           </div>
 
           <h4 style={{ margin: '16px 0 8px' }}>Danh sách thành viên đăng ký</h4>
@@ -802,8 +818,7 @@ function CreateMatchModal({
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [date, setDate] = useState(todayStr)
-  // Có sân: giờ chơi lấy từ khung giờ của sân. Chưa chốt sân: nhập tự do.
-  const [slot, setSlot] = useState<TimeSlot | null>(null)
+  // Giờ chơi nhập tự do theo ô 30 phút; nếu đã chọn sân thì báo thêm ô đó còn trống hay đã có người đặt.
   const [freeStart, setFreeStart] = useState('18:00')
   const [freeEnd, setFreeEnd] = useState('19:30')
 
@@ -826,20 +841,31 @@ function CreateMatchModal({
       ).data,
   })
 
-  const slots = useQuery({
-    queryKey: ['slots', field?.id, date],
+  const schedule = useQuery({
+    queryKey: ['schedule', field?.id, date],
     enabled: isOpen && !!field && !!date,
     queryFn: async () =>
       (
-        await api.get<ApiEnvelope<{ date: string; slots: TimeSlot[] }>>(
-          `/fields/${field?.id}/available-slots?date=${date}`,
+        await api.get<ApiEnvelope<{ date: string; fields: GridField[] }>>(
+          `/fields/${field?.id}/schedule?date=${date}`,
         )
-      ).data.data.slots,
+      ).data.data.fields.find((f) => f.id === field?.id),
   })
 
-  const startTime = field ? slot?.start_time : freeStart
-  const endTime = field ? slot?.end_time : freeEnd
-  const timeError = !field && freeEnd <= freeStart ? 'Giờ kết thúc phải sau giờ bắt đầu.' : ''
+  const startTime = freeStart
+  const endTime = freeEnd
+  const timeError = freeEnd <= freeStart ? 'Giờ kết thúc phải sau giờ bắt đầu.' : ''
+
+  // Tình trạng sân trong khoảng giờ đã nhập (chỉ để báo, không chặn việc tạo phòng).
+  const availability = (() => {
+    if (!field || timeError || !schedule.data) return null
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+    const cells = schedule.data.cells.filter((c) => c.start >= freeStart && c.end <= freeEnd)
+    if (cells.length < (toMin(freeEnd) - toMin(freeStart)) / 30) return { ok: false, text: 'Khoảng giờ này nằm ngoài giờ mở cửa của sân.' }
+    if (cells.some((c) => c.state === 'past')) return { ok: false, text: 'Khoảng giờ này đã qua.' }
+    if (cells.some((c) => c.state !== 'free')) return { ok: false, text: 'Khoảng giờ này đã có người đặt hoặc sân đang khoá. Chỉ tạo phòng nếu chính bạn là người đã đặt sân.' }
+    return { ok: true, text: `Khoảng giờ còn trống. Tạo phòng chưa giữ sân — nhớ đặt ${freeStart} – ${freeEnd} ở trang sân sau khi đăng.` }
+  })()
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -874,7 +900,6 @@ function CreateMatchModal({
               setPickedCategoryId(Number(e.target.value))
               // Sân thuộc môn khác thì bỏ chọn để môn và sân luôn khớp nhau.
               setField(null)
-              setSlot(null)
             }}
           >
             {categories.map((cat) => (
@@ -916,7 +941,6 @@ function CreateMatchModal({
               className="button button--ghost button--small"
               onClick={() => {
                 setField(null)
-                setSlot(null)
               }}
             >
               Đổi sân
@@ -942,7 +966,6 @@ function CreateMatchModal({
                   className="field-picker__item"
                   onClick={() => {
                     setField(item)
-                    setSlot(null)
                   }}
                 >
                   <strong>{item.name}</strong>
@@ -978,7 +1001,6 @@ function CreateMatchModal({
             value={date}
             onChange={(e) => {
               setDate(e.target.value)
-              setSlot(null)
             }}
           />
         </label>
@@ -989,57 +1011,23 @@ function CreateMatchModal({
         </label>
       </div>
 
-      {field ? (
-        <div className="field-picker">
-          <span className="field-label">Khung giờ của sân ngày {formatDay(date)} *</span>
-          {slots.isPending && <p className="form-help">Đang tải khung giờ...</p>}
-          {slots.data?.length === 0 && (
-            <p className="form-help">Sân này chưa mở khung giờ nào. Hãy chọn sân khác.</p>
-          )}
-          <div className="slot-grid slot-grid--wide">
-            {slots.data?.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                disabled={item.is_past}
-                className={`slot-chip ${slot?.id === item.id ? 'selected' : ''} ${item.is_past ? 'slot-chip--past' : ''}`}
-                onClick={() => setSlot(item)}
-              >
-                <span>
-                  {item.start_time} – {item.end_time}
-                </span>
-                <small>
-                  {item.is_past ? 'Đã qua giờ' : item.is_booked ? 'Đã có người đặt' : item.is_held ? 'Đang giữ chỗ' : 'Còn trống'}
-                </small>
-              </button>
-            ))}
-          </div>
-          {slot?.is_booked && (
-            <p className="form-help">
-              Khung giờ này đã có người đặt. Chỉ tạo phòng nếu chính bạn là người đã đặt sân.
-            </p>
-          )}
-          {slot && !slot.is_booked && (
-            <p className="form-help">
-              Tạo phòng chưa giữ sân — nhớ đặt khung {slot.start_time} – {slot.end_time} ở trang sân sau khi đăng.
-            </p>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="form-grid">
-            <label>
-              <span>Giờ bắt đầu *</span>
-              <input type="time" step={1800} required value={freeStart} onChange={(e) => setFreeStart(e.target.value)} />
-            </label>
+      <div className="form-grid">
+        <label>
+          <span>Giờ bắt đầu *</span>
+          <input type="time" step={1800} required value={freeStart} onChange={(e) => setFreeStart(e.target.value)} />
+        </label>
 
-            <label>
-              <span>Giờ kết thúc *</span>
-              <input type="time" step={1800} required value={freeEnd} onChange={(e) => setFreeEnd(e.target.value)} />
-            </label>
-          </div>
-          {timeError && <div className="notice notice--error">{timeError}</div>}
-        </>
+        <label>
+          <span>Giờ kết thúc *</span>
+          <input type="time" step={1800} required value={freeEnd} onChange={(e) => setFreeEnd(e.target.value)} />
+        </label>
+      </div>
+      {timeError && <div className="notice notice--error">{timeError}</div>}
+      {field && schedule.isPending && <p className="form-help">Đang kiểm tra lịch sân...</p>}
+      {availability && (
+        <p className={`form-help ${availability.ok ? '' : 'form-help--warn'}`} style={availability.ok ? undefined : { color: 'var(--warn)' }}>
+          {availability.text}
+        </p>
       )}
 
       <label>
@@ -1048,8 +1036,10 @@ function CreateMatchModal({
           name="contact_phone"
           type="tel"
           inputMode="numeric"
-          pattern="[0-9]{10,11}"
-          title="Số điện thoại gồm 10–11 chữ số"
+          pattern="0[0-9]{9,10}"
+          maxLength={11}
+          onInput={(e) => (e.currentTarget.value = digitsOnly(e.currentTarget.value, 11))}
+          title="Số điện thoại gồm 10–11 chữ số, bắt đầu bằng 0"
           required
           defaultValue={defaultPhone}
           placeholder="09xxxxxxxx"
@@ -1071,7 +1061,7 @@ function CreateMatchModal({
           Hủy
         </button>
         <button type="submit" disabled={busy || !startTime || !!timeError} className="button button--brand">
-          {busy ? 'Đang tạo...' : field && !slot ? 'Chọn khung giờ' : 'Đăng phòng'}
+          {busy ? 'Đang tạo...' : 'Đăng phòng'}
         </button>
       </div>
     </Modal>

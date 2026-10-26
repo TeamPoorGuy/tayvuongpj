@@ -88,13 +88,14 @@ class PhaseFourAdminBookingRefundTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('data.status', 'cancelled');
-        $response->assertJsonPath('data.refund.status', 'pending');
+        $response->assertJsonPath('data.refund.status', 'done');
+        $this->assertEquals(36000, $this->customer->fresh()->wallet_balance);
 
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,
             'status' => 'cancelled',
             'cancel_reason' => 'Sân bị bảo trì đột xuất theo thông báo của ban quản lý.',
-            'refund_status' => 'pending',
+            'refund_status' => 'done',
         ]);
 
         $this->assertDatabaseHas('admin_logs', [
@@ -124,7 +125,7 @@ class PhaseFourAdminBookingRefundTest extends TestCase
         $response->assertStatus(409);
     }
 
-    public function test_admin_can_update_refund_status(): void
+    public function test_manual_refund_endpoint_is_gone_because_refunds_go_to_the_wallet(): void
     {
         $booking = Booking::create([
             'user_id' => $this->customer->id,
@@ -133,33 +134,11 @@ class PhaseFourAdminBookingRefundTest extends TestCase
             'booking_date' => today()->addDays(3),
             'total_price' => 120000,
             'status' => BookingStatus::Cancelled->value,
-            'refund_status' => 'pending',
-            'refund_amount' => 36000,
         ]);
 
         Sanctum::actingAs($this->admin);
 
-        $response = $this->patchJson("/api/v1/admin/bookings/{$booking->id}/refund", [
-            'refund_status' => 'done',
-            'refund_amount' => 36000,
-        ]);
-
-        $response->assertOk();
-        $response->assertJsonPath('data.refund.status', 'done');
-
-        $this->assertDatabaseHas('bookings', [
-            'id' => $booking->id,
-            'refund_status' => 'done',
-            'refund_amount' => 36000,
-        ]);
-
-        $this->assertNotNull(Booking::find($booking->id)->refunded_at);
-
-        $this->assertDatabaseHas('admin_logs', [
-            'admin_id' => $this->admin->id,
-            'action' => 'update_booking_refund',
-            'subject_id' => (string) $booking->id,
-        ]);
+        $this->patchJson("/api/v1/admin/bookings/{$booking->id}/refund", ['refund_status' => 'done'])->assertStatus(404);
     }
 
     public function test_admin_can_export_bookings_csv(): void

@@ -39,10 +39,15 @@ class FieldClosureService
         }
 
         // 1. Kiểm tra đơn đặt sân đang hoạt động (pending, confirmed)
+        $startTime = ($data['start_time'] ?? null) ?: null;
+        $endTime = ($data['end_time'] ?? null) ?: null;
+
         $activeBookings = Booking::query()
             ->where('sports_field_id', $field->id)
-            ->whereBetween('booking_date', [$startDate, $endDate])
+            ->whereDate('booking_date', '>=', $startDate)
+            ->whereDate('booking_date', '<=', $endDate)
             ->whereIn('status', [BookingStatus::Pending->value, BookingStatus::Confirmed->value])
+            ->when($startTime, fn ($q) => $q->overlapping($startTime, $endTime))
             ->get();
 
         if ($activeBookings->isNotEmpty()) {
@@ -62,7 +67,10 @@ class FieldClosureService
                             ->where('end_date', '>=', $endDate);
                     });
             })
-            ->exists();
+            // Trùng ngày chưa đủ: hai lịch khoá theo giờ khác nhau cùng ngày vẫn hợp lệ.
+            ->get()
+            ->contains(fn (FieldClosure $other) => $other->isWholeDay() || ! $startTime
+                || ($other->start_time < Booking::normalizeTime($endTime) && $other->end_time > Booking::normalizeTime($startTime)));
 
         if ($overlap) {
             throw new ConflictException('Khoảng ngày đóng sân bị trùng lặp với một lịch đóng sân khác đã tạo.');
@@ -72,6 +80,8 @@ class FieldClosureService
             'sports_field_id' => $field->id,
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
             'reason' => trim($data['reason']),
         ]);
     }

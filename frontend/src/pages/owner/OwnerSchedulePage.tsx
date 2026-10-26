@@ -8,7 +8,6 @@ import {
   Clock,
   Clock3,
   DollarSign,
-  Eye,
   Filter,
   Info,
   List,
@@ -22,11 +21,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/errors'
-import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { StatusBadge } from '../../components/StatusBadge'
-import { OwnerPaymentActions } from '../../components/OwnerPaymentActions'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { useToast } from '../../components/Toast'
 import { getLocalTodayString } from '../../utils/date'
@@ -46,7 +42,7 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; bg: string; border: string; color: string; dot: string }
 > = {
-  pending: { label: 'Chờ duyệt', bg: '#fdf1d3', border: '#f0cf7a', color: '#6b4700', dot: '#e29a0c' },
+  pending: { label: 'Chờ thanh toán', bg: '#fdf1d3', border: '#f0cf7a', color: '#6b4700', dot: '#e29a0c' },
   confirmed: { label: 'Đã xác nhận', bg: '#e4f1e6', border: '#9fcfb0', color: '#0b3025', dot: '#1f875e' },
   completed: { label: 'Hoàn thành', bg: '#eef1e9', border: '#c4cdbf', color: '#0b3025', dot: '#0b3025' },
   cancelled: { label: 'Đã hủy', bg: '#f4f5f2', border: '#dde3d8', color: '#66756c', dot: '#9aa59e' },
@@ -93,10 +89,6 @@ export function OwnerSchedulePage() {
 
   // Booking detail modal
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
-  const [isRejecting, setIsRejecting] = useState(false)
-  const [showProof, setShowProof] = useState(false)
-  const [noShowingBooking, setNoShowingBooking] = useState<Booking | null>(null)
 
   // 1. Fetch Owner Fields
   const fieldsQuery = useQuery({
@@ -114,6 +106,7 @@ export function OwnerSchedulePage() {
   // 3. Fetch Bookings for Date / Range
   const bookingsQuery = useQuery({
     queryKey: ['owner', 'schedule-bookings', startDate, endDate, selectedFieldId, selectedStatus],
+    refetchInterval: 30_000, // khách đặt/huỷ lúc chủ sân đang mở lịch
     queryFn: async () => {
       const params = new URLSearchParams()
       if (viewMode === 'day') {
@@ -132,41 +125,6 @@ export function OwnerSchedulePage() {
 
   const bookings = bookingsQuery.data ?? []
 
-  // 4. Update status mutation
-  const updateStatus = useMutation({
-    mutationFn: async ({
-      bookingId,
-      status,
-      reason,
-    }: {
-      bookingId: number
-      status: string
-      reason?: string
-    }) =>
-      api.patch(`/field-owner/bookings/${bookingId}/status`, {
-        status,
-        ...(reason ? { reason } : {}),
-      }),
-    onSuccess: (_, vars) => {
-      const label =
-        vars.status === 'confirmed'
-          ? 'xác nhận'
-          : vars.status === 'completed'
-            ? 'hoàn thành'
-            : 'từ chối'
-      toast.success(`Đã ${label} đơn đặt sân #BK-${vars.bookingId}.`)
-      setIsRejecting(false)
-      setRejectReason('')
-      setDetailBooking(null)
-      void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Cập nhật trạng thái thất bại')
-    },
-  })
-
   // 5. Quick Check-In Mutation
   const checkIn = useMutation({
     mutationFn: async (booking: Booking) =>
@@ -180,23 +138,6 @@ export function OwnerSchedulePage() {
     },
     onError: (err) => {
       toast.error(errorMessage(err), 'Không thể xác nhận khách đến')
-    },
-  })
-
-  // 6. Record No-Show Mutation
-  const noShow = useMutation({
-    mutationFn: async (booking: Booking) =>
-      (await api.patch<{ message: string; data: Booking }>(`/field-owner/bookings/${booking.id}/no-show`)).data,
-    onSuccess: (res) => {
-      toast.success(res.message || 'Đã ghi nhận khách vắng mặt và trừ điểm uy tín.')
-      setNoShowingBooking(null)
-      setDetailBooking(null)
-      void client.invalidateQueries({ queryKey: ['owner', 'schedule-bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['owner', 'dashboard'] })
-    },
-    onError: (err) => {
-      toast.error(errorMessage(err), 'Không thể ghi nhận vắng mặt')
     },
   })
 
@@ -223,48 +164,25 @@ export function OwnerSchedulePage() {
     return fields.filter((f) => String(f.id) === selectedFieldId)
   }, [fields, selectedFieldId])
 
-  // Extract all unique time slot ranges across active fields
+  // Hàng theo từng giờ, từ giờ mở sớm nhất tới giờ đóng muộn nhất của các sân đang xem.
+  // Khung giờ của sân nay là khung mở cửa/giá (vd 06:00–16:00), khách đặt tự do theo ô 30 phút nên không dùng làm hàng.
   const timeSlots = useMemo(() => {
-    const set = new Map<string, { start: string; end: string }>()
-    displayFields.forEach((f) => {
-      f.time_slots?.forEach((ts) => {
-        const key = `${ts.start_time}-${ts.end_time}`
-        if (!set.has(key)) {
-          set.set(key, { start: ts.start_time, end: ts.end_time })
-        }
-      })
-    })
-
-    const list = Array.from(set.values()).sort((a, b) =>
-      a.start.localeCompare(b.start),
-    )
-
-    // Fallback if field has no time slots defined yet
-    if (list.length === 0) {
-      for (let h = 6; h <= 22; h += 2) {
-        const start = `${String(h).padStart(2, '0')}:00`
-        const end = `${String(h + 2).padStart(2, '0')}:00`
-        list.push({ start, end })
-      }
-    }
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+    const windows = displayFields.flatMap((f) => f.time_slots ?? []).filter((ts) => ts.is_active !== false)
+    const open = windows.length ? Math.min(...windows.map((ts) => toMin(ts.start_time))) : 6 * 60
+    const close = windows.length ? Math.max(...windows.map((ts) => toMin(ts.end_time))) : 22 * 60
+    const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    const list: { start: string; end: string }[] = []
+    for (let m = Math.floor(open / 60) * 60; m < close; m += 60) list.push({ start: fmt(m), end: fmt(Math.min(m + 60, close)) })
     return list
   }, [displayFields])
 
-  // Bookings mapped by key: `${field_id}_${date}_${start_time}`
-  const bookingMap = useMemo(() => {
-    const map = new Map<string, Booking>()
-    bookings.forEach((b) => {
-      const datePart = b.booking_date.slice(0, 10)
-      const startPart = b.time_slot?.start_time
-      if (startPart) {
-        const key = `${b.field?.id}_${datePart}_${startPart}`
-        // Đơn đã huỷ/từ chối không chiếm khung giờ: không để nó ghi đè đơn đang hiệu lực.
-        const inactive = b.status === 'cancelled' || b.status === 'rejected'
-        if (!inactive || !map.has(key)) map.set(key, b)
-      }
-    })
-    return map
-  }, [bookings])
+  // Đơn giao với một hàng giờ (đơn 18:00–20:00 hiện ở cả hàng 18h và 19h); đơn đang hiệu lực được ưu tiên hơn đơn đã huỷ.
+  const bookingAt = (fieldId: number, date: string, start: string, end: string) => {
+    const hits = bookings.filter((b) => b.field?.id === fieldId && b.booking_date.slice(0, 10) === date
+      && (b.time_slot?.start_time ?? '') < end && (b.time_slot?.end_time ?? '') > start)
+    return hits.find((b) => b.status !== 'cancelled' && b.status !== 'rejected') ?? hits[0]
+  }
 
   return (
     <div className="owner-schedule-page">
@@ -293,7 +211,7 @@ export function OwnerSchedulePage() {
         <div>
           <strong>Quy định vận hành & quản lý khung giờ</strong>
           <p>
-            Khung giờ có màu vàng (Chờ duyệt) cần được xác nhận để giữ chỗ cho khách. Khi khách tới sân,
+            Khung giờ màu vàng là khách đang giữ chỗ và chuyển khoản qua SportHub; đơn tự xác nhận khi có tiền. Khi khách tới sân,
             bấm vào ô booking để <strong>xác nhận khách đã đến (+10 điểm uy tín)</strong>. Bạn có thể
             điều chỉnh giá giờ hoặc thêm khung giờ hoạt động tại{' '}
             <Link to="/owner/fields">Quản lý sân</Link>.
@@ -483,7 +401,7 @@ export function OwnerSchedulePage() {
 
                 <div className="mobile-field-slots">
                   {timeSlots.map((ts, idx) => {
-                    const booking = bookingMap.get(`${f.id}_${selectedDate}_${ts.start}`)
+                    const booking = bookingAt(f.id, selectedDate, ts.start, ts.end)
                     const cfg = booking ? STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.pending : null
 
                     if (booking) {
@@ -566,7 +484,7 @@ export function OwnerSchedulePage() {
 
                   {/* Each Field's cell for this slot */}
                   {displayFields.map((f) => {
-                    const booking = bookingMap.get(`${f.id}_${selectedDate}_${ts.start}`)
+                    const booking = bookingAt(f.id, selectedDate, ts.start, ts.end)
                     const cfg = booking ? STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.pending : null
 
                     return (
@@ -682,7 +600,6 @@ export function OwnerSchedulePage() {
         isOpen={!!detailBooking}
         onClose={() => {
           setDetailBooking(null)
-          setIsRejecting(false)
         }}
         title={`Chi tiết đơn #BK-${detailBooking?.id ?? ''}`}
       >
@@ -744,21 +661,9 @@ export function OwnerSchedulePage() {
                 </strong>
                 <small>
                   {detailBooking.payment?.status === 'paid'
-                    ? `Đã nhận ${formatMoney(detailBooking.payment.amount ?? 0)} chuyển khoản (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
-                    : detailBooking.payment?.status
-                      ? 'Khách chuyển khoản cọc hoặc trả hết trước khi đơn được xác nhận'
-                      : 'Duyệt đơn để khách chuyển khoản cọc hoặc trả hết'}
+                    ? `SportHub đã thu hộ ${formatMoney(detailBooking.payment.amount ?? 0)} (${detailBooking.payment.option === 'full' ? 'trả hết' : 'đặt cọc'})${detailBooking.payment.option === 'deposit' ? `, còn ${formatMoney(detailBooking.total_price - (detailBooking.payment.amount ?? 0))} thu tại sân` : ''}`
+                    : 'Khách đang chuyển khoản vào tài khoản SportHub; đơn tự xác nhận khi có tiền'}
                 </small>
-                {detailBooking.payment?.proof_url && (
-                  <button
-                    type="button"
-                    className="button button--ghost button--small"
-                    style={{ marginTop: 6 }}
-                    onClick={() => setShowProof(true)}
-                  >
-                    <Eye size={13} /> Xem biên lai chuyển khoản
-                  </button>
-                )}
               </div>
 
               <div className="detail-item">
@@ -784,45 +689,8 @@ export function OwnerSchedulePage() {
               </div>
             )}
 
-            {/* Reject reason input view */}
-            {isRejecting ? (
-              <div className="reject-reason-form">
-                <label>
-                  <span>Lý do từ chối đơn đặt</span>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="VD: Sân bảo trì đột xuất, trùng lịch giải đấu..."
-                    rows={3}
-                    autoFocus
-                  />
-                </label>
-                <div className="modal__actions" style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    onClick={() => setIsRejecting(false)}
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--danger"
-                    disabled={updateStatus.isPending}
-                    onClick={() =>
-                      updateStatus.mutate({
-                        bookingId: detailBooking.id,
-                        status: 'rejected',
-                        reason: rejectReason || 'Chủ sân từ chối đơn này.',
-                      })
-                    }
-                  >
-                    {updateStatus.isPending ? 'Đang gửi...' : 'Xác nhận từ chối'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Modal Actions Toolbar */
+            {/* Modal Actions Toolbar */}
+            {(
               <div className="modal__actions" style={{ marginTop: 24, justifyContent: 'space-between' }}>
                 <button
                   type="button"
@@ -833,15 +701,6 @@ export function OwnerSchedulePage() {
                 </button>
 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {detailBooking.status === 'pending' && (
-                    <OwnerPaymentActions
-                      booking={detailBooking}
-                      size=""
-                      onReject={() => setIsRejecting(true)}
-                      onDone={() => setDetailBooking(null)}
-                    />
-                  )}
-
                   {detailBooking.status === 'confirmed' && (
                     <>
                       {!detailBooking.checked_in_at && (
@@ -855,51 +714,6 @@ export function OwnerSchedulePage() {
                           <UserCheck size={15} /> Khách đã đến (+10đ)
                         </button>
                       )}
-                      {(() => {
-                        const matchEnded = (() => {
-                          if (!detailBooking.booking_date || !detailBooking.time_slot?.end_time) return false
-                          const matchEndTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.end_time}`).getTime()
-                          return !isNaN(matchEndTime) && matchEndTime <= Date.now()
-                        })()
-
-                        const matchStarted = (() => {
-                          if (!detailBooking.booking_date || !detailBooking.time_slot?.start_time) return false
-                          const matchStartTime = new Date(`${detailBooking.booking_date}T${detailBooking.time_slot.start_time}`).getTime()
-                          return !isNaN(matchStartTime) && matchStartTime <= Date.now()
-                        })()
-
-                        if (detailBooking.checked_in_at && matchEnded) {
-                          return (
-                            <button
-                              type="button"
-                              className="button button--brand"
-                              disabled={updateStatus.isPending}
-                              onClick={() =>
-                                updateStatus.mutate({ bookingId: detailBooking.id, status: 'completed' })
-                              }
-                            >
-                              Hoàn tất lượt chơi
-                            </button>
-                          )
-                        }
-
-                        if (!detailBooking.checked_in_at && matchStarted) {
-                          return (
-                            <button
-                              type="button"
-                              className="button button--ghost"
-                              style={{ color: '#b45309', borderColor: '#fde68a' }}
-                              disabled={noShow.isPending}
-                              onClick={() => setNoShowingBooking(detailBooking)}
-                              title="Ghi nhận khách không tới sân theo lịch"
-                            >
-                              Vắng mặt
-                            </button>
-                          )
-                        }
-
-                        return null
-                      })()}
                     </>
                   )}
                 </div>
@@ -909,28 +723,6 @@ export function OwnerSchedulePage() {
         )}
       </Modal>
 
-      <ConfirmModal
-        isOpen={!!noShowingBooking}
-        title="Ghi nhận khách vắng mặt (No-show)"
-        message={`Bạn có chắc chắn khách hàng ${noShowingBooking?.customer?.name ?? ''} không đến sân cho đơn #BK-${noShowingBooking?.id}? Hệ thống sẽ trừ 25 điểm uy tín của khách và hoàn tất đơn.`}
-        confirmText="Xác nhận vắng mặt"
-        cancelText="Đóng"
-        danger
-        busy={noShow.isPending}
-        onClose={() => setNoShowingBooking(null)}
-        onConfirm={() => {
-          if (noShowingBooking) {
-            noShow.mutate(noShowingBooking)
-          }
-        }}
-      />
-
-      <PaymentProofModal
-        isOpen={showProof}
-        onClose={() => setShowProof(false)}
-        proofUrl={detailBooking?.payment?.proof_url}
-        title={`Biên lai đơn #BK-${detailBooking ? String(detailBooking.id).padStart(5, '0') : ''}`}
-      />
     </div>
   )
 }

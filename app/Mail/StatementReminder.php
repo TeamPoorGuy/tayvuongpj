@@ -14,16 +14,12 @@ class StatementReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    /** @param 'issued'|'due_soon'|'overdue' $kind */
+    /** Báo chủ sân đã có báo cáo đối soát của kỳ (kind: 'issued'). */
     public function __construct(public OwnerStatement $statement, public string $kind) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: match ($this->kind) {
-            'issued' => "Bảng đối soát phí nền tảng tháng {$this->statement->period}",
-            'due_soon' => "Sắp đến hạn nộp phí đối soát tháng {$this->statement->period}",
-            default => "Phí đối soát tháng {$this->statement->period} đã quá hạn",
-        });
+        return new Envelope(subject: "Báo cáo đối soát tháng {$this->statement->period}");
     }
 
     public function content(): Content

@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\BookingResource;
+use App\Models\Booking;
 use App\Services\AdminService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpFoundation\Response;
 
 class BookingController extends Controller
 {
@@ -27,7 +30,7 @@ class BookingController extends Controller
         ));
     }
 
-    public function cancel(Request $request, \App\Models\Booking $booking): \Illuminate\Http\JsonResponse
+    public function cancel(Request $request, Booking $booking): JsonResponse
     {
         $request->validate([
             'reason' => ['required', 'string', 'min:3', 'max:500'],
@@ -47,30 +50,7 @@ class BookingController extends Controller
         ]);
     }
 
-    public function updateRefund(Request $request, \App\Models\Booking $booking): \Illuminate\Http\JsonResponse
-    {
-        $request->validate([
-            'refund_status' => ['required', 'in:pending,done,waived'],
-            'refund_amount' => ['nullable', 'numeric', 'min:0'],
-        ], [
-            'refund_status.required' => 'Vui lòng chọn trạng thái hoàn tiền.',
-            'refund_status.in' => 'Trạng thái hoàn tiền không hợp lệ.',
-        ]);
-
-        $updated = $this->service->updateBookingRefund(
-            $booking,
-            $request->input('refund_status'),
-            $request->has('refund_amount') ? (float) $request->input('refund_amount') : null,
-            $request->user()
-        );
-
-        return response()->json([
-            'message' => 'Cập nhật trạng thái hoàn tiền thành công.',
-            'data' => new BookingResource($updated),
-        ]);
-    }
-
-    public function exportCsv(Request $request): \Symfony\Component\HttpFoundation\Response
+    public function exportCsv(Request $request): Response
     {
         $csv = $this->service->exportBookingsCsv(
             $request->input('status'),

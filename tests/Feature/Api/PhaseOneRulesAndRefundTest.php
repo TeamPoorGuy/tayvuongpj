@@ -80,7 +80,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
     }
 
-    public function test_customer_free_cancellation_records_pending_refund_and_no_penalty(): void
+    public function test_customer_free_cancellation_refunds_to_wallet_and_no_penalty(): void
     {
         // Trận đấu ngày mai 17:00
         $bookingDate = today()->addDay()->toDateString();
@@ -96,8 +96,8 @@ class PhaseOneRulesAndRefundTest extends TestCase
             'payment_amount' => 135000, // cọc 30%
         ]);
 
-        // Huỷ lúc 09:00 sáng ngày mai (trước giờ chơi 8 tiếng >= 4h)
-        $this->travelTo(today()->addDay()->setTime(9, 0));
+        // Huỷ lúc 09:00 hôm nay (trước giờ chơi 32 tiếng ≥ 24h → hoàn 100%)
+        $this->travelTo(today()->setTime(9, 0));
 
         Sanctum::actingAs($this->customer);
         $res = $this->patchJson("/api/v1/customer/bookings/{$booking->id}/cancel");
@@ -105,8 +105,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertOk();
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertSame(100, $this->customer->fresh()->trust_score);
     }
 
@@ -165,40 +166,10 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertOk();
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertSame(100, $this->customer->fresh()->trust_score); // Khách không có lỗi
-    }
-
-    public function test_owner_cannot_reject_or_cancel_reported_booking(): void
-    {
-        $booking = Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => today()->addDay()->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 450000,
-            'payment_status' => 'reported',
-            'payment_amount' => 135000,
-        ]);
-
-        Sanctum::actingAs($this->owner);
-
-        // Thử từ chối đơn reported
-        $resReject = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", [
-            'status' => 'rejected',
-            'reason' => 'Không muốn nhận',
-        ]);
-        $resReject->assertStatus(409);
-        $resReject->assertJsonFragment(['message' => 'Khách đã báo chuyển khoản, vui lòng xác nhận hoặc đối soát thanh toán thay vì từ chối/huỷ.']);
-
-        // Thử huỷ đơn reported
-        $resCancel = $this->patchJson("/api/v1/field-owner/bookings/{$booking->id}/status", [
-            'status' => 'cancelled',
-            'reason' => 'Huỷ ngang',
-        ]);
-        $resCancel->assertStatus(409);
     }
 
     public function test_owner_cannot_cancel_booking_after_start_time(): void
@@ -312,14 +283,13 @@ class PhaseOneRulesAndRefundTest extends TestCase
                 'is_active' => true,
             ]);
 
-            Booking::create([
-                'user_id' => $this->customer->id,
+            // Mỗi lần giữ chỗ chưa thanh toán là một lượt thanh toán đang chờ.
+            Sanctum::actingAs($this->customer);
+            $this->postJson('/api/v1/customer/bookings', [
                 'sports_field_id' => $this->field->id,
                 'time_slot_id' => $otherSlot->id,
                 'booking_date' => today()->addDays($i)->toDateString(),
-                'status' => BookingStatus::Pending->value,
-                'total_price' => 300000,
-            ]);
+            ])->assertCreated();
         }
 
         Sanctum::actingAs($this->customer);
@@ -330,7 +300,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
 
         $res->assertStatus(409);
-        $res->assertJsonFragment(['message' => 'Bạn đang có 3 đơn chờ xử lý. Tối đa chỉ được có 3 đơn cùng lúc.']);
+        $res->assertJsonFragment(['message' => 'Bạn đang có 3 lượt đặt chờ thanh toán. Tối đa chỉ được có 3 lượt cùng lúc.']);
     }
 
     public function test_booking_too_far_in_advance_is_rejected(): void
@@ -347,16 +317,11 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertStatus(422); // Validation error
     }
 
-    public function test_owner_cannot_change_bank_account_when_active_payments_exist(): void
+    public function test_owner_cannot_change_bank_account_while_a_withdrawal_is_pending(): void
     {
-        Booking::create([
-            'user_id' => $this->customer->id,
-            'sports_field_id' => $this->field->id,
-            'time_slot_id' => $this->slot->id,
-            'booking_date' => today()->addDay()->toDateString(),
-            'status' => BookingStatus::Pending->value,
-            'total_price' => 450000,
-            'payment_status' => 'awaiting',
+        \App\Models\Withdrawal::create([
+            'user_id' => $this->owner->id, 'amount' => 3000000, 'bank_bin' => '970436', 'bank_name' => 'Vietcombank',
+            'account_number' => '1234567890', 'account_holder' => 'NGUYEN CHU SAN', 'status' => 'pending',
         ]);
 
         Sanctum::actingAs($this->owner);
@@ -370,7 +335,7 @@ class PhaseOneRulesAndRefundTest extends TestCase
         ]);
 
         $res->assertStatus(409);
-        $res->assertJsonFragment(['message' => 'Không thể thay đổi thông tin tài khoản ngân hàng khi đang có đơn chờ thanh toán hoặc đang xác nhận chuyển khoản.']);
+        $res->assertJsonFragment(['message' => 'Không thể đổi tài khoản ngân hàng khi đang có lệnh rút tiền chờ xử lý.']);
     }
 
     public function test_cannot_deactivate_field_or_slot_with_upcoming_bookings(): void
@@ -426,8 +391,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
 
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertStringContainsString('Chủ sân đã bị tạm khoá tài khoản', $fresh->cancel_reason);
     }
 
@@ -459,8 +425,9 @@ class PhaseOneRulesAndRefundTest extends TestCase
 
         $fresh = $booking->fresh();
         $this->assertSame(BookingStatus::Cancelled, $fresh->status);
-        $this->assertSame('pending', $fresh->refund_status);
+        $this->assertSame('done', $fresh->refund_status); // Hoàn thẳng vào ví khách
         $this->assertEquals(135000, $fresh->refund_amount);
+        $this->assertEquals(135000, $this->customer->fresh()->wallet_balance);
         $this->assertStringContainsString('Chủ sân đã bị đình chỉ', $fresh->cancel_reason);
     }
 

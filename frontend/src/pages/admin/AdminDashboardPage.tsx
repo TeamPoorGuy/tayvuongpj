@@ -9,7 +9,6 @@ import {
   Coins,
   Inbox,
   Receipt,
-  RotateCcw,
   ShieldCheck,
   TrendingUp,
 } from 'lucide-react'
@@ -110,23 +109,13 @@ export function AdminDashboardPage() {
             </strong>
           </Link>
 
-          <Link to="/admin/statements" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to="/admin/withdrawals" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Đối soát đã báo chuyển</span>
-              <Receipt size={16} style={{ color: queue.reported_statements > 0 ? 'var(--pitch)' : 'var(--muted)' }} />
+              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Lệnh rút chờ chuyển khoản</span>
+              <Receipt size={16} style={{ color: queue.pending_withdrawals > 0 ? 'var(--danger)' : 'var(--muted)' }} />
             </div>
-            <strong style={{ fontSize: 20, color: queue.reported_statements > 0 ? 'var(--pitch)' : 'var(--forest)' }}>
-              {queue.reported_statements}
-            </strong>
-          </Link>
-
-          <Link to="/admin/bookings" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Đơn cần hoàn cọc</span>
-              <RotateCcw size={16} style={{ color: queue.pending_refunds > 0 ? 'var(--danger)' : 'var(--muted)' }} />
-            </div>
-            <strong style={{ fontSize: 20, color: queue.pending_refunds > 0 ? 'var(--danger)' : 'var(--forest)' }}>
-              {queue.pending_refunds}
+            <strong style={{ fontSize: 20, color: queue.pending_withdrawals > 0 ? 'var(--danger)' : 'var(--forest)' }}>
+              {queue.pending_withdrawals}
             </strong>
           </Link>
         </div>
@@ -150,19 +139,19 @@ export function AdminDashboardPage() {
           </div>
           <strong style={{ fontSize: 22, color: 'var(--pitch)' }}>{formatMoney(kpis.commission_accrued)}</strong>
           <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
-            Đã thu: {formatMoney(kpis.commission_collected)} · Chưa gồm tiền cọc bị phạt
+            Đã trừ khi chi trả: {formatMoney(kpis.commission_collected)}
           </small>
         </div>
 
         <div className="stat">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Công nợ hoa hồng chủ sân</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Hoa hồng của kỳ chưa chi trả</span>
             <Coins size={18} style={{ color: kpis.commission_debt > 0 ? 'var(--warn)' : 'var(--muted)' }} />
           </div>
           <strong style={{ fontSize: 22, color: kpis.commission_debt > 0 ? 'var(--warn)' : 'var(--forest)' }}>
             {formatMoney(kpis.commission_debt)}
           </strong>
-          <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>Chưa thanh toán & đang báo chuyển</small>
+          <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>SportHub đang giữ, sẽ trừ khi chuyển tiền cho chủ sân</small>
         </div>
 
         <div className="stat">

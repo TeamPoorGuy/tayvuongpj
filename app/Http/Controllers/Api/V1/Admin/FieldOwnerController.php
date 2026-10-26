@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\VerifyOwnerRequest;
 use App\Http\Resources\Api\OwnerProfileResource;
+use App\Models\AdminLog;
 use App\Models\FieldOwnerProfile;
 use App\Models\OwnerDocument;
 use App\Services\AdminService;
@@ -23,9 +24,11 @@ class FieldOwnerController extends Controller
         return OwnerProfileResource::collection($this->service->ownerProfiles($request->query('status')));
     }
 
-    public function document(FieldOwnerProfile $profile, OwnerDocument $document): StreamedResponse
+    public function document(Request $request, FieldOwnerProfile $profile, OwnerDocument $document): StreamedResponse
     {
         abort_unless($document->field_owner_profile_id === $profile->id && Storage::disk('local')->exists($document->path), 404);
+
+        AdminLog::record('view_owner_document', $profile, ['type' => $document->type], $request->user());
 
         return Storage::disk('local')->response($document->path, $document->original_name);
     }

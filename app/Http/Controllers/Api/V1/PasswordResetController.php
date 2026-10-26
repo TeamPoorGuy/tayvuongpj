@@ -15,7 +15,7 @@ class PasswordResetController extends Controller
 {
     public function forgot(Request $request): JsonResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
+        $request->validate(['email' => ['required', 'email', 'max:255']]);
 
         // Luôn trả cùng một thông báo để không lộ email nào đã đăng ký.
         Password::sendResetLink($request->only('email'));
@@ -27,7 +27,7 @@ class PasswordResetController extends Controller
     {
         $data = $request->validate([
             'token' => ['required', 'string'],
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'confirmed', PasswordRule::defaults()],
         ]);
 

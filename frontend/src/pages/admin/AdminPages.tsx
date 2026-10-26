@@ -11,7 +11,6 @@ import {
   FileText,
   FolderTree,
   Phone,
-  RotateCcw,
   Search,
   Trophy,
   MessageSquareText,
@@ -28,7 +27,6 @@ import { ConfirmModal } from '../../components/ConfirmModal'
 import { Modal } from '../../components/Modal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { Pagination } from '../../components/Pagination'
-import { PaymentProofModal } from '../../components/PaymentProofModal'
 import { QueryState } from '../../components/QueryState'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useToast } from '../../components/Toast'
@@ -1214,10 +1212,6 @@ export function AdminBookingsPage() {
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
   const [adminCancelReason, setAdminCancelReason] = useState('')
-  const [refundingBooking, setRefundingBooking] = useState<Booking | null>(null)
-  const [refundStatusInput, setRefundStatusInput] = useState<'pending' | 'done' | 'waived'>('done')
-  const [refundAmountInput, setRefundAmountInput] = useState<number | ''>('')
-  const [proofBooking, setProofBooking] = useState<Booking | null>(null)
 
   const bookings = useQuery({
     queryKey: ['admin', 'bookings', status, date, search, page],
@@ -1243,30 +1237,6 @@ export function AdminBookingsPage() {
     onError: (err) => toast.error(errorMessage(err), 'Không thể huỷ đơn'),
   })
 
-  const updateRefundMutation = useMutation({
-    mutationFn: async ({
-      id,
-      refund_status,
-      refund_amount,
-    }: {
-      id: number
-      refund_status: string
-      refund_amount?: number
-    }) =>
-      api.patch(`/admin/bookings/${id}/refund`, {
-        refund_status,
-        refund_amount: typeof refund_amount === 'number' ? refund_amount : undefined,
-      }),
-    onSuccess: () => {
-      toast.success('Đã cập nhật trạng thái hoàn tiền cọc thành công.')
-      setRefundingBooking(null)
-      void client.invalidateQueries({ queryKey: ['admin', 'bookings'] })
-      void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-      void client.invalidateQueries({ queryKey: ['admin', 'logs'] })
-    },
-    onError: (err) => toast.error(errorMessage(err), 'Không thể cập nhật hoàn tiền'),
-  })
-
   const handleStatusChange = (newStatus: string) => {
     setStatus(newStatus)
     setPage(1)
@@ -1275,12 +1245,6 @@ export function AdminBookingsPage() {
   const handleOpenCancel = (booking: Booking) => {
     setCancellingBooking(booking)
     setAdminCancelReason('')
-  }
-
-  const handleOpenRefund = (booking: Booking) => {
-    setRefundingBooking(booking)
-    setRefundStatusInput(booking.refund?.status === 'done' ? 'done' : 'done')
-    setRefundAmountInput(booking.refund?.amount ?? booking.payment?.deposit_amount ?? 0)
   }
 
   return (
@@ -1373,16 +1337,6 @@ export function AdminBookingsPage() {
               >
                 <Eye size={14} /> Chi tiết
               </button>
-              {booking.payment?.proof_url && (
-                <button
-                  type="button"
-                  className="button button--small button--ghost"
-                  onClick={() => setProofBooking(booking)}
-                  title="Xem ảnh chứng từ chuyển khoản"
-                >
-                  <FileText size={14} /> Biên lai
-                </button>
-              )}
               {booking.status !== 'completed' && booking.status !== 'cancelled' && (
                 <button
                   type="button"
@@ -1391,16 +1345,6 @@ export function AdminBookingsPage() {
                   title="Admin can thiệp huỷ đơn"
                 >
                   <Ban size={14} /> Huỷ
-                </button>
-              )}
-              {(booking.refund || (booking.status === 'cancelled' && booking.payment?.status === 'paid')) && (
-                <button
-                  type="button"
-                  className="button button--small button--ghost"
-                  onClick={() => handleOpenRefund(booking)}
-                  title="Cập nhật trạng thái chuyển khoản hoàn tiền"
-                >
-                  <RotateCcw size={14} /> Hoàn cọc
                 </button>
               )}
             </div>,
@@ -1458,7 +1402,7 @@ export function AdminBookingsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span>Khách đã thanh toán:</span>
                 <strong style={{ color: viewingBooking.payment?.status === 'paid' ? 'var(--pitch)' : 'var(--warn)' }}>
-                  {formatMoney(viewingBooking.payment?.amount ?? 0)} ({viewingBooking.payment?.status === 'paid' ? 'Đã nhận' : viewingBooking.payment?.status === 'reported' ? 'Báo chuyển' : 'Chờ'})
+                  {formatMoney(viewingBooking.payment?.amount ?? 0)} ({viewingBooking.payment?.status === 'paid' ? 'Đã nhận' : 'Chờ'})
                 </strong>
               </div>
               {viewingBooking.payment?.code && (
@@ -1475,19 +1419,8 @@ export function AdminBookingsPage() {
               )}
               {viewingBooking.refund && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, padding: '8px 10px', background: '#fef3c7', borderRadius: 6, color: '#92400e' }}>
-                  <span>Tiền cọc cần hoàn trả:</span>
-                  <strong>{formatMoney(viewingBooking.refund.amount)} ({viewingBooking.refund.status === 'done' ? 'Đã chuyển hoàn' : viewingBooking.refund.status === 'waived' ? 'Miễn hoàn' : 'Chờ chuyển'})</strong>
-                </div>
-              )}
-              {viewingBooking.payment?.proof_url && (
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-start' }}>
-                  <button
-                    type="button"
-                    className="button button--ghost button--small"
-                    onClick={() => setProofBooking(viewingBooking)}
-                  >
-                    <Eye size={13} /> Xem biên lai chuyển khoản
-                  </button>
+                  <span>Tiền hoàn cho khách (vào ví):</span>
+                  <strong>{formatMoney(viewingBooking.refund.amount)} ({viewingBooking.refund.status === 'waived' ? 'Miễn hoàn' : 'Đã vào ví'})</strong>
                 </div>
               )}
             </div>
@@ -1521,13 +1454,6 @@ export function AdminBookingsPage() {
           </div>
         )}
       </Modal>
-
-      <PaymentProofModal
-        isOpen={!!proofBooking}
-        onClose={() => setProofBooking(null)}
-        proofUrl={proofBooking?.payment?.proof_url}
-        title={`Biên lai đơn #BK-${proofBooking?.id ?? ''}`}
-      />
 
       {/* Modal Admin huỷ đơn */}
       <Modal
@@ -1587,74 +1513,6 @@ export function AdminBookingsPage() {
         )}
       </Modal>
 
-      {/* Modal Cập nhật hoàn tiền cọc */}
-      <Modal
-        isOpen={!!refundingBooking}
-        onClose={() => setRefundingBooking(null)}
-        title={`Cập nhật hoàn cọc đơn #BK-${refundingBooking?.id}`}
-      >
-        {refundingBooking && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              updateRefundMutation.mutate({
-                id: refundingBooking.id,
-                refund_status: refundStatusInput,
-                refund_amount: refundAmountInput !== '' ? Number(refundAmountInput) : undefined,
-              })
-            }}
-            style={{ maxWidth: 460 }}
-          >
-            <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-              <div>Khách hàng: <strong>{refundingBooking.customer?.name}</strong></div>
-              <div>Tổng tiền đơn: <strong>{formatMoney(refundingBooking.total_price)}</strong></div>
-              <div>Đã trả cọc: <strong>{formatMoney(refundingBooking.payment?.amount ?? 0)}</strong></div>
-            </div>
-
-            <div className="form-stack">
-              <label>
-                <span>Trạng thái hoàn tiền</span>
-                <select
-                  value={refundStatusInput}
-                  onChange={(e) => setRefundStatusInput(e.target.value as any)}
-                >
-                  <option value="done">Đã hoàn tiền (đã chuyển khoản trả khách)</option>
-                  <option value="pending">Chờ hoàn tiền (chưa chuyển khoản)</option>
-                  <option value="waived">Miễn hoàn tiền (khách tự ý bỏ/vi phạm)</option>
-                </select>
-              </label>
-
-              <label>
-                <span>Số tiền hoàn cọc (VNĐ)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={refundAmountInput}
-                  onChange={(e) => setRefundAmountInput(e.target.value === '' ? '' : Number(e.target.value))}
-                />
-              </label>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  onClick={() => setRefundingBooking(null)}
-                >
-                  Đóng
-                </button>
-                <button
-                  type="submit"
-                  className="button button--brand"
-                  disabled={updateRefundMutation.isPending}
-                >
-                  {updateRefundMutation.isPending ? 'Đang lưu...' : 'Lưu kết quả hoàn cọc'}
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
-      </Modal>
     </>
   )
 }

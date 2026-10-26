@@ -31,7 +31,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'terms_accepted_at',
     ];
 
-    // role / is_active are privileged: set via forceFill only, never mass-assigned.
+    // role / is_active / trust_score / wallet_balance are privileged: set via forceFill only, never mass-assigned.
 
     /**
      * The attributes that should be hidden for serialization.
@@ -55,6 +55,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'is_active' => 'boolean',
             'trust_score' => 'integer',
+            'wallet_balance' => 'decimal:2',
             'terms_accepted_at' => 'datetime',
         ];
     }
@@ -130,5 +131,15 @@ class User extends Authenticatable implements MustVerifyEmail
     public function trustScoreLogs()
     {
         return $this->hasMany(TrustScoreLog::class)->latest();
+    }
+
+    public function walletTransactions()
+    {
+        return $this->hasMany(WalletTransaction::class);
+    }
+
+    public function withdrawals()
+    {
+        return $this->hasMany(Withdrawal::class);
     }
 }

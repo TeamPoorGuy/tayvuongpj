@@ -1,6 +1,7 @@
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner'
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   Building2,
   CalendarDays,
@@ -15,9 +16,12 @@ import {
   Sliders,
   Trophy,
   UsersRound,
+  Wallet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { api } from '../api/client'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/auth-context'
 import { useReveal } from '../hooks/useReveal'
@@ -25,6 +29,7 @@ import { Avatar } from '../components/Avatar'
 
 const customerNav = [
   { to: '/bookings', label: 'Lịch chơi của tôi', icon: CalendarDays },
+  { to: '/wallet', label: 'Ví SportHub', icon: Wallet },
   { to: '/profile', label: 'Hồ sơ cá nhân', icon: CircleUserRound },
 ]
 
@@ -33,8 +38,10 @@ const ownerNav = [
   { to: '/owner/schedule', label: 'Lịch sân trực quan', icon: CalendarDays },
   { to: '/owner/fields', label: 'Quản lý sân', icon: Building2 },
   { to: '/owner/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
-  { to: '/owner/statements', label: 'Đối soát & Phí sàn', icon: Receipt },
+  { to: '/owner/wallet', label: 'Ví & Rút tiền', icon: Wallet },
+  { to: '/owner/statements', label: 'Báo cáo đối soát', icon: Receipt },
   { to: '/owner/reviews', label: 'Đánh giá khách', icon: MessageSquareText },
+  { to: '/owner/complaints', label: 'Khiếu nại', icon: AlertCircle },
   { to: '/owner/profile', label: 'Hồ sơ cơ sở', icon: CircleUserRound },
 ]
 
@@ -51,6 +58,8 @@ const adminGroups = [
     title: 'Vận hành',
     items: [
       { to: '/admin/bookings', label: 'Đơn đặt sân', icon: CalendarDays },
+      { to: '/admin/payments', label: 'Giao dịch thu hộ', icon: Receipt },
+      { to: '/admin/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
       { to: '/admin/complaints', label: 'Khiếu nại', icon: AlertTriangle },
       { to: '/admin/matches', label: 'Phòng tìm đối', icon: Trophy },
     ],
@@ -60,7 +69,7 @@ const adminGroups = [
     items: [
       { to: '/admin/owners', label: 'Duyệt chủ sân', icon: ShieldCheck },
       { to: '/admin/fields', label: 'Duyệt sân', icon: Building2 },
-      { to: '/admin/statements', label: 'Đối soát tháng', icon: Coins },
+      { to: '/admin/statements', label: 'Báo cáo đối soát', icon: Coins },
     ],
   },
   {
@@ -85,6 +94,15 @@ export function DashboardLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   useReveal([location.pathname])
+
+  // Số việc đang chờ theo đường dẫn menu (khiếu nại cần phản hồi, đơn chờ duyệt...), tự làm mới mỗi phút.
+  const badges = useQuery({
+    queryKey: ['badges', user?.id],
+    enabled: !!user,
+    refetchInterval: 60_000,
+    queryFn: async () => (await api.get<{ data: Record<string, number> }>('/me/badges')).data.data,
+  }).data
+  const badge = (to: string) => (badges?.[to] ? <b className="sidebar__badge" aria-label={`${badges[to]} việc đang chờ`}>{badges[to]}</b> : null)
 
   const isAdmin = user?.role === 'admin'
   const isApprovedOwner = user?.field_owner_profile?.verification_status === 'approved'
@@ -184,6 +202,7 @@ export function DashboardLayout() {
                       )}
                       <Icon size={16} />
                       <span>{label}</span>
+                      {badge(to)}
                     </NavLink>
                   )
                 })}
@@ -204,6 +223,7 @@ export function DashboardLayout() {
                   )}
                   <Icon size={16} />
                   <span>{label}</span>
+                  {badge(to)}
                 </NavLink>
               )
             })

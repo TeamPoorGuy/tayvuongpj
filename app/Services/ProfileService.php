@@ -69,14 +69,8 @@ class ProfileService
                 || (isset($attributes['bank_account_holder']) && $attributes['bank_account_holder'] !== $profile->bank_account_holder);
 
             if ($bankChanging) {
-                $fieldIds = \App\Models\SportsField::withTrashed()->where('field_owner_id', $user->id)->pluck('id');
-                $hasPendingPayments = \App\Models\Booking::whereIn('sports_field_id', $fieldIds)
-                    ->whereIn('payment_status', ['awaiting', 'reported'])
-                    ->whereIn('status', [\App\Enums\BookingStatus::Pending->value, \App\Enums\BookingStatus::Confirmed->value])
-                    ->exists();
-
-                if ($hasPendingPayments) {
-                    throw new \App\Exceptions\ConflictException('Không thể thay đổi thông tin tài khoản ngân hàng khi đang có đơn chờ thanh toán hoặc đang xác nhận chuyển khoản.');
+                if (\App\Models\Withdrawal::where('user_id', $user->id)->where('status', 'pending')->exists()) {
+                    throw new \App\Exceptions\ConflictException('Không thể đổi tài khoản ngân hàng khi đang có lệnh rút tiền chờ xử lý.');
                 }
             }
         }
