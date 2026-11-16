@@ -54,6 +54,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return () => api.interceptors.response.eject(id);
     }, [clearAuthState]);
 
+    // Nút Back có thể khôi phục nguyên trang từ bfcache (state React cũ còn user đã đăng xuất): hỏi lại server.
+    useEffect(() => {
+        const onPageShow = (e: PageTransitionEvent) => {
+            if (e.persisted) {
+                void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            }
+        };
+        window.addEventListener("pageshow", onPageShow);
+        return () => window.removeEventListener("pageshow", onPageShow);
+    }, [queryClient]);
+
     const dropUserData = () =>
         queryClient.removeQueries({
             predicate: (query) => query.queryKey[0] !== "auth",
