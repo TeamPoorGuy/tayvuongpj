@@ -40,7 +40,6 @@ class PhaseZeroFoundationTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'commission_percent',
-                    'statement_due_days',
                     'deposit_percent',
                     'payment_hold_minutes',
                     'free_cancel_hours',
@@ -56,7 +55,6 @@ class PhaseZeroFoundationTest extends TestCase
             ]);
 
         $this->assertSame(8, $response->json('data.commission_percent'));
-        $this->assertSame(7, $response->json('data.statement_due_days'));
         $this->assertSame(30, $response->json('data.deposit_percent'));
     }
 

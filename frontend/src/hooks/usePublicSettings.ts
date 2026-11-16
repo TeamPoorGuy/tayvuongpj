@@ -4,7 +4,6 @@ import type { ApiEnvelope, PublicSettings } from '../types/api'
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
   commission_percent: 8,
-  statement_due_days: 7,
   deposit_percent: 30,
   payment_hold_minutes: 15,
   min_minutes: 60,

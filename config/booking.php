@@ -1,11 +1,6 @@
 <?php
 
 return [
-    // Đơn chờ duyệt: khách huỷ lúc nào cũng được, không bị trừ điểm.
-    // Đơn đã duyệt: khách chỉ huỷ được trong N giờ kể từ lúc chủ sân duyệt.
-    'confirmed_cancel_window_hours' => (int) env('BOOKING_CONFIRMED_CANCEL_WINDOW_HOURS', 2),
-    // Đơn chờ duyệt quá N giờ mà chủ sân không phản hồi thì tự huỷ (hoặc đến giờ chơi, nếu sớm hơn).
-    'pending_expire_hours' => (int) env('BOOKING_PENDING_EXPIRE_HOURS', 24),
     // Huỷ đơn đã duyệt khi còn dưới N giờ trước giờ bắt đầu thì bị trừ điểm uy tín.
     'late_cancel_hours' => (int) env('BOOKING_LATE_CANCEL_HOURS', 4),
     // Thanh toán chuyển khoản: mức cọc (% tổng tiền, làm tròn lên nghìn đồng) nếu khách không trả hết.
@@ -26,12 +21,15 @@ return [
     'no_show_appeal_hours' => (int) env('BOOKING_NO_SHOW_APPEAL_HOURS', 48),
     // Lệnh rút ví từ mức này trở xuống tự được duyệt (đ); lớn hơn chờ admin chuyển khoản.
     'withdraw_auto_limit' => (int) env('BOOKING_WITHDRAW_AUTO_LIMIT', 2000000),
+    // Chủ sân huỷ từ N đơn đã thanh toán trong 30 ngày thì hiện ở việc chờ của admin để xem xét (có thể ngưng sân).
+    'owner_cancel_warn_count' => (int) env('BOOKING_OWNER_CANCEL_WARN_COUNT', 3),
     // Tỉ lệ hoa hồng nền tảng mặc định (%)
     'commission_percent' => (int) env('PLATFORM_COMMISSION_PERCENT', 8),
-    // Số ngày chủ sân cần thanh toán đối soát kể từ ngày xuất bảng
-    'statement_due_days' => (int) env('STATEMENT_DUE_DAYS', 7),
     // Số đơn chờ duyệt tối đa một khách được tạo cùng lúc
     'max_pending_bookings' => (int) env('BOOKING_MAX_PENDING', 3),
+    // Điểm tin cậy dưới ngưỡng này thì chỉ được giữ chỗ chờ thanh toán tối đa N lượt cùng lúc.
+    'low_trust_score' => (int) env('BOOKING_LOW_TRUST_SCORE', 50),
+    'low_trust_max_pending' => (int) env('BOOKING_LOW_TRUST_MAX_PENDING', 1),
     // Số ngày tối đa được đặt trước
     'max_advance_days' => (int) env('BOOKING_MAX_ADVANCE_DAYS', 30),
     // Thông tin tài khoản nhận phí nền tảng

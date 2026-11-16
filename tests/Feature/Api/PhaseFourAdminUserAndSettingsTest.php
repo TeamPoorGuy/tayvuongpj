@@ -84,13 +84,11 @@ class PhaseFourAdminUserAndSettingsTest extends TestCase
 
         $putRes = $this->putJson('/api/v1/admin/settings', [
             'commission_percent' => 10,
-            'statement_due_days' => 10,
             'support_hotline' => '1900 9999',
         ]);
 
         $putRes->assertOk();
         $this->assertEquals(10, Settings::getInt('commission_percent'));
-        $this->assertEquals(10, Settings::getInt('statement_due_days'));
         $this->assertEquals('1900 9999', Settings::getString('support_hotline'));
 
         $this->assertDatabaseHas('admin_logs', [

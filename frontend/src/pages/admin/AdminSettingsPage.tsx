@@ -63,7 +63,7 @@ export function AdminSettingsPage() {
         icon={<Sliders />}
         kicker="Quản trị tham số"
         title="Cấu hình hệ thống"
-        copy="Thiết lập các tham số vận hành: chính sách cọc & hoàn tiền, hạn chi trả chủ sân, hoa hồng nền tảng và tài khoản nhận tiền thu hộ."
+        copy="Thiết lập các tham số vận hành: chính sách cọc & hoàn tiền, hạn mức rút ví, hoa hồng nền tảng và tài khoản nhận tiền thu hộ."
       />
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -190,7 +190,7 @@ export function AdminSettingsPage() {
         <div className="content-card panel-form" style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
             <CircleDollarSign size={22} style={{ color: 'var(--forest)' }} />
-            <h2 style={{ fontSize: 18, margin: 0, color: 'var(--forest)' }}>Hoa hồng nền tảng & Chi trả chủ sân</h2>
+            <h2 style={{ fontSize: 18, margin: 0, color: 'var(--forest)' }}>Hoa hồng nền tảng</h2>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
@@ -204,18 +204,6 @@ export function AdminSettingsPage() {
                 onChange={(e) => handleChange('commission_percent', e.target.value === '' ? '' : Number(e.target.value))}
               />
               <small style={{ color: 'var(--muted)', fontSize: 12 }}>Thu trên giá trị đơn hoàn thành / no-show</small>
-            </label>
-
-            <label style={{ margin: 0 }}>
-              <span>Hạn SportHub chi trả chủ sân (ngày)</span>
-              <input
-                type="number"
-                min="1"
-                max="30"
-                value={formData.statement_due_days ?? 7}
-                onChange={(e) => handleChange('statement_due_days', e.target.value === '' ? '' : Number(e.target.value))}
-              />
-              <small style={{ color: 'var(--muted)', fontSize: 12 }}>Hạn cam kết chuyển khoản sau khi chốt đối soát tháng</small>
             </label>
           </div>
         </div>

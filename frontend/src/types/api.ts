@@ -33,6 +33,8 @@ export interface OwnerProfile {
   terms_version?: string | null
   terms_accepted_at?: string | null
   documents?: { id: number; type: string; original_name: string; url: string }[]
+  /** Chỉ admin: số đơn đã thanh toán chủ sân huỷ trong 30 ngày. */
+  cancellations_30d?: number
   rejection_reason: string | null
   verified_at: string | null
   user?: User
@@ -226,6 +228,8 @@ export interface Payment {
   due_at: string
   paid_at: string | null
   source: 'webhook' | 'admin' | 'wallet' | null
+  /** Chỉ true khi backend chạy local: có nút mô phỏng chuyển khoản. */
+  simulate_available?: boolean
   bank_ref: string | null
   bank: { name: string; code: string; account_number: string; account_holder: string; qr_url: string | null }
   customer?: User
@@ -419,7 +423,6 @@ export interface TrustScoreLog {
 
 export interface PublicSettings {
   commission_percent: number
-  statement_due_days: number
   deposit_percent: number
   payment_hold_minutes: number
   min_minutes: number
@@ -532,6 +535,7 @@ export interface AdminDashboardData {
     pending_fields: number
     open_complaints: number
     pending_withdrawals: number
+    frequent_cancel_owners: number
   }
   total_gmv?: number
   total_commission_collected?: number
@@ -563,6 +567,8 @@ export interface WalletTransaction {
 
 export interface WalletData {
   balance: number
+  /** Phần rút được về ngân hàng (số dư trừ tiền mới nạp chưa đủ ngày giữ). */
+  withdrawable: number
   /** Chủ sân: tiền các đơn đã thanh toán nhưng chưa tới hạn cộng vào ví; null với khách thường. */
   pending_earnings: number | null
   transactions: WalletTransaction[]
