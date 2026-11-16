@@ -184,6 +184,7 @@ export function PublicLayout() {
             <strong>Chính sách & Quy định</strong>
             <Link to="/dieu-khoan">Điều khoản sử dụng</Link>
             <Link to="/chinh-sach-bao-mat">Chính sách bảo mật</Link>
+            <Link to="/chinh-sach-cookie">Chính sách cookie</Link>
             <Link to="/chinh-sach-huy-hoan">Chính sách hủy & hoàn cọc</Link>
             <Link to="/quy-che-chu-san">Quy chế đối tác chủ sân</Link>
           </div>

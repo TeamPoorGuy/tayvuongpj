@@ -31,7 +31,7 @@ export function CookieNotice() {
         bottom: 20,
         right: 20,
         zIndex: 50,
-        maxWidth: 380,
+        maxWidth: 'min(380px, calc(100vw - 32px))',
         background: 'var(--paper)',
         borderRadius: 14,
         padding: '16px 18px',
@@ -61,7 +61,7 @@ export function CookieNotice() {
           </strong>
           SportHub sử dụng cookie kỹ thuật và lưu trữ cục bộ để duy trì phiên đăng nhập và tối ưu trải nghiệm.{' '}
           <Link
-            to="/chinh-sach-bao-mat"
+            to="/chinh-sach-cookie"
             style={{ color: 'var(--pitch)', fontWeight: 600, textDecoration: 'underline' }}
           >
             Xem chi tiết

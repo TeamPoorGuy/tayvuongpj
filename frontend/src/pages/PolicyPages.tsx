@@ -11,6 +11,7 @@ import {
   Sparkles,
   UserCheck,
 } from 'lucide-react'
+import { Link } from 'react-router'
 import { usePublicSettings } from '../hooks/usePublicSettings'
 import { useToast } from '../components/Toast'
 import { api } from '../api/client'
@@ -35,7 +36,6 @@ function PolicyShell({
             <span className="kicker">{kicker}</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="badge badge--soft" style={{ fontSize: 11 }}>Cập nhật: {updatedAt}</span>
-              <span className="badge badge--warning" style={{ fontSize: 11 }}>Văn bản mô phỏng cho đồ án</span>
             </div>
           </div>
           <h1 style={{ fontSize: 'clamp(24px, 3.2vw, 36px)', margin: '0 0 10px', color: 'var(--forest)' }}>
@@ -77,20 +77,31 @@ export function TermsPage() {
           <li>Chuyển khoản (cọc hoặc trả hết) vào tài khoản SportHub đúng số tiền và nội dung trong vòng <strong>{settings?.payment_hold_minutes ?? 15} phút</strong> giữ chỗ; đơn được xác nhận ngay khi SportHub nhận tiền.</li>
           <li>Không chuyển tiền trực tiếp cho chủ sân: SportHub giữ tiền và chỉ bảo vệ, hoàn tiền cho giao dịch qua nền tảng.</li>
           <li>Hết thời gian giữ chỗ mà chưa thanh toán thì đơn tự huỷ để nhả chỗ cho người khác.</li>
+          <li>Mỗi tài khoản chỉ có tối đa <strong>{settings?.max_pending_bookings ?? 3} lượt giữ chỗ</strong> đang chờ thanh toán cùng lúc.</li>
         </ul>
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Trách nhiệm của chủ sân</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Ví SportHub</h2>
+        <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <li>Mỗi tài khoản có một ví. Tiền hoàn khi huỷ đơn được cộng thẳng vào ví; bạn dùng số dư để thanh toán đơn tiếp theo hoặc rút về ngân hàng.</li>
+          <li>Tiền nạp vào ví dùng để đặt sân được ngay, nhưng chỉ rút về ngân hàng được sau <strong>7 ngày</strong> kể từ lần nạp. Tiền hoàn từ đơn huỷ không bị giữ.</li>
+          <li>Số tiền rút tối thiểu 50.000đ, mỗi lần chỉ có một lệnh rút chờ xử lý. Lệnh nhỏ được chuyển tự động; lệnh lớn hoặc của tài khoản đang có khiếu nại sẽ chờ Ban quản trị chuyển khoản, và tiền được giữ khỏi ví cho tới khi lệnh hoàn tất hoặc bị từ chối.</li>
+          <li>Nếu bạn chuyển khoản thiếu, thừa hoặc chuyển muộn so với đơn, phần tiền nhận được sẽ được cộng vào ví để bạn tự dùng hoặc rút.</li>
+        </ul>
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>4. Trách nhiệm của chủ sân</h2>
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Đảm bảo cơ sở vật chất, khung giờ thi đấu trống đúng theo lịch công bố trên hệ thống.</li>
-          <li>Chuẩn bị sân đúng giờ cho các đơn đã thanh toán qua SportHub; huỷ đơn chỉ khi bất khả kháng (khách được hoàn đủ tiền).</li>
+          <li>Chuẩn bị sân đúng giờ cho các đơn đã thanh toán qua SportHub; huỷ đơn chỉ khi bất khả kháng (khách được hoàn đủ tiền). Huỷ nhiều đơn đã thanh toán sẽ được Ban quản trị xem xét.</li>
           <li>Tiếp đón khách hàng và thực hiện thủ tục check-in theo quy định để ghi nhận điểm uy tín cho khách.</li>
         </ul>
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>4. Miễn trừ trách nhiệm đối với giao dịch ngoài nền tảng</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>5. Giao dịch ngoài nền tảng</h2>
         <div className="notice notice--error" style={{ marginBottom: 16 }}>
           <ShieldAlert size={18} />
           <span>
@@ -100,9 +111,9 @@ export function TermsPage() {
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>5. Hệ thống điểm tin cậy (Trust Score)</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>6. Hệ thống điểm tin cậy</h2>
         <p>
-          Mỗi tài khoản bắt đầu với 100 điểm tin cậy. Điểm sẽ được cộng khi bạn đến sân đúng giờ (+10 điểm) và bị trừ khi hủy muộn (-10 đến -15 điểm) hoặc vắng mặt không lý do (-25 điểm). Tài khoản có điểm tin cậy quá thấp sẽ bị giới hạn số lượng đơn đặt sân cùng lúc.
+          Mỗi tài khoản bắt đầu với 100 điểm tin cậy (tối đa 150). Điểm được cộng khi bạn đến sân và check-in đúng giờ (+10 điểm), bị trừ khi hủy sát giờ chơi (-15 điểm) hoặc vắng mặt không báo trước (-25 điểm). Tài khoản dưới <strong>50 điểm</strong> chỉ được giữ chỗ một lượt chờ thanh toán tại một thời điểm cho tới khi lấy lại điểm.
         </p>
       </section>
     </PolicyShell>
@@ -117,7 +128,7 @@ export function PrivacyPage() {
     <PolicyShell kicker="Bảo mật dữ liệu" title="Chính sách bảo mật thông tin">
       <div className="content-card" style={{ padding: 24, marginBottom: 24 }}>
         <p style={{ margin: 0, color: 'var(--soft)' }}>
-          SportHub cam kết tuân thủ các quy định pháp luật về bảo vệ dữ liệu cá nhân. Chính sách này mô tả cách chúng tôi thu thập, sử dụng, lưu trữ và bảo vệ thông tin của bạn.
+          Chính sách này mô tả SportHub thu thập những thông tin nào của bạn, dùng vào việc gì, lưu trữ và bảo vệ ra sao. Chúng tôi chỉ giữ những gì cần cho việc đặt sân và thanh toán.
         </p>
       </div>
 
@@ -127,7 +138,8 @@ export function PrivacyPage() {
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li><strong>Khách hàng:</strong> Họ tên, địa chỉ email, số điện thoại, địa chỉ (nếu có), lịch sử đặt sân và điểm uy tín.</li>
           <li><strong>Chủ sân:</strong> Họ tên người đại diện, số CCCD/định danh cá nhân, tên cơ sở kinh doanh, số tài khoản ngân hàng và các giấy tờ xác thực pháp lý.</li>
-          <li><strong>Dữ liệu kỹ thuật:</strong> Địa chỉ IP, nhật ký truy cập và cookie kỹ thuật duy trì phiên làm việc.</li>
+          <li><strong>Dữ liệu giao dịch:</strong> Lịch sử nạp ví, thanh toán, hoàn tiền, lệnh rút và tài khoản ngân hàng bạn nhập để nhận tiền rút.</li>
+          <li><strong>Dữ liệu kỹ thuật:</strong> Địa chỉ IP, nhật ký truy cập và cookie kỹ thuật duy trì phiên làm việc (xem <Link to="/chinh-sach-cookie" style={{ color: 'var(--pitch)', fontWeight: 600 }}>Chính sách cookie</Link>).</li>
         </ul>
       </section>
 
@@ -135,7 +147,7 @@ export function PrivacyPage() {
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Mục đích xử lý dữ liệu</h2>
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Xác thực tài khoản và gửi email thông báo trạng thái đơn đặt sân.</li>
-          <li>Cung cấp số tài khoản và nội dung chuyển tiền để phục vụ việc chuyển khoản giữa khách và chủ sân.</li>
+          <li>Xử lý thanh toán, hoàn tiền vào ví và chuyển tiền rút về đúng tài khoản ngân hàng của bạn.</li>
           <li>Hỗ trợ giải quyết tranh chấp, đối soát thu hộ - chi trả và nâng cao chất lượng dịch vụ.</li>
           <li>Không mua bán, chia sẻ hoặc chuyển giao dữ liệu cá nhân cho bên thứ ba vì mục đích thương mại.</li>
         </ul>
@@ -144,7 +156,7 @@ export function PrivacyPage() {
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Biện pháp bảo vệ và lưu trữ</h2>
         <p>
-          Mật khẩu của người dùng được mã hóa bằng thuật toán băm an toàn (Bcrypt/Argon2). Các giấy tờ nhạy cảm như CCCD, giấy phép kinh doanh của chủ sân được lưu trữ trên vùng nhớ riêng biệt (private storage) có kiểm soát quyền truy cập nghiêm ngặt. Với hồ sơ bị từ chối, giấy tờ sẽ được tự động xoá sau 30 ngày; số CCCD luôn được mã hoá và chỉ hiển thị 4 số cuối cho người nộp hồ sơ.
+          Mật khẩu của người dùng được mã hóa bằng thuật toán băm an toàn (Bcrypt/Argon2). Các giấy tờ nhạy cảm như CCCD, giấy phép kinh doanh của chủ sân được lưu trữ trên vùng nhớ riêng biệt (private storage) có kiểm soát quyền truy cập nghiêm ngặt. Với hồ sơ bị từ chối, giấy tờ sẽ được tự động xoá sau 30 ngày; số CCCD luôn được mã hoá và chỉ hiển thị 4 số cuối cho người nộp hồ sơ. Mỗi lần Ban quản trị xem giấy tờ đều được ghi lại.
         </p>
       </section>
 
@@ -155,6 +167,59 @@ export function PrivacyPage() {
           <a href={`mailto:${settings?.support_email ?? 'hotro@sporthub.vn'}`} style={{ color: 'var(--pitch)', fontWeight: 600 }}>
             {settings?.support_email ?? 'hotro@sporthub.vn'}
           </a>.
+        </p>
+      </section>
+    </PolicyShell>
+  )
+}
+
+/** 5b. Chính sách cookie (/chinh-sach-cookie) */
+export function CookiePolicyPage() {
+  return (
+    <PolicyShell kicker="Bảo mật dữ liệu" title="Chính sách cookie">
+      <div className="content-card" style={{ padding: 24, marginBottom: 24 }}>
+        <p style={{ margin: 0, color: 'var(--soft)' }}>
+          SportHub chỉ dùng cookie và bộ nhớ trình duyệt ở mức cần thiết để bạn đăng nhập và đặt sân được. Chúng tôi không dùng cookie quảng cáo và không theo dõi bạn trên các trang web khác.
+        </p>
+      </div>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>1. Cookie cần thiết</h2>
+        <p>Các cookie này do SportHub đặt, thiếu chúng bạn không đăng nhập hay thanh toán được nên không thể tắt:</p>
+        <div className="content-card" style={{ padding: 20, background: 'var(--surface)' }}>
+          <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <li><strong>Cookie phiên đăng nhập:</strong> giữ trạng thái đăng nhập của bạn. Tự hết hạn sau 2 giờ không hoạt động và bị xoá khi bạn đăng xuất.</li>
+          <li><strong>Cookie bảo vệ biểu mẫu (XSRF-TOKEN):</strong> ngăn trang web khác gửi yêu cầu thay bạn khi bạn đang đăng nhập.</li>
+        </ul>
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Bộ nhớ trình duyệt</h2>
+        <p>Ngoài cookie, SportHub lưu một vài mục ngay trên thiết bị của bạn (không gửi về máy chủ):</p>
+        <div className="content-card" style={{ padding: 20, background: 'var(--surface)' }}>
+          <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <li><strong>Đã đồng ý thông báo cookie:</strong> để không hỏi lại ở các lần truy cập sau.</li>
+          <li><strong>Chế độ xem gần nhất (khách hoặc chủ sân):</strong> để mở đúng giao diện bạn dùng lần trước.</li>
+          <li><strong>Các ô giờ bạn đang chọn:</strong> giữ lại khi bạn phải đăng nhập giữa chừng; mất khi đóng thẻ trình duyệt.</li>
+        </ul>
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>3. Dịch vụ bên thứ ba</h2>
+        <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <li><strong>Bản đồ:</strong> ảnh bản đồ vị trí sân được tải từ OpenStreetMap, máy chủ bản đồ nhận địa chỉ IP của bạn như khi xem bất kỳ trang web nào.</li>
+          <li><strong>Đăng nhập bằng Google:</strong> nếu bạn chọn nút này, bạn được chuyển sang trang của Google; cookie ở trang đó do Google quản lý.</li>
+          <li><strong>Mở chỉ đường:</strong> khi bạn bấm mở Google Maps hoặc Apple Maps, bạn rời SportHub và áp dụng chính sách của các dịch vụ đó.</li>
+        </ul>
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>4. Quản lý cookie</h2>
+        <p>
+          Bạn có thể xoá cookie và dữ liệu trang web trong phần cài đặt của trình duyệt bất cứ lúc nào; việc này sẽ đăng xuất bạn và thông báo cookie sẽ hiện lại. Chặn cookie cần thiết sẽ khiến đăng nhập và đặt sân không hoạt động. Xem thêm cách chúng tôi xử lý dữ liệu cá nhân ở{' '}
+          <Link to="/chinh-sach-bao-mat" style={{ color: 'var(--pitch)', fontWeight: 600 }}>Chính sách bảo mật</Link>.
         </p>
       </section>
     </PolicyShell>
@@ -195,14 +260,14 @@ export function RefundPolicyPage() {
         <div className="content-card" style={{ padding: 20, borderLeft: '4px solid var(--warn)' }}>
           <strong style={{ color: 'var(--warn)', fontSize: 16, display: 'block', marginBottom: 6 }}>Huỷ sát giờ (không hoàn)</strong>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--soft)' }}>
-            Hủy dưới {partialHours} giờ trước giờ chơi: không hoàn tiền. Hủy dưới {freeCancelHours} giờ còn bị trừ <strong>15 điểm uy tín</strong>. Chủ sân huỷ đơn thì bạn luôn được hoàn đủ.
+            Hủy dưới {partialHours} giờ trước giờ chơi: không hoàn tiền. Hủy dưới {freeCancelHours} giờ còn bị trừ <strong>15 điểm tin cậy</strong>. Chủ sân huỷ đơn thì bạn luôn được hoàn đủ.
           </p>
         </div>
 
         <div className="content-card" style={{ padding: 20, borderLeft: '4px solid var(--danger)' }}>
           <strong style={{ color: 'var(--danger)', fontSize: 16, display: 'block', marginBottom: 6 }}>Vắng mặt (No-show)</strong>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--soft)' }}>
-            Không đến sân và không báo trước: Mất toàn bộ tiền cọc, ghi nhận vi phạm No-show và bị trừ 25 điểm uy tín.
+            Không đến sân và không báo trước: số tiền đã thanh toán không được hoàn, đơn bị ghi nhận vắng mặt và bị trừ 25 điểm tin cậy. Nếu bạn thật sự đã đến sân, hãy khiếu nại trong vòng 48 giờ để được xem xét gỡ ghi nhận.
           </p>
         </div>
       </div>
@@ -210,16 +275,16 @@ export function RefundPolicyPage() {
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>Quy trình ghi nhận và xử lý hoàn cọc</h2>
         <ol style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <li>Khi khách hàng hủy đơn hợp lệ (trong khung giờ miễn phí hoặc thời gian ân hạn), hệ thống tự động ghi nhận bản ghi hoàn tiền (booking refund) và chuyển trạng thái đơn sang <em>Đã huỷ</em>.</li>
-          <li>Khoản tiền cọc được đối chiếu để chuyển hoàn lại qua tài khoản ngân hàng của khách theo thông tin giao dịch đã ghi nhận.</li>
-          <li>Trường hợp cần hỗ trợ đối chiếu giao dịch hoặc có thắc mắc về tiền hoàn, khách hàng liên hệ ban quản trị SportHub để được kiểm tra và xử lý bảo vệ quyền lợi.</li>
+          <li>Khi bạn hủy đơn đã thanh toán, hệ thống tính số tiền hoàn theo mốc giờ ở trên, chuyển đơn sang <em>Đã huỷ</em> và cộng ngay khoản hoàn vào <strong>ví SportHub</strong> của bạn. Bạn nhận mail xác nhận kèm số tiền.</li>
+          <li>Tiền trong ví dùng để thanh toán lần đặt sân sau, hoặc rút về tài khoản ngân hàng ở mục Ví SportHub.</li>
+          <li>Nếu bạn thấy số tiền hoàn chưa đúng hoặc cần hỗ trợ đối chiếu, hãy gửi khiếu nại kèm đơn liên quan; Ban quản trị có thể hoàn thêm vào ví sau khi xem xét.</li>
         </ol>
       </section>
 
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>Trường hợp bất khả kháng</h2>
         <p>
-          Nếu buổi chơi bị hủy do lý do từ phía cơ sở sân bãi (sự cố điện nước, bảo trì đột xuất, thời tiết giông lốc nguy hiểm), chủ sân có nghĩa vụ hoàn trả 100% tiền cọc hoặc sắp xếp dời lịch thi đấu theo thỏa thuận với khách.
+          Nếu buổi chơi bị hủy do lý do từ phía cơ sở sân bãi (sự cố điện nước, bảo trì đột xuất, thời tiết giông lốc nguy hiểm), khách được hoàn 100% số tiền đã thanh toán vào ví SportHub.
         </p>
       </section>
     </PolicyShell>
@@ -230,7 +295,6 @@ export function RefundPolicyPage() {
 export function OwnerRegulationsPage() {
   const { data: settings } = usePublicSettings()
   const commissionPercent = settings?.commission_percent ?? 8
-  const dueDays = settings?.statement_due_days ?? 7
 
   return (
     <PolicyShell kicker="Dành cho đối tác" title="Quy chế hoạt động dành cho chủ sân">
@@ -245,19 +309,20 @@ export function OwnerRegulationsPage() {
         <p>Để trở thành đối tác chủ sân trên SportHub, người đăng ký cần:</p>
         <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <li>Cung cấp số CCCD chính chủ và giấy chứng nhận đăng ký kinh doanh hoặc quyền sử dụng địa điểm sân thể thao.</li>
-          <li>Kê khai số tài khoản ngân hàng chính xác để nhận thanh toán cọc trực tiếp từ khách hàng.</li>
+          <li>Kê khai số tài khoản ngân hàng chính xác để nhận tiền rút từ ví SportHub của bạn.</li>
           <li>Cam kết hình ảnh, bảng giá và tiện ích sân cập nhật đúng thực tế cơ sở.</li>
         </ul>
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Thu hộ, hoa hồng & chi trả hàng tháng</h2>
+        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>2. Thu hộ, hoa hồng & ví</h2>
         <div className="content-card" style={{ padding: 20, background: 'var(--surface)', marginBottom: 16 }}>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <li><strong>Thu hộ:</strong> Khách thanh toán (cọc hoặc trả hết) vào tài khoản SportHub; đơn được xác nhận ngay khi nền tảng nhận tiền. Phần còn lại của đơn đặt cọc khách trả trực tiếp tại sân.</li>
-            <li><strong>Mức hoa hồng nền tảng:</strong> Cố định <strong>{commissionPercent}%</strong> tính trên doanh thu đơn hoàn thành hoặc phần tiền giữ lại từ đơn huỷ muộn/no-show, trừ thẳng khi chi trả.</li>
-            <li><strong>Chu kỳ đối soát:</strong> Ngày 1 hàng tháng, SportHub lập bảng đối soát tháng trước: tiền đã thu hộ − tiền hoàn cho khách − hoa hồng = số chi trả cho chủ sân.</li>
-            <li><strong>Thời hạn chi trả:</strong> SportHub chuyển khoản vào tài khoản ngân hàng khai trong hồ sơ cơ sở trong vòng <strong>{dueDays} ngày</strong> kể từ ngày lập bảng.</li>
+            <li><strong>Thu hộ:</strong> Khách thanh toán (cọc hoặc trả hết) vào SportHub; đơn được xác nhận ngay khi nền tảng nhận tiền. Phần còn lại của đơn đặt cọc khách trả trực tiếp tại sân.</li>
+            <li><strong>Mức hoa hồng nền tảng:</strong> <strong>{commissionPercent}%</strong> tính trên giá trị đơn đã hoàn thành, hoặc trên phần tiền khách đã trả của đơn vắng mặt / huỷ muộn. Đơn được hoàn tiền thì không tính hoa hồng. Hoa hồng được trừ trước khi tiền vào ví của bạn.</li>
+            <li><strong>Tiền về ví:</strong> Khi đơn đã kết thúc và qua <strong>48 giờ</strong> không có khiếu nại đang xử lý, phần của bạn (tiền khách đã trả − tiền hoàn − hoa hồng) tự động vào ví SportHub. Đơn có khiếu nại sẽ được giữ lại cho tới khi khiếu nại được giải quyết.</li>
+            <li><strong>Rút tiền:</strong> Bạn rút từ ví về tài khoản ngân hàng khai trong hồ sơ cơ sở bất cứ lúc nào. Lệnh nhỏ được chuyển tự động; lệnh lớn chờ Ban quản trị chuyển khoản.</li>
+            <li><strong>Báo cáo đối soát:</strong> Ngày 1 hàng tháng, SportHub lập báo cáo tổng hợp tháng trước để bạn đối chiếu; báo cáo không làm thay đổi số dư ví.</li>
           </ul>
         </div>
       </section>
@@ -267,7 +332,7 @@ export function OwnerRegulationsPage() {
         <div className="notice notice--warn" style={{ marginBottom: 16 }}>
           <AlertTriangle size={18} />
           <span>
-            Chủ sân huỷ đơn đã thanh toán thì khách được <strong>hoàn 100%</strong> và khoản hoàn được trừ vào kỳ chi trả. Huỷ nhiều lần không lý do chính đáng có thể bị tạm ngưng hiển thị sân.
+            Chủ sân huỷ đơn đã thanh toán thì khách được <strong>hoàn 100%</strong> và đơn đó không được tính tiền. Bạn nhận mail báo số đơn đã huỷ trong 30 ngày; huỷ từ 3 đơn trở lên sẽ được Ban quản trị xem xét và có thể bị tạm ngưng hiển thị sân.
           </span>
         </div>
       </section>
@@ -301,11 +366,11 @@ export function FaqPage() {
     },
     {
       q: 'Nếu tôi bận việc đột xuất thì hủy đơn như thế nào?',
-      a: `Bạn có thể bấm Hủy đơn trong mục "Lịch đặt của tôi". Hủy trước giờ chơi từ ${settings?.refund_full_hours ?? 24} giờ được hoàn 100%, từ ${settings?.refund_partial_hours ?? 6} giờ được hoàn ${settings?.refund_partial_percent ?? 50}%, sát giờ hơn thì không hoàn.`,
+      a: `Bạn có thể bấm Hủy đơn trong mục "Lịch đặt của tôi". Hủy trước giờ chơi từ ${settings?.refund_full_hours ?? 24} giờ được hoàn 100%, từ ${settings?.refund_partial_hours ?? 6} giờ được hoàn ${settings?.refund_partial_percent ?? 50}%, sát giờ hơn thì không hoàn. Tiền hoàn được cộng ngay vào ví SportHub của bạn.`,
     },
     {
       q: 'Mã check-in tại sân hoạt động như thế nào?',
-      a: 'Khi đơn đặt sân đã được thanh toán xác nhận, hệ thống sẽ cấp một mã check-in định dạng CK-XXXXXXXX. Khi đến sân, bạn đọc mã này cho chủ sân để được tích lũy +10 điểm tin cậy.',
+      a: 'Khi đơn đặt sân đã được thanh toán xác nhận, hệ thống sẽ cấp một mã check-in định dạng CK-XXXXXXXX (mã cũng được gửi qua mail trước giờ chơi). Khi đến sân, bạn đọc mã này cho chủ sân để được tích lũy +10 điểm tin cậy.',
     },
     {
       q: 'Hàng đợi thông minh (Waitlist) hoạt động ra sao?',
@@ -391,13 +456,6 @@ export function AboutPage() {
           </p>
         </div>
       </div>
-
-      <section style={{ marginBottom: 32 }}>
-        <h2 style={{ color: 'var(--forest)', fontSize: 20, marginBottom: 12 }}>Thông tin đồ án công nghệ</h2>
-        <p>
-          Dự án SportHub được phát triển bởi nhóm sinh viên đam mê công nghệ và thể thao, ứng dụng kiến trúc chuẩn RESTful API, Single Page Application với cơ chế bảo mật xác thực session/token hiện đại.
-        </p>
-      </section>
     </PolicyShell>
   )
 }
