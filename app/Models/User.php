@@ -87,6 +87,22 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     // Chủ sân được duyệt: vai trò suy ra từ trạng thái hồ sơ, không phải cột role.
+    /** Điểm tin cậy dưới ngưỡng (mới tạo chưa nạp điểm thì tính như điểm khởi đầu 100). */
+    public function hasLowTrust(): bool
+    {
+        return ($this->trust_score ?? 100) < config('booking.low_trust_score');
+    }
+
+    /** Số lượt giữ chỗ chờ thanh toán tối đa cùng lúc; điểm tin cậy thấp thì bị giới hạn chặt hơn. */
+    public function pendingLimit(): int
+    {
+        $max = \App\Support\Settings::getInt('max_pending_bookings', 3);
+
+        return $this->hasLowTrust()
+            ? min($max, config('booking.low_trust_max_pending'))
+            : $max;
+    }
+
     public function isApprovedOwner(): bool
     {
         return $this->fieldOwnerProfile?->verification_status === VerificationStatus::Approved;
