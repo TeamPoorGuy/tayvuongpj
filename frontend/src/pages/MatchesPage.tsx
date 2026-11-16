@@ -59,6 +59,7 @@ export function MatchesPage() {
   const [mine, setMine] = useState(false)
   const [page, setPage] = useState<number>(1)
   const todayStr = getLocalTodayString()
+  const isMine = Boolean(mine && user)
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -78,7 +79,7 @@ export function MatchesPage() {
 
   // Matches query
   const matchesQuery = useQuery({
-    queryKey: ['matches', categoryId, skillLevel, matchStatus, date, mine && user?.id, page],
+    queryKey: ['matches', categoryId, skillLevel, matchStatus, date, isMine && user?.id, page],
     queryFn: async () => {
       const params = new URLSearchParams()
       params.set('page', String(page))
@@ -86,7 +87,7 @@ export function MatchesPage() {
       if (skillLevel) params.set('skill_level', skillLevel)
       if (matchStatus) params.set('status', matchStatus)
       if (date) params.set('date', date)
-      if (mine && user) params.set('mine', '1')
+      if (isMine) params.set('mine', '1')
       return (await api.get<Paginated<MatchRequest>>(`/matches?${params.toString()}`)).data
     },
     // Chủ phòng thấy yêu cầu tham gia mới và người xin thấy kết quả mà không cần tải lại.
@@ -278,8 +279,8 @@ export function MatchesPage() {
               <option value="">Trạng thái: Tất cả</option>
               <option value="open">Đang tìm người</option>
               <option value="full">Đã đủ người</option>
-              {mine && <option value="completed">Đã kết thúc</option>}
-              {mine && <option value="cancelled">Đã hủy</option>}
+              {isMine && <option value="completed">Đã kết thúc</option>}
+              {isMine && <option value="cancelled">Đã hủy</option>}
             </select>
           </div>
 
@@ -287,7 +288,7 @@ export function MatchesPage() {
             <input
               type="date"
               value={date}
-              min={mine ? undefined : todayStr}
+              min={isMine ? undefined : todayStr}
               aria-label="Ngày thi đấu"
               onChange={(e) => {
                 setDate(e.target.value)
@@ -299,8 +300,8 @@ export function MatchesPage() {
           {user && (
             <button
               type="button"
-              className={`button button--small ${mine ? 'button--dark' : 'button--ghost'}`}
-              aria-pressed={mine}
+              className={`button button--small ${isMine ? 'button--dark' : 'button--ghost'}`}
+              aria-pressed={isMine}
               title="Phòng bạn tạo hoặc đã xin tham gia, kể cả đã kết thúc"
               onClick={() => {
                 setMine(!mine)
@@ -311,7 +312,7 @@ export function MatchesPage() {
             </button>
           )}
 
-          {(categoryId || skillLevel || matchStatus || date || mine) && (
+          {(categoryId || skillLevel || matchStatus || date || isMine) && (
             <button
               type="button"
               className="button button--ghost button--small"

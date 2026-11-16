@@ -32,8 +32,8 @@ class OwnerProfileResource extends JsonResource
                 'type' => $doc->type,
                 'original_name' => $doc->original_name,
                 'url' => $request->user()?->isAdmin()
-                    ? url("/api/v1/admin/field-owners/{$this->id}/documents/{$doc->id}")
-                    : url("/api/v1/customer/owner-application/documents/{$doc->id}"),
+                    ? "/api/v1/admin/field-owners/{$this->id}/documents/{$doc->id}"
+                    : "/api/v1/customer/owner-application/documents/{$doc->id}",
             ])),
             // Admin xem để cân nhắc khi chủ sân huỷ nhiều đơn đã thanh toán.
             'cancellations_30d' => $this->when($request->user()?->isAdmin(), fn () => Booking::ownerCancellationCount($this->user_id)),

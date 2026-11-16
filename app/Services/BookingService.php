@@ -494,4 +494,3 @@ class BookingService
         return new Collection($cancelled->all());
     }
 }
-

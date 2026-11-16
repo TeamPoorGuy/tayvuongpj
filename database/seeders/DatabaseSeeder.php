@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             SportsFieldSeeder::class,
             BookingSeeder::class,
+            SmartMatchdaySeeder::class,
         ]);
     }
 }

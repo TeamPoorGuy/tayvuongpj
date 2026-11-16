@@ -7,6 +7,8 @@ use Laravel\Socialite\Facades\Socialite;
 
 $frontend = fn (string $path) => redirect(rtrim(config('frontend.url'), '/').$path);
 
+Route::get('/login', fn () => $frontend('/login'))->name('login');
+
 // Liên kết trong email xác thực: không cần đăng nhập, bảo vệ bằng chữ ký URL + hash email.
 Route::get('/email/verify/{id}/{hash}', function (string $id, string $hash) use ($frontend) {
     $user = User::find($id);

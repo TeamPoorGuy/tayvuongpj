@@ -26,5 +26,3 @@ export function FieldCard({ field, index }: { field: SportsField; index?: number
     </article>
   )
 }
-
-
