@@ -145,7 +145,6 @@ class PhaseThreePolicyAndComplianceTest extends TestCase
         $response->assertJsonStructure([
             'data' => [
                 'commission_percent',
-                'statement_due_days',
                 'deposit_percent',
                 'payment_hold_minutes',
                 'free_cancel_hours',

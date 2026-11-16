@@ -159,11 +159,12 @@ class BookingService
     /** Giới hạn số lượt giữ chỗ chưa thanh toán (mỗi lượt có thể gồm nhiều ô). */
     private function assertPendingLimit(User $user): void
     {
-        $maxPending = Settings::getInt('max_pending_bookings', 3);
+        $maxPending = $user->pendingLimit();
         $pendingCount = Payment::where('user_id', $user->id)->where('purpose', 'booking')->where('status', 'awaiting')->lockForUpdate()->count();
 
         if ($pendingCount >= $maxPending) {
-            throw new ConflictException("Bạn đang có {$pendingCount} lượt đặt chờ thanh toán. Tối đa chỉ được có {$maxPending} lượt cùng lúc.");
+            $low = $user->hasLowTrust() ? " Điểm tin cậy của bạn đang thấp ({$user->trust_score} điểm) nên bị giới hạn chặt hơn; đến sân đúng giờ để lấy lại điểm." : '';
+            throw new ConflictException("Bạn đang có {$pendingCount} lượt đặt chờ thanh toán. Tối đa chỉ được có {$maxPending} lượt cùng lúc.{$low}");
         }
     }
 

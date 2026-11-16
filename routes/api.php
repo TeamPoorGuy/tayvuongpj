@@ -73,6 +73,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
             Route::get('/payments/{payment}', [Customer\PaymentController::class, 'show']);
             Route::patch('/payments/{payment}', [Customer\PaymentController::class, 'update'])->middleware('throttle:writes');
             Route::post('/payments/{payment}/cancel', [Customer\PaymentController::class, 'cancel'])->middleware('throttle:writes');
+            Route::post('/payments/{payment}/simulate-transfer', [Customer\PaymentController::class, 'simulateTransfer'])->middleware('throttle:writes');
             Route::post('/payments/{payment}/use-wallet', [Customer\PaymentController::class, 'useWallet'])->middleware('throttle:writes');
             Route::patch('/bookings/{booking}/cancel', [Customer\BookingController::class, 'cancel'])->middleware('throttle:writes');
             Route::post('/reviews', [Customer\ReviewController::class, 'store']);

@@ -165,6 +165,43 @@ class PaymentFlowTest extends TestCase
         $this->assertEquals(30000, $payment->user->fresh()->wallet_balance, 'Chuyển lần hai cho lượt đã trả không được mất.');
     }
 
+    public function test_simulated_transfer_only_exists_locally_and_goes_through_the_real_webhook_path(): void
+    {
+        $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
+        Sanctum::actingAs($this->customer);
+
+        // Môi trường khác local: không có nút, không gọi được.
+        $this->getJson("/api/v1/customer/payments/{$payment->id}")->assertJsonPath('data.simulate_available', false);
+        $this->postJson("/api/v1/customer/payments/{$payment->id}/simulate-transfer")->assertNotFound();
+
+        $this->app['env'] = 'local';
+        $this->getJson("/api/v1/customer/payments/{$payment->id}")->assertJsonPath('data.simulate_available', true);
+
+        // Người khác không mô phỏng được lượt của mình.
+        Sanctum::actingAs(User::factory()->create(['role' => 'customer', 'is_active' => true, 'email_verified_at' => now()]));
+        $this->postJson("/api/v1/customer/payments/{$payment->id}/simulate-transfer")->assertNotFound();
+
+        Sanctum::actingAs($this->customer);
+        $this->postJson("/api/v1/customer/payments/{$payment->id}/simulate-transfer")->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.source', 'webhook');
+        $this->assertSame('confirmed', $payment->bookings()->first()->status->value);
+        $this->postJson("/api/v1/customer/payments/{$payment->id}/simulate-transfer")->assertStatus(409);
+    }
+
+    public function test_simulated_short_transfer_goes_to_the_wallet_and_a_simulated_topup_credits_it(): void
+    {
+        $this->app['env'] = 'local';
+        Sanctum::actingAs($this->customer);
+
+        // Chuyển thiếu cho lượt đặt sân: không tự xác nhận, tiền vào ví.
+        $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));
+        $this->postJson("/api/v1/customer/payments/{$payment->id}/simulate-transfer", ['amount' => 1000])->assertOk()->assertJsonPath('data.status', 'awaiting');
+        $this->assertEquals(1000, $this->customer->fresh()->wallet_balance);
+
+        $topup = Payment::findOrFail($this->postJson('/api/v1/wallet/topups', ['amount' => 200000])->json('data.id'));
+        $this->postJson("/api/v1/customer/payments/{$topup->id}/simulate-transfer")->assertOk()->assertJsonPath('data.status', 'paid');
+        $this->assertEquals(201000, $this->customer->fresh()->wallet_balance);
+    }
+
     public function test_unpaid_hold_expires_and_frees_the_courts(): void
     {
         $payment = Payment::findOrFail($this->checkout([$this->item($this->courtA, '18:00', '19:00')])->json('payment.id'));

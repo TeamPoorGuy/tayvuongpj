@@ -43,6 +43,25 @@ class WalletService
         return $transaction;
     }
 
+    /** Số ngày tiền vừa nạp bị giữ lại, chưa cho rút về ngân hàng (vẫn dùng đặt sân được ngay). */
+    public const TOPUP_HOLD_DAYS = 7;
+
+    /**
+     * Số tiền được rút về ngân hàng: số dư trừ tiền nạp trong TOPUP_HOLD_DAYS ngày gần nhất. Tiền hoàn, tiền chủ sân và
+     * tiền chuyển lạc không bị giữ. Chặn việc nạp rồi rút ngay như một kênh chuyển tiền.
+     * ponytail: trừ theo tổng số dư chứ không theo dõi từng đồng; tiền hoàn của chính tiền vừa nạp cũng bị giữ tới hết hạn.
+     */
+    public function withdrawable(User $user): float
+    {
+        $balance = (float) User::whereKey($user->id)->value('wallet_balance');
+        $recentTopups = (float) WalletTransaction::where('user_id', $user->id)
+            ->where('type', 'topup')
+            ->where('created_at', '>', now()->subDays(self::TOPUP_HOLD_DAYS))
+            ->sum('amount');
+
+        return max(0.0, $balance - $recentTopups);
+    }
+
     private function apply(User $user, float $delta, string $type, string $description, array $refs, bool $allowNegative = false): WalletTransaction
     {
         if ($delta == 0.0) {

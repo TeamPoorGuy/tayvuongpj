@@ -26,7 +26,6 @@ class SettingController extends Controller
     {
         $validated = $request->validate([
             'commission_percent' => ['sometimes', 'required', 'integer', 'between:0,100'],
-            'statement_due_days' => ['sometimes', 'required', 'integer', 'between:1,30'],
             'deposit_percent' => ['sometimes', 'required', 'integer', 'between:0,100'],
             'payment_hold_minutes' => ['sometimes', 'required', 'integer', 'between:5,120'],
             'min_minutes' => ['sometimes', 'required', 'integer', 'in:30,60,90,120'],

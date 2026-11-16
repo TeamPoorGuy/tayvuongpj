@@ -171,9 +171,7 @@ class ComplaintService
     public function partyStats(User $user): array
     {
         return [
-            'owner_cancellations_90d' => Booking::where('cancelled_by', 'field_owner')
-                ->where('payment_status', 'paid')
-                ->where('cancelled_at', '>=', now()->subDays(90))
+            'owner_cancellations_90d' => Booking::ownerCancellations(90)
                 ->whereHas('sportsField', fn ($f) => $f->where('field_owner_id', $user->id)->withTrashed())
                 ->count(),
             'no_shows' => Booking::where('user_id', $user->id)->whereNotNull('no_show_at')->count(),

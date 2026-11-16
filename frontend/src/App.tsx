@@ -30,6 +30,7 @@ import {
   ContactPage,
   FaqPage,
   OwnerRegulationsPage,
+  CookiePolicyPage,
   PrivacyPage,
   RefundPolicyPage,
   TermsPage,
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="matches" element={<MatchesPage />} />
         <Route path="dieu-khoan" element={<TermsPage />} />
         <Route path="chinh-sach-bao-mat" element={<PrivacyPage />} />
+        <Route path="chinh-sach-cookie" element={<CookiePolicyPage />} />
         <Route path="chinh-sach-huy-hoan" element={<RefundPolicyPage />} />
         <Route path="quy-che-chu-san" element={<OwnerRegulationsPage />} />
         <Route path="cau-hoi-thuong-gap" element={<FaqPage />} />

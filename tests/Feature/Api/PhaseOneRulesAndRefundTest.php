@@ -303,6 +303,28 @@ class PhaseOneRulesAndRefundTest extends TestCase
         $res->assertJsonFragment(['message' => 'Bạn đang có 3 lượt đặt chờ thanh toán. Tối đa chỉ được có 3 lượt cùng lúc.']);
     }
 
+    public function test_low_trust_customer_can_only_hold_one_pending_booking(): void
+    {
+        $this->customer->forceFill(['trust_score' => 40])->save();
+        Settings::set('max_pending_bookings', 3);
+        $slots = collect([2, 4])->map(fn ($h) => TimeSlot::create([
+            'sports_field_id' => $this->field->id, 'start_time' => sprintf('%02d:00:00', $h), 'end_time' => sprintf('%02d:00:00', $h + 1),
+            'price_per_hour' => 300000, 'is_active' => true,
+        ]));
+
+        Sanctum::actingAs($this->customer);
+        $book = fn ($slot, $day) => $this->postJson('/api/v1/customer/bookings', [
+            'sports_field_id' => $this->field->id, 'time_slot_id' => $slot->id, 'booking_date' => today()->addDays($day)->toDateString(),
+        ]);
+
+        $book($slots[0], 1)->assertCreated();
+        $book($slots[1], 2)->assertStatus(409)->assertJsonFragment(['message' => 'Bạn đang có 1 lượt đặt chờ thanh toán. Tối đa chỉ được có 1 lượt cùng lúc. Điểm tin cậy của bạn đang thấp (40 điểm) nên bị giới hạn chặt hơn; đến sân đúng giờ để lấy lại điểm.']);
+
+        // Lấy lại điểm thì được giữ tối đa như người thường.
+        $this->customer->forceFill(['trust_score' => 60])->save();
+        $book($slots[1], 2)->assertCreated();
+    }
+
     public function test_booking_too_far_in_advance_is_rejected(): void
     {
         Settings::set('max_advance_days', 30);

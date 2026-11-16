@@ -28,6 +28,8 @@ class PaymentResource extends JsonResource
             'due_at' => $this->due_at?->toISOString(),
             'paid_at' => $this->paid_at?->toISOString(),
             'source' => $this->source,
+            // Chỉ khi chạy local: giao diện hiện nút mô phỏng ngân hàng báo có tiền để demo.
+            'simulate_available' => app()->environment('local') && $this->status === 'awaiting',
             'bank_ref' => $this->bank_ref,
             // Tài khoản nền tảng (thu hộ) — khách không chuyển thẳng cho chủ sân.
             'bank' => [

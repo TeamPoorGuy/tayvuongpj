@@ -91,7 +91,6 @@ class Settings
     {
         return [
             'commission_percent' => static::getInt('commission_percent', 8),
-            'statement_due_days' => static::getInt('statement_due_days', 7),
             'deposit_percent' => static::getInt('deposit_percent', 30),
             'payment_hold_minutes' => static::getInt('payment_hold_minutes', 15),
             'min_minutes' => static::getInt('min_minutes', 60),

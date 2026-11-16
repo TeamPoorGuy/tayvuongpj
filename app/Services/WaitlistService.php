@@ -224,7 +224,7 @@ class WaitlistService
                 return 'Khung giờ này đã được người khác xác nhận trước.';
             }
 
-            $maxPending = \App\Support\Settings::getInt('max_pending_bookings', 3);
+            $maxPending = $user->pendingLimit();
             $pendingCount = Booking::where('user_id', $user->id)
                 ->where('status', BookingStatus::Pending->value)
                 ->count();

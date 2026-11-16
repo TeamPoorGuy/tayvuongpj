@@ -117,6 +117,7 @@ class AdminService
             'pending_fields' => SportsField::where('status', 'pending')->count(),
             'open_complaints' => \App\Models\Complaint::where('status', 'open')->count(),
             'pending_withdrawals' => \App\Models\Withdrawal::where('status', 'pending')->count(),
+            'frequent_cancel_owners' => Booking::ownerIdsOverCancelThreshold()->count(),
         ];
 
         return [
@@ -267,10 +268,11 @@ class AdminService
             ->withQueryString();
     }
 
-    public function ownerProfiles(?string $status = null): LengthAwarePaginator
+    public function ownerProfiles(?string $status = null, bool $frequentCancellers = false): LengthAwarePaginator
     {
         return FieldOwnerProfile::with(['user', 'documents'])
             ->when($status, fn ($query) => $query->where('verification_status', $status))
+            ->when($frequentCancellers, fn ($query) => $query->whereIn('user_id', Booking::ownerIdsOverCancelThreshold()))
             ->latest()
             ->paginate(10)
             ->withQueryString();

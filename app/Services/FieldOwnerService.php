@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Exceptions\ConflictException;
 use App\Mail\BookingStatusChanged;
+use App\Mail\Notice;
 use App\Models\FieldImage;
 use App\Support\SafeMail;
 use Illuminate\Support\Facades\DB;
@@ -218,7 +219,23 @@ class FieldOwnerService
             SafeMail::queue($booking->customer->email, new BookingStatusChanged($booking));
         }
 
+        if ($next === BookingStatus::Cancelled && $booking->payment_status === 'paid') {
+            $this->warnAboutCancellations($owner);
+        }
+
         return $booking;
+    }
+
+    /** Chủ sân vừa huỷ đơn đã thanh toán: báo số lần trong 30 ngày; từ ngưỡng cảnh báo thì nhắc ban quản trị có thể xem xét. */
+    private function warnAboutCancellations(User $owner): void
+    {
+        $count = Booking::ownerCancellationCount($owner->id);
+        $lines = ["Bạn vừa huỷ một đơn khách đã thanh toán; khách được hoàn đủ tiền. Trong 30 ngày qua bạn đã huỷ {$count} đơn đã thanh toán."];
+        if ($count >= config('booking.owner_cancel_warn_count')) {
+            $lines[] = 'Huỷ nhiều đơn sẽ được ban quản trị xem xét và có thể bị tạm ngưng hiển thị sân. Vui lòng chỉ huỷ khi thật sự bất khả kháng.';
+        }
+
+        SafeMail::queue($owner->email, new Notice('Bạn vừa huỷ một đơn đã thanh toán', $lines, 'Xem đơn đặt sân', '/owner/bookings'));
     }
 
     public function recordNoShow(User $owner, Booking $booking): Booking

@@ -260,6 +260,33 @@ class Booking extends Model
         return $deadline->isFuture() ? $deadline : null;
     }
 
+    /** Đơn đã thanh toán mà chủ sân huỷ trong N ngày gần đây (cả chủ sân đã xoá sân). */
+    public static function ownerCancellations(int $days)
+    {
+        return static::query()
+            ->where('cancelled_by', 'field_owner')
+            ->where('payment_status', 'paid')
+            ->where('cancelled_at', '>=', now()->subDays($days));
+    }
+
+    /** Số đơn đã thanh toán mà một chủ sân huỷ trong N ngày gần đây. */
+    public static function ownerCancellationCount(int $ownerUserId, int $days = 30): int
+    {
+        return static::ownerCancellations($days)
+            ->whereHas('sportsField', fn ($f) => $f->withTrashed()->where('field_owner_id', $ownerUserId))
+            ->count();
+    }
+
+    /** @return \Illuminate\Support\Collection<int, int> id chủ sân huỷ từ ngưỡng cảnh báo trở lên trong N ngày (để admin xem xét). */
+    public static function ownerIdsOverCancelThreshold(int $days = 30)
+    {
+        return static::ownerCancellations($days)
+            ->join('sports_fields', 'sports_fields.id', '=', 'bookings.sports_field_id')
+            ->groupBy('sports_fields.field_owner_id')
+            ->havingRaw('count(*) >= ?', [config('booking.owner_cancel_warn_count')])
+            ->pluck('sports_fields.field_owner_id');
+    }
+
     /**
      * Số tiền hoàn nếu khách huỷ lúc này (bậc theo số giờ còn lại trước giờ chơi):
      * ≥ refund_full_hours → 100%; ≥ refund_partial_hours → refund_partial_percent%; ít hơn → 0.

@@ -78,8 +78,8 @@ export function AdminDashboardPage() {
           <strong style={{ fontSize: 15, color: 'var(--forest)' }}>Hàng việc cần xử lý ngay</strong>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          <Link to="/admin/owners" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <Link to="/admin/owners?status=pending" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span style={{ fontSize: 13, color: 'var(--soft)' }}>Hồ sơ chủ sân chờ duyệt</span>
               <ShieldCheck size={16} style={{ color: queue.pending_owners > 0 ? 'var(--warn)' : 'var(--muted)' }} />
@@ -116,6 +116,16 @@ export function AdminDashboardPage() {
             </div>
             <strong style={{ fontSize: 20, color: queue.pending_withdrawals > 0 ? 'var(--danger)' : 'var(--forest)' }}>
               {queue.pending_withdrawals}
+            </strong>
+          </Link>
+
+          <Link to="/admin/owners?frequent_cancel=1" className="stat-action" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: 'var(--soft)' }}>Chủ sân huỷ nhiều đơn (30 ngày)</span>
+              <AlertTriangle size={16} style={{ color: queue.frequent_cancel_owners > 0 ? 'var(--danger)' : 'var(--muted)' }} />
+            </div>
+            <strong style={{ fontSize: 20, color: queue.frequent_cancel_owners > 0 ? 'var(--danger)' : 'var(--forest)' }}>
+              {queue.frequent_cancel_owners}
             </strong>
           </Link>
         </div>

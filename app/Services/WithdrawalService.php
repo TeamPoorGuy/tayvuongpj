@@ -38,6 +38,11 @@ class WithdrawalService
                 throw new ConflictException('Bạn đang có một lệnh rút chờ xử lý. Vui lòng chờ lệnh đó xong rồi rút tiếp.');
             }
 
+            $withdrawable = $this->wallet->withdrawable($user);
+            if ($amount > $withdrawable) {
+                throw new DomainException('Bạn chỉ rút được tối đa '.number_format($withdrawable, 0, ',', '.').'đ lúc này. Tiền mới nạp dùng đặt sân được ngay nhưng chỉ rút về ngân hàng được sau '.WalletService::TOPUP_HOLD_DAYS.' ngày kể từ lần nạp.');
+            }
+
             [$bin, $account, $holder] = $this->destination($user, $bank);
             $withdrawal = Withdrawal::create([
                 'user_id' => $user->id,

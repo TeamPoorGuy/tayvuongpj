@@ -21,7 +21,7 @@ class FieldOwnerController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return OwnerProfileResource::collection($this->service->ownerProfiles($request->query('status')));
+        return OwnerProfileResource::collection($this->service->ownerProfiles($request->query('status'), $request->boolean('frequent_cancel')));
     }
 
     public function document(Request $request, FieldOwnerProfile $profile, OwnerDocument $document): StreamedResponse

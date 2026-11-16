@@ -461,6 +461,7 @@ export function AdminOwnersPage() {
   const toast = useToast()
   const [params] = useSearchParams()
   const [status, setStatus] = useState(params.get('status') ?? '')
+  const [frequentCancel, setFrequentCancel] = useState(params.get('frequent_cancel') === '1')
   const [page, setPage] = useState(1)
   const [rejecting, setRejecting] = useState<OwnerProfile | null>(null)
   const [suspending, setSuspending] = useState<OwnerProfile | null>(null)
@@ -468,11 +469,11 @@ export function AdminOwnersPage() {
   const [viewingProfile, setViewingProfile] = useState<OwnerProfile | null>(null)
 
   const profiles = useQuery({
-    queryKey: ['admin', 'owners', status, page],
+    queryKey: ['admin', 'owners', status, frequentCancel, page],
     queryFn: async () =>
       (
         await api.get<Paginated<OwnerProfile>>(
-          `/admin/field-owners?page=${page}${status ? `&status=${status}` : ''}`,
+          `/admin/field-owners?page=${page}${status ? `&status=${status}` : ''}${frequentCancel ? '&frequent_cancel=1' : ''}`,
         )
       ).data,
   })
@@ -553,6 +554,17 @@ export function AdminOwnersPage() {
           <option value="suspended">Đã thu hồi / đình chỉ</option>
           <option value="rejected">Từ chối</option>
         </select>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0 }}>
+          <input
+            type="checkbox"
+            checked={frequentCancel}
+            onChange={(e) => {
+              setFrequentCancel(e.target.checked)
+              setPage(1)
+            }}
+          />
+          <span>Huỷ nhiều đơn (30 ngày)</span>
+        </label>
       </div>
       <QueryState
         isPending={profiles.isPending}
@@ -595,6 +607,9 @@ export function AdminOwnersPage() {
             </Fragment>,
             <Fragment key="status">
               <StatusBadge status={profile.verification_status} />
+              {(profile.cancellations_30d ?? 0) > 0 && (
+                <small style={{ display: 'block', color: 'var(--danger)' }}>Huỷ {profile.cancellations_30d} đơn đã trả tiền / 30 ngày</small>
+              )}
               {profile.rejection_reason && (
                 <small className="form-help" style={{ display: 'block', maxWidth: 180 }}>
                   Lý do: {profile.rejection_reason}
