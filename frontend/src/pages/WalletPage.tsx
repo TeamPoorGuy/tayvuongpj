@@ -55,6 +55,9 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
   })
 
   const balance = wallet.data?.data.balance ?? 0
+  // Số rút được: trừ tiền mới nạp chưa đủ ngày giữ (vẫn dùng đặt sân được).
+  const withdrawable = wallet.data?.data.withdrawable ?? 0
+  const lockedTopup = Math.max(0, balance - withdrawable)
   const bankOf = (bin?: string) => VIETNAMESE_BANKS.find((b) => b.bin === bin)
   const hasPending = info.data?.data.some((w) => w.status === 'pending') ?? false
 
@@ -85,7 +88,7 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
     setBankBin(saved?.bank_bin ?? '')
     setAccountNumber(saved?.account_number ?? '')
     setAccountHolder(saved?.account_holder ?? '')
-    setAmount(String(Math.floor(balance)))
+    setAmount(String(Math.floor(withdrawable)))
     setWithdrawOpen(true)
   }
 
@@ -116,6 +119,15 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
               <strong className="stat-card__val">{formatMoney(balance)}</strong>
               <small className="stat-card__note">{balance < 0 ? 'Ví đang âm do hoàn tiền sau khi nhận; chưa rút được.' : 'Dùng được ngay'}</small>
             </div>
+            {!owner && (
+              <div className="stat-card">
+                <span className="stat-card__label">Rút được về ngân hàng</span>
+                <strong className="stat-card__val">{formatMoney(withdrawable)}</strong>
+                <small className="stat-card__note">
+                  {lockedTopup > 0 ? `${formatMoney(lockedTopup)} mới nạp mở khoá sau 7 ngày kể từ lần nạp` : 'Không có tiền nạp đang chờ mở khoá'}
+                </small>
+              </div>
+            )}
             {owner && (
               <div className="stat-card">
                 <span className="stat-card__label">Sắp về ví</span>
@@ -129,7 +141,7 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
                   <ArrowDownToLine size={16} /> Nạp tiền
                 </button>
               )}
-              <button type="button" className="button button--ghost" disabled={balance < minAmount || hasPending} onClick={openWithdraw} title={hasPending ? 'Đang có lệnh rút chờ xử lý' : undefined}>
+              <button type="button" className="button button--ghost" disabled={withdrawable < minAmount || hasPending} onClick={openWithdraw} title={hasPending ? 'Đang có lệnh rút chờ xử lý' : undefined}>
                 <ArrowUpFromLine size={16} /> Rút về ngân hàng
               </button>
               {hasPending && <small className="text-muted">Đang có một lệnh rút chờ xử lý.</small>}
@@ -215,7 +227,7 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
       <Modal isOpen={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Rút tiền về ngân hàng" asForm onSubmit={submitWithdraw}>
         <div className="form-stack" style={{ maxWidth: 440 }}>
           <label>
-            <span>Số tiền rút (tối thiểu {formatMoney(minAmount)}, tối đa {formatMoney(balance)})</span>
+            <span>Số tiền rút (tối thiểu {formatMoney(minAmount)}, tối đa {formatMoney(withdrawable)})</span>
             <input inputMode="numeric" required value={amount} onChange={(e) => setAmount(digitsOnly(e.target.value, 9))} />
           </label>
 
@@ -250,7 +262,7 @@ export function WalletPage({ owner = false }: { owner?: boolean }) {
           </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button type="button" className="button button--ghost" onClick={() => setWithdrawOpen(false)}>Đóng</button>
-            <button type="submit" className="button button--brand" disabled={withdraw.isPending || withdrawAmount < minAmount || withdrawAmount > balance}>
+            <button type="submit" className="button button--brand" disabled={withdraw.isPending || withdrawAmount < minAmount || withdrawAmount > withdrawable}>
               {withdraw.isPending ? 'Đang gửi...' : 'Rút tiền'}
             </button>
           </div>

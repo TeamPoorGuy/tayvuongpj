@@ -7,6 +7,7 @@ use App\Http\Resources\Api\PaymentResource;
 use App\Http\Resources\Api\WithdrawalResource;
 use App\Services\EarningService;
 use App\Services\PaymentService;
+use App\Services\WalletService;
 use App\Services\WithdrawalService;
 use App\Support\Banks;
 use App\Support\InputRules;
@@ -20,6 +21,7 @@ class WalletController extends Controller
         private readonly PaymentService $payments,
         private readonly WithdrawalService $withdrawals,
         private readonly EarningService $earnings,
+        private readonly WalletService $wallet,
     ) {}
 
     public function show(Request $request): JsonResponse
@@ -30,6 +32,8 @@ class WalletController extends Controller
         return response()->json([
             'data' => [
                 'balance' => (float) $user->wallet_balance,
+                // Phần rút được về ngân hàng: số dư trừ tiền mới nạp chưa đủ ngày giữ.
+                'withdrawable' => $this->wallet->withdrawable($user),
                 // Chủ sân: tiền các đơn đã thanh toán nhưng chưa tới hạn cộng vào ví (null với khách thường).
                 'pending_earnings' => $user->isApprovedOwner() ? $this->earnings->pendingFor($user) : null,
                 'transactions' => $transactions->map(fn ($t) => [

@@ -45,7 +45,7 @@ class WithdrawalTest extends TestCase
 
     private function fund(User $user, float $amount): void
     {
-        app(WalletService::class)->credit($user, $amount, 'topup', 'Nạp ví');
+        app(WalletService::class)->credit($user, $amount, 'refund', 'Tiền hoàn'); // không phải tiền nạp nên rút được ngay
     }
 
     private function withdraw(User $user, array $payload)
@@ -165,6 +165,36 @@ class WithdrawalTest extends TestCase
         app(WalletService::class)->debit($this->owner, 100000, 'owner_adjustment', 'Hoàn sau khiếu nại', [], allowNegative: true);
 
         $this->withdraw($this->owner, ['amount' => 50000])->assertStatus(422);
+    }
+
+    public function test_freshly_topped_up_money_cannot_be_withdrawn_until_the_hold_ends(): void
+    {
+        $this->fund($this->customer, 300000);
+        app(WalletService::class)->credit($this->customer, 500000, 'topup', 'Nạp ví');
+
+        // Số dư 800k nhưng 500k mới nạp: chỉ rút được 300k tiền hoàn.
+        $this->withdraw($this->customer, ['amount' => 400000] + $this->bank)->assertStatus(422)
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, '300.000đ') && str_contains($m, '7 ngày'));
+        $this->assertSame(0, Withdrawal::count());
+
+        Sanctum::actingAs($this->customer->fresh());
+        $this->getJson('/api/v1/wallet')->assertOk()->assertJsonPath('data.balance', 800000)->assertJsonPath('data.withdrawable', 300000);
+
+        $this->withdraw($this->customer, ['amount' => 300000] + $this->bank)->assertCreated()->assertJsonPath('data.status', 'paid');
+
+        // Đủ 7 ngày thì phần tiền nạp được mở khoá.
+        $this->travel(8)->days();
+        $this->withdraw($this->customer, ['amount' => 500000] + $this->bank)->assertCreated();
+        $this->assertEquals(0, $this->customer->fresh()->wallet_balance);
+    }
+
+    public function test_money_spent_on_bookings_comes_out_of_the_topup_first_so_it_cannot_be_withdrawn_twice(): void
+    {
+        app(WalletService::class)->credit($this->customer, 500000, 'topup', 'Nạp ví');
+        app(WalletService::class)->debit($this->customer, 500000, 'booking_payment', 'Trả đơn');
+
+        $this->assertSame(0.0, app(WalletService::class)->withdrawable($this->customer));
+        $this->withdraw($this->customer, ['amount' => 100000] + $this->bank)->assertStatus(422);
     }
 
     public function test_only_admins_can_see_the_withdrawal_queue(): void
