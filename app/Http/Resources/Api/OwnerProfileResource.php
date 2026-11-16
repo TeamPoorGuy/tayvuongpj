@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
+use App\Models\Booking;
 use App\Support\Banks;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -34,6 +35,8 @@ class OwnerProfileResource extends JsonResource
                     ? url("/api/v1/admin/field-owners/{$this->id}/documents/{$doc->id}")
                     : url("/api/v1/customer/owner-application/documents/{$doc->id}"),
             ])),
+            // Admin xem để cân nhắc khi chủ sân huỷ nhiều đơn đã thanh toán.
+            'cancellations_30d' => $this->when($request->user()?->isAdmin(), fn () => Booking::ownerCancellationCount($this->user_id)),
             'rejection_reason' => $this->rejection_reason,
             'verified_at' => $this->verified_at?->toISOString(),
             'user' => $this->whenLoaded('user', fn () => new UserResource($this->user)),
