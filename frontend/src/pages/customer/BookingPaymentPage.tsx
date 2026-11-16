@@ -62,6 +62,12 @@ export function BookingPaymentPage() {
     onError: (err) => toast.error(errorMessage(err), 'Không thể trả bằng ví'),
   })
 
+  const simulate = useMutation({
+    mutationFn: async () => (await api.post<{ message: string }>(`/customer/payments/${id}/simulate-transfer`)).data,
+    onSuccess: () => void query.refetch(),
+    onError: (err) => toast.error(errorMessage(err), 'Không mô phỏng được'),
+  })
+
   const cancel = useMutation({
     mutationFn: async () => api.post(`/customer/payments/${id}/cancel`),
     onSuccess: () => {
@@ -210,6 +216,15 @@ export function BookingPaymentPage() {
                 {row('Nội dung chuyển khoản', payment.code, 'nội dung chuyển khoản')}
               </dl>
             </div>
+
+            {payment.simulate_available && (
+              <div className="notice" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', fontSize: 13, border: '1px dashed var(--line)' }}>
+                <span>Chế độ demo (chỉ có khi chạy local): giả lập ngân hàng báo đã nhận <strong>{formatMoney(payment.due_amount)}</strong> với nội dung {payment.code}.</span>
+                <button type="button" className="button button--brand button--small" disabled={simulate.isPending} onClick={() => simulate.mutate()}>
+                  {simulate.isPending ? 'Đang gửi...' : 'Mô phỏng đã chuyển khoản'}
+                </button>
+              </div>
+            )}
 
             <div className="notice notice--warn" style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.5 }}>
               <ShieldAlert size={18} />
